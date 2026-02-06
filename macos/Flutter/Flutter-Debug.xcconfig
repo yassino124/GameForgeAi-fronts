@@ -1,0 +1,6 @@
+#include? "Pods/Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"
+#include "ephemeral/Flutter-Generated.xcconfig"
+
+GOOGLE_SERVER_CLIENT_ID=1025078322603-odqc7615cg3v8dq1403jc4tpopifnha9.apps.googleusercontent.com
+GOOGLE_MACOS_CLIENT_ID=1025078322603-odqc7615cg3v8dq1403jc4tpopifnha9.apps.googleusercontent.com
+GOOGLE_MACOS_REVERSED_CLIENT_ID=com.googleusercontent.apps.1025078322603-odqc7615cg3v8dq1403jc4tpopifnha9
