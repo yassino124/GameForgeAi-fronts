@@ -6,9 +6,10 @@ import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/providers/auth_provider.dart';
+import '../../../core/services/billing_service.dart';
 import '../../widgets/widgets.dart';
 
-class UserProfileScreen extends StatelessWidget {
+class UserProfileScreen extends StatefulWidget {
   final bool showAppBar;
 
   const UserProfileScreen({
@@ -17,15 +18,98 @@ class UserProfileScreen extends StatelessWidget {
   });
 
   @override
+  State<UserProfileScreen> createState() => _UserProfileScreenState();
+}
+
+class _UserProfileScreenState extends State<UserProfileScreen>
+    with WidgetsBindingObserver, SingleTickerProviderStateMixin {
+  int _subscriptionRefreshTick = 0;
+
+  late final AnimationController _appearController;
+  late final Animation<double> _fadeIn;
+  late final Animation<Offset> _slideUp;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+
+    _appearController = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 700),
+    );
+    _fadeIn = CurvedAnimation(parent: _appearController, curve: Curves.easeOutCubic);
+    _slideUp = Tween<Offset>(begin: const Offset(0, 0.05), end: Offset.zero).animate(
+      CurvedAnimation(parent: _appearController, curve: Curves.easeOutCubic),
+    );
+
+    _appearController.forward();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    _appearController.dispose();
+    super.dispose();
+  }
+
+  Widget _wowEntry(Widget child) {
+    return FadeTransition(
+      opacity: _fadeIn,
+      child: SlideTransition(position: _slideUp, child: child),
+    );
+  }
+
+  Widget _ctaGlow({required bool enabled, required Widget child}) {
+    if (!enabled) return child;
+    return TweenAnimationBuilder<double>(
+      tween: Tween(begin: 0.0, end: 1.0),
+      duration: const Duration(milliseconds: 1600),
+      curve: Curves.easeInOut,
+      onEnd: () {
+        if (mounted) setState(() {});
+      },
+      builder: (context, t, _) {
+        final a = 0.14 + (0.10 * (1 - (t - 0.5).abs() * 2));
+        return DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppBorderRadius.large),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withOpacity(a),
+                blurRadius: 26,
+                spreadRadius: 1,
+                offset: const Offset(0, 12),
+              ),
+            ],
+          ),
+          child: child,
+        );
+      },
+    );
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      setState(() {
+        _subscriptionRefreshTick++;
+      });
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Consumer<AuthProvider>(
       builder: (context, authProvider, child) {
         final cs = Theme.of(context).colorScheme;
         final user = authProvider.user;
-        
+        void _noop = _subscriptionRefreshTick;
+        _noop;
+
         return Scaffold(
           backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-          appBar: showAppBar
+          appBar: widget.showAppBar
               ? AppBar(
                   backgroundColor: cs.surface,
                   elevation: 0,
@@ -480,84 +564,207 @@ class UserProfileScreen extends StatelessWidget {
 
   Widget _buildSubscriptionCard(BuildContext context, Map<String, dynamic>? user) {
     final cs = Theme.of(context).colorScheme;
-    final subscription = user?['subscription']?.toString() ?? 'free';
-    final isPro = subscription.toLowerCase() == 'pro';
-    
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: isPro ? [
-            AppColors.primary.withOpacity(0.1),
-            AppColors.secondary.withOpacity(0.1),
-          ] : [
-            cs.surface,
-            cs.surface,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(AppBorderRadius.large),
-        border: Border.all(
-          color: isPro 
-              ? AppColors.primary.withOpacity(0.3)
-              : cs.outlineVariant.withOpacity(0.6),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+
+    final auth = context.read<AuthProvider>();
+    final token = auth.token;
+
+    return FutureBuilder<Map<String, dynamic>>(
+      future: (token == null || token.isEmpty) ? null : BillingService.getMySubscription(token: token),
+      builder: (context, snapshot) {
+        final Map<String, dynamic>? data =
+            (snapshot.data != null && snapshot.data!['success'] == true && snapshot.data!['data'] is Map)
+                ? Map<String, dynamic>.from(snapshot.data!['data'] as Map)
+                : null;
+
+        final plan = (data != null && data['plan'] is Map) ? Map<String, dynamic>.from(data['plan'] as Map) : null;
+        final planName = plan?['name']?.toString().trim().toLowerCase() ?? 'free';
+        final status = data?['status']?.toString().trim().toLowerCase() ?? 'inactive';
+
+        final isConfirmedPaid = status == 'active' || status == 'trialing';
+        final isEnterprise = planName == 'enterprise';
+        final isPro = planName == 'pro';
+        final isPaid = (isPro || isEnterprise) && isConfirmedPaid;
+
+        final needsPaymentFix = ['incomplete', 'past_due', 'unpaid'].contains(status);
+        final isActiveLike = ['active', 'trialing'].contains(status);
+
+        final title = isEnterprise
+            ? 'Enterprise Plan'
+            : isPro
+                ? 'Pro Plan'
+                : 'Free Plan';
+
+        final badgeText = needsPaymentFix
+            ? (status.isNotEmpty ? status[0].toUpperCase() + status.substring(1) : 'Payment issue')
+            : isPaid
+                ? (status.isNotEmpty ? status[0].toUpperCase() + status.substring(1) : 'Active')
+                : 'Free';
+
+        final badgeColor = needsPaymentFix
+            ? AppColors.warning
+            : isPaid && isActiveLike
+                ? AppColors.success
+                : cs.onSurfaceVariant;
+
+        final icon = isEnterprise
+            ? Icons.emoji_events
+            : isPro
+                ? Icons.workspace_premium
+                : Icons.star_outline;
+
+        final accent = isEnterprise
+            ? const Color(0xFF22C55E)
+            : isPro
+                ? AppColors.primary
+                : cs.onSurfaceVariant;
+
+        return Container(
+          padding: const EdgeInsets.all(AppSpacing.lg),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: isPaid
+                  ? [
+                      accent.withOpacity(0.14),
+                      AppColors.secondary.withOpacity(0.10),
+                    ]
+                  : [
+                      cs.surface,
+                      cs.surface,
+                    ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(AppBorderRadius.large),
+            border: Border.all(
+              color: isPaid ? AppColors.primary.withOpacity(0.3) : cs.outlineVariant.withOpacity(0.6),
+            ),
+            boxShadow: AppShadows.boxShadowSmall,
+          ),
+          child: _wowEntry(
+            Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Icon(
-                isPro ? Icons.workspace_premium : Icons.star_outline,
-                color: isPro ? cs.primary : cs.onSurfaceVariant,
+              Row(
+                children: [
+                  Icon(
+                    icon,
+                    color: accent,
+                  ),
+                  const SizedBox(width: AppSpacing.md),
+                  Text(
+                    title,
+                    style: AppTypography.subtitle2.copyWith(
+                      color: isPaid ? accent : cs.onSurfaceVariant,
+                    ),
+                  ),
+                  const Expanded(child: SizedBox()),
+                  AnimatedSwitcher(
+                    duration: const Duration(milliseconds: 250),
+                    child: StatusBadge(
+                      key: ValueKey('badge-$badgeText-$badgeColor'),
+                      text: badgeText,
+                      color: badgeColor,
+                    ),
+                  ),
+                ],
               ),
-              
-              const SizedBox(width: AppSpacing.md),
-              
+              const SizedBox(height: AppSpacing.md),
               Text(
-                isPro ? 'Pro Plan' : 'Free Plan',
-                style: AppTypography.subtitle2.copyWith(
-                  color: isPro ? cs.primary : cs.onSurfaceVariant,
+                isEnterprise
+                    ? 'Teams, collaboration, and unlimited workflows'
+                    : isPro
+                        ? 'Unlimited game generations, premium templates, and priority support'
+                        : 'Basic game generation features with limited templates',
+                style: AppTypography.body2.copyWith(
+                  color: cs.onSurfaceVariant,
                 ),
               ),
-              
-              const Expanded(
-                child: SizedBox(),
-              ),
-              
-              StatusBadge(
-                text: isPro ? 'Active' : 'Free',
-                color: isPro ? AppColors.success : cs.onSurfaceVariant,
+              const SizedBox(height: AppSpacing.lg),
+              AnimatedSwitcher(
+                duration: const Duration(milliseconds: 250),
+                child: needsPaymentFix
+                    ? _ctaGlow(
+                        enabled: true,
+                        child: SizedBox(
+                          key: const ValueKey('cta-fix'),
+                          width: double.infinity,
+                          child: CustomButton(
+                            text: 'Fix payment',
+                            onPressed: () async {
+                              await context.push('/subscription');
+                              if (!context.mounted) return;
+                              setState(() {
+                                _subscriptionRefreshTick++;
+                              });
+                            },
+                            type: ButtonType.primary,
+                          ),
+                        ),
+                      )
+                    : !isPaid
+                        ? Column(
+                            key: const ValueKey('cta-free'),
+                            children: [
+                              _ctaGlow(
+                                enabled: true,
+                                child: SizedBox(
+                                  width: double.infinity,
+                                  child: CustomButton(
+                                    text: 'Upgrade to Pro',
+                                    onPressed: () async {
+                                      await context.push('/subscription');
+                                      if (!context.mounted) return;
+                                      setState(() {
+                                        _subscriptionRefreshTick++;
+                                      });
+                                    },
+                                    type: ButtonType.primary,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: AppSpacing.md),
+                              SizedBox(
+                                width: double.infinity,
+                                child: CustomButton(
+                                  text: 'Upgrade to Enterprise',
+                                  onPressed: () async {
+                                    await context.push('/subscription');
+                                    if (!context.mounted) return;
+                                    setState(() {
+                                      _subscriptionRefreshTick++;
+                                    });
+                                  },
+                                  type: ButtonType.ghost,
+                                ),
+                              ),
+                            ],
+                          )
+                        : isPro
+                            ? _ctaGlow(
+                                enabled: true,
+                                child: SizedBox(
+                                  key: const ValueKey('cta-pro'),
+                                  width: double.infinity,
+                                  child: CustomButton(
+                                    text: 'Upgrade to Enterprise',
+                                    onPressed: () async {
+                                      await context.push('/subscription');
+                                      if (!context.mounted) return;
+                                      setState(() {
+                                        _subscriptionRefreshTick++;
+                                      });
+                                    },
+                                    type: ButtonType.primary,
+                                  ),
+                                ),
+                              )
+                            : const SizedBox.shrink(key: ValueKey('cta-enterprise')),
               ),
             ],
           ),
-          
-          const SizedBox(height: AppSpacing.md),
-          
-          Text(
-            isPro 
-                ? 'Unlimited game generations, premium templates, and priority support'
-                : 'Basic game generation features with limited templates',
-            style: AppTypography.body2.copyWith(
-              color: cs.onSurfaceVariant,
-            ),
           ),
-          
-          const SizedBox(height: AppSpacing.lg),
-          
-          if (!isPro)
-            SizedBox(
-              width: double.infinity,
-              child: CustomButton(
-                text: 'Upgrade to Pro',
-                onPressed: () {
-                  context.push('/subscription');
-                },
-                type: ButtonType.primary,
-              ),
-            ),
-        ],
-      ),
+        );
+      },
     );
   }
 

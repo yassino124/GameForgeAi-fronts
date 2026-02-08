@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
-import '../../core/constants/app_constants.dart';
-import '../../presentation/widgets/widgets.dart';
+import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
+import '../../../core/constants/app_constants.dart';
+import '../../widgets/widgets.dart';
 import 'template_selection_screen.dart';
+import '../../../core/providers/auth_provider.dart';
+import '../../../core/services/projects_service.dart';
 
 class ProjectDetailsScreen extends StatefulWidget {
   const ProjectDetailsScreen({super.key});
@@ -19,6 +24,11 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen> {
   bool _showAdvancedSettings = false;
   GameTemplate? _selectedTemplate;
   bool _initializedFromRoute = false;
+
+  bool _creating = false;
+  String? _error;
+  int _buildStep = 0;
+  String? _downloadUrl;
 
   @override
   void initState() {
@@ -95,6 +105,26 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              if (_creating || _downloadUrl != null) ...[
+                _buildBuildSection(cs),
+                const SizedBox(height: AppSpacing.lg),
+              ],
+              if (_error != null) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  decoration: BoxDecoration(
+                    color: AppColors.error.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(AppBorderRadius.large),
+                    border: Border.all(color: AppColors.error.withOpacity(0.35)),
+                  ),
+                  child: Text(
+                    _error!,
+                    style: AppTypography.body2.copyWith(color: cs.onSurface),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+              ],
               // Template info card
               if (_selectedTemplate != null) ...[
                 Container(
@@ -331,10 +361,98 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen> {
               
               const SizedBox(height: AppSpacing.xxl),
               
-              // Next button
+              // Create project button
               CustomButton(
-                text: 'Next',
-                onPressed: () => context.go('/ai-configuration'),
+                text: _creating ? 'Creating…' : (_downloadUrl != null ? 'Create Another Project' : 'Create Project'),
+                onPressed: _creating
+                    ? null
+                    : () async {
+                        setState(() {
+                          _error = null;
+                          _downloadUrl = null;
+                          _buildStep = 0;
+                        });
+
+                        if (_selectedTemplate == null) {
+                          setState(() {
+                            _error = 'Please select a template first.';
+                          });
+                          return;
+                        }
+
+                        if (!_formKey.currentState!.validate()) return;
+
+                        final auth = context.read<AuthProvider>();
+                        final token = auth.token;
+                        if (token == null || token.isEmpty) {
+                          setState(() {
+                            _error = 'Session expired. Please sign in again.';
+                          });
+                          return;
+                        }
+
+                        setState(() {
+                          _creating = true;
+                          _buildStep = 1;
+                        });
+
+                        try {
+                          final created = await ProjectsService.createFromTemplate(
+                            token: token,
+                            templateId: _selectedTemplate!.id,
+                            name: _nameController.text,
+                            description: _descriptionController.text,
+                          );
+                          final data = created['data'];
+                          final projectId = (data is Map)
+                              ? (data['_id']?.toString() ?? data['id']?.toString())
+                              : null;
+                          if (projectId == null || projectId.isEmpty) {
+                            throw Exception('Missing project id');
+                          }
+
+                          while (true) {
+                            final p = await ProjectsService.getProject(token: token, projectId: projectId);
+                            final pd = (p['data'] is Map) ? Map<String, dynamic>.from(p['data']) : <String, dynamic>{};
+                            final status = pd['status']?.toString();
+                            if (mounted) {
+                              setState(() {
+                                _buildStep = status == 'queued' ? 1 : 2;
+                              });
+                            }
+                            if (status == 'ready') break;
+                            if (status == 'failed') {
+                              throw Exception(pd['error']?.toString() ?? 'Project build failed');
+                            }
+                            await Future<void>.delayed(const Duration(milliseconds: 650));
+                          }
+
+                          if (mounted) {
+                            setState(() {
+                              _buildStep = 3;
+                            });
+                          }
+
+                          final urlRes = await ProjectsService.getProjectDownloadUrl(token: token, projectId: projectId);
+                          final url = (urlRes['data'] is Map) ? urlRes['data']['url']?.toString() : null;
+                          if (url == null || url.isEmpty) throw Exception('Missing download url');
+
+                          if (!mounted) return;
+                          setState(() {
+                            _downloadUrl = url;
+                          });
+                        } catch (e) {
+                          setState(() {
+                            _error = e.toString();
+                          });
+                        } finally {
+                          if (mounted) {
+                            setState(() {
+                              _creating = false;
+                            });
+                          }
+                        }
+                      },
                 isFullWidth: true,
               ),
               
@@ -361,6 +479,137 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen> {
             onChanged: (value) {},
             activeColor: cs.primary,
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBuildSection(ColorScheme cs) {
+    final title = _downloadUrl != null ? 'Project ready' : 'Analysis & build';
+
+    Widget stepDot({required bool active, required bool done}) {
+      final bg = done
+          ? AppColors.success
+          : (active ? cs.primary : cs.outlineVariant.withOpacity(0.6));
+      final fg = done || active ? cs.onPrimary : cs.onSurfaceVariant;
+      return Container(
+        width: 28,
+        height: 28,
+        decoration: BoxDecoration(
+          color: bg,
+          shape: BoxShape.circle,
+        ),
+        child: Center(
+          child: Icon(done ? Icons.check : Icons.circle, size: done ? 16 : 10, color: fg),
+        ),
+      );
+    }
+
+    Widget stepLine(bool activeOrDone) {
+      return Expanded(
+        child: Container(
+          height: 2,
+          color: activeOrDone ? cs.primary : cs.outlineVariant.withOpacity(0.5),
+        ),
+      );
+    }
+
+    final s1Done = _buildStep >= 1;
+    final s2Done = _buildStep >= 2;
+    final s3Done = _buildStep >= 3;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(AppBorderRadius.large),
+        border: Border.all(color: cs.outlineVariant.withOpacity(0.6)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title, style: AppTypography.subtitle1.copyWith(color: cs.onSurface)),
+          const SizedBox(height: AppSpacing.md),
+          Row(
+            children: [
+              stepDot(active: _buildStep == 1, done: s1Done && _buildStep > 1),
+              stepLine(s1Done),
+              stepDot(active: _buildStep == 2, done: s2Done && _buildStep > 2),
+              stepLine(s2Done),
+              stepDot(active: _buildStep == 3, done: s3Done),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text('Queued', style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant)),
+              Text('Building', style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant)),
+              Text('Ready', style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant)),
+            ],
+          ),
+          if (_downloadUrl != null) ...[
+            const SizedBox(height: AppSpacing.lg),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest.withOpacity(0.4),
+                borderRadius: BorderRadius.circular(AppBorderRadius.large),
+                border: Border.all(color: cs.outlineVariant.withOpacity(0.6)),
+              ),
+              child: Text(
+                _downloadUrl!,
+                style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: () async {
+                      final url = _downloadUrl;
+                      if (url == null || url.trim().isEmpty) return;
+                      await Clipboard.setData(ClipboardData(text: url));
+                      if (!mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Link copied')),
+                      );
+                    },
+                    icon: const Icon(Icons.copy),
+                    label: const Text('Copy link'),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      final url = _downloadUrl;
+                      if (url == null || url.trim().isEmpty) return;
+                      final uri = Uri.parse(url);
+                      if (await canLaunchUrl(uri)) {
+                        await launchUrl(uri, mode: LaunchMode.externalApplication);
+                      }
+                    },
+                    icon: const Icon(Icons.download),
+                    label: const Text('Download'),
+                  ),
+                ),
+              ],
+            ),
+          ] else ...[
+            const SizedBox(height: AppSpacing.lg),
+            Text(
+              _buildStep <= 1
+                  ? 'Preparing your project…'
+                  : _buildStep == 2
+                      ? 'Building Unity project…'
+                      : 'Finalizing…',
+              style: AppTypography.body2.copyWith(color: cs.onSurfaceVariant),
+            ),
+          ],
         ],
       ),
     );

@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../core/constants/app_constants.dart';
-import '../../core/themes/app_theme.dart';
-import '../../presentation/widgets/widgets.dart';
+import 'dart:async';
+import 'package:speech_to_text/speech_to_text.dart' as stt;
+import '../../../core/constants/app_constants.dart';
+import '../../../core/themes/app_theme.dart';
+import '../../../core/services/api_service.dart';
+import '../../../core/services/templates_service.dart';
+import '../../widgets/widgets.dart';
 
 class TemplateMarketplaceScreen extends StatefulWidget {
   const TemplateMarketplaceScreen({super.key});
@@ -16,6 +20,15 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> {
   String _selectedCategory = 'All';
   String _sortBy = 'Popular';
   bool _isGridView = true;
+
+  final stt.SpeechToText _speech = stt.SpeechToText();
+  bool _speechAvailable = false;
+  bool _isListening = false;
+
+  Timer? _debounce;
+  bool _loading = false;
+  String? _error;
+  List<GameTemplate> _templates = [];
 
   final List<String> _categories = [
     'All',
@@ -36,98 +49,197 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> {
     'Price',
   ];
 
-  final List<GameTemplate> _featuredTemplates = [
-    GameTemplate(
-      id: '1',
-      name: 'Space Odyssey',
-      category: 'Action',
-      description: 'Epic space adventure with stunning graphics and immersive gameplay',
-      rating: 4.9,
-      downloads: 25000,
-      price: 0.0,
-      imageUrl: null,
-      tags: ['space', 'adventure', '3d'],
-      isFeatured: true,
-      creator: 'GameForge Studios',
-      createdAt: DateTime.now().subtract(const Duration(days: 7)),
-    ),
-    GameTemplate(
-      id: '2',
-      name: 'Puzzle Master Pro',
-      category: 'Puzzle',
-      description: 'Challenging puzzles with AI-generated levels',
-      rating: 4.8,
-      downloads: 18000,
-      price: 4.99,
-      imageUrl: null,
-      tags: ['puzzle', 'brain', 'ai'],
-      isFeatured: true,
-      creator: 'Mind Games Inc',
-      createdAt: DateTime.now().subtract(const Duration(days: 14)),
-    ),
-  ];
-
-  late final List<GameTemplate> _allTemplates;
-
   @override
   void initState() {
     super.initState();
-    _allTemplates = [
-      ..._featuredTemplates,
-      GameTemplate(
-        id: '3',
-        name: 'Fantasy Quest',
-        category: 'RPG',
-        description: 'Classic RPG with modern twists',
-        rating: 4.7,
-        downloads: 12000,
-        price: 9.99,
-        imageUrl: null,
-        tags: ['rpg', 'fantasy', 'story'],
-        isFeatured: false,
-        creator: 'Epic Games Studio',
-        createdAt: DateTime.now().subtract(const Duration(days: 30)),
-      ),
-      GameTemplate(
-        id: '4',
-        name: 'Tower Defense Elite',
-        category: 'Strategy',
-        description: 'Strategic tower defense gameplay',
-        rating: 4.6,
-        downloads: 15000,
-        price: 2.99,
-        imageUrl: null,
-        tags: ['strategy', 'defense', 'tactics'],
-        isFeatured: false,
-        creator: 'Strategy Masters',
-        createdAt: DateTime.now().subtract(const Duration(days: 21)),
-      ),
-      GameTemplate(
-        id: '5',
-        name: 'Casino Royale',
-        category: 'Casual',
-        description: 'Premium casino experience',
-        rating: 4.5,
-        downloads: 8000,
-        price: 0.0,
-        imageUrl: null,
-        tags: ['casino', 'cards', 'luck'],
-        isFeatured: false,
-        creator: 'Lucky Games',
-        createdAt: DateTime.now().subtract(const Duration(days: 45)),
-      ),
-    ];
+    _searchController.addListener(_onSearchChanged);
+    _initSpeech();
+    _loadTemplates();
+  }
+
+  Future<void> _initSpeech() async {
+    try {
+      final ok = await _speech.initialize(
+        onError: (e) {
+          if (!mounted) return;
+          setState(() {
+            _isListening = false;
+            _speechAvailable = false;
+            _error = e.errorMsg;
+          });
+        },
+        onStatus: (status) {
+          if (!mounted) return;
+          if (status == 'notListening' || status == 'done') {
+            setState(() {
+              _isListening = false;
+            });
+          }
+        },
+      );
+      if (!mounted) return;
+      setState(() {
+        _speechAvailable = ok;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _speechAvailable = false;
+      });
+    }
+  }
+
+  Future<void> _toggleVoiceSearch() async {
+    final cs = Theme.of(context).colorScheme;
+
+    if (_isListening) {
+      await _speech.stop();
+      if (!mounted) return;
+      setState(() {
+        _isListening = false;
+      });
+      return;
+    }
+
+    if (!_speechAvailable) {
+      await _initSpeech();
+    }
+    if (!_speechAvailable) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Voice search not available. Please allow microphone permission.'),
+          backgroundColor: cs.error,
+        ),
+      );
+      return;
+    }
+
+    if (!mounted) return;
+    setState(() {
+      _isListening = true;
+      _error = null;
+    });
+
+    await _speech.listen(
+      listenMode: stt.ListenMode.search,
+      onResult: (result) {
+        if (!mounted) return;
+        final words = result.recognizedWords;
+        if (words.trim().isEmpty) return;
+        _searchController.value = TextEditingValue(
+          text: words,
+          selection: TextSelection.collapsed(offset: words.length),
+        );
+        if (result.finalResult) {
+          setState(() {
+            _isListening = false;
+          });
+        }
+      },
+    );
+  }
+
+  String? _resolveMediaUrl(String? url) {
+    if (url == null) return null;
+    final raw = url.trim();
+    if (raw.isEmpty) return null;
+
+    try {
+      final base = Uri.parse(ApiService.baseUrl);
+      final baseOrigin = Uri(scheme: base.scheme, host: base.host, port: base.hasPort ? base.port : null);
+
+      if (raw.startsWith('/')) {
+        return baseOrigin.resolve(raw).toString();
+      }
+
+      final u = Uri.parse(raw);
+      if (!u.hasScheme) {
+        return baseOrigin.resolve('/$raw').toString();
+      }
+
+      // If backend stored an absolute URL using another host (e.g., 10.0.2.2),
+      // keep the path/query but use the current API origin.
+      return baseOrigin.replace(path: u.path, query: u.query).toString();
+    } catch (_) {
+      return raw;
+    }
   }
 
   @override
   void dispose() {
+    _debounce?.cancel();
+    _searchController.removeListener(_onSearchChanged);
     _searchController.dispose();
+    _speech.stop();
     super.dispose();
+  }
+
+  void _onSearchChanged() {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 350), () {
+      _loadTemplates();
+    });
+  }
+
+  Future<void> _loadTemplates() async {
+    if (!mounted) return;
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final res = await TemplatesService.listPublicTemplates(
+        q: _searchController.text,
+        category: _selectedCategory,
+      );
+      final raw = (res['success'] == true && res['data'] is List) ? (res['data'] as List) : const [];
+      final parsed = raw.map((e) {
+        if (e is! Map) return null;
+        final id = (e['_id'] ?? e['id'])?.toString() ?? '';
+        if (id.isEmpty) return null;
+
+        final tagsRaw = e['tags'];
+        final tags = (tagsRaw is List) ? tagsRaw.map((t) => t.toString()).toList() : const <String>[];
+
+        return GameTemplate(
+          id: id,
+          name: e['name']?.toString() ?? 'Template',
+          category: e['category']?.toString() ?? 'General',
+          description: e['description']?.toString() ?? '',
+          rating: (e['rating'] is num) ? (e['rating'] as num).toDouble() : 4.7,
+          downloads: (e['downloads'] is num) ? (e['downloads'] as num).toInt() : 0,
+          price: (e['price'] is num) ? (e['price'] as num).toDouble() : 0.0,
+          imageUrl: _resolveMediaUrl(e['previewImageUrl']?.toString()),
+          tags: tags,
+          isFeatured: e['isFeatured'] == true,
+          creator: e['ownerId']?.toString() ?? 'Creator',
+          createdAt: DateTime.tryParse(e['createdAt']?.toString() ?? '') ?? DateTime.now(),
+        );
+      }).whereType<GameTemplate>().toList();
+
+      if (!mounted) return;
+      setState(() {
+        _templates = parsed;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+      });
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final featured = _getFeaturedTemplates();
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -174,25 +286,27 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> {
                       child: CustomSearchField(
                         controller: _searchController,
                         hint: 'Search templates...',
-                        onChanged: (value) {
-                          setState(() {});
-                        },
+                        onChanged: (_) {},
                       ),
                     ),
                     
                     const SizedBox(width: AppSpacing.md),
                     
                     // Voice search button
-                    Container(
-                      width: 48,
-                      height: 48,
-                      decoration: BoxDecoration(
-                        color: cs.primary,
-                        borderRadius: BorderRadius.circular(AppBorderRadius.medium),
-                      ),
-                      child: Icon(
-                        Icons.mic,
-                        color: cs.onPrimary,
+                    InkWell(
+                      onTap: _toggleVoiceSearch,
+                      borderRadius: BorderRadius.circular(AppBorderRadius.medium),
+                      child: Container(
+                        width: 48,
+                        height: 48,
+                        decoration: BoxDecoration(
+                          color: _isListening ? AppColors.accent : cs.primary,
+                          borderRadius: BorderRadius.circular(AppBorderRadius.medium),
+                        ),
+                        child: Icon(
+                          _isListening ? Icons.graphic_eq : Icons.mic,
+                          color: cs.onPrimary,
+                        ),
                       ),
                     ),
                   ],
@@ -257,20 +371,25 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> {
                             
                             return Padding(
                               padding: const EdgeInsets.only(right: AppSpacing.sm),
-                              child: FilterChip(
+                              child: ChoiceChip(
                                 label: Text(category),
                                 selected: isSelected,
                                 onSelected: (selected) {
                                   setState(() {
                                     _selectedCategory = category;
                                   });
+                                  _loadTemplates();
                                 },
+                                selectedColor: cs.primary.withOpacity(0.2),
                                 backgroundColor: cs.surface,
-                                selectedColor: AppColors.primary.withOpacity(0.2),
                                 labelStyle: AppTypography.caption.copyWith(
-                                  color: isSelected ? cs.primary : cs.onSurface,
+                                  color: isSelected ? cs.primary : cs.onSurfaceVariant,
+                                  fontWeight: isSelected ? FontWeight.w600 : FontWeight.w500,
                                 ),
-                                side: BorderSide(color: cs.outlineVariant.withOpacity(0.6)),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(AppBorderRadius.medium),
+                                  side: BorderSide(color: cs.outlineVariant.withOpacity(0.6)),
+                                ),
                               ),
                             );
                           },
@@ -290,8 +409,29 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  if (_loading) ...[
+                    const Center(child: CircularProgressIndicator()),
+                    const SizedBox(height: AppSpacing.lg),
+                  ],
+                  if (_error != null) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(AppSpacing.md),
+                      decoration: BoxDecoration(
+                        color: AppColors.error.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(AppBorderRadius.large),
+                        border: Border.all(color: AppColors.error.withOpacity(0.35)),
+                      ),
+                      child: Text(
+                        _error!,
+                        style: AppTypography.body2.copyWith(color: cs.onSurface),
+                      ),
+                    ),
+                    const SizedBox(height: AppSpacing.lg),
+                  ],
+
                   // Featured carousel
-                  if (_featuredTemplates.isNotEmpty) ...[
+                  if (featured.isNotEmpty) ...[
                     Text(
                       'Featured Templates',
                       style: AppTypography.subtitle2,
@@ -303,28 +443,26 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> {
                       height: 200,
                       child: ListView.builder(
                         scrollDirection: Axis.horizontal,
-                        itemCount: _featuredTemplates.length,
+                        itemCount: featured.length,
                         itemBuilder: (context, index) {
-                          return _buildFeaturedCard(_featuredTemplates[index]);
+                          return _buildFeaturedCard(featured[index]);
                         },
                       ),
                     ),
                     
                     const SizedBox(height: AppSpacing.xxxl),
                   ],
-                  
+
                   // All templates
                   Text(
                     'All Templates',
                     style: AppTypography.subtitle2,
                   ),
-                  
+
                   const SizedBox(height: AppSpacing.lg),
-                  
+
                   // Templates grid/list
-                  _isGridView 
-                      ? _buildTemplatesGrid()
-                      : _buildTemplatesList(),
+                  _isGridView ? _buildTemplatesGrid() : _buildTemplatesList(),
                 ],
               ),
             ),
@@ -334,27 +472,56 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> {
     );
   }
 
+  List<GameTemplate> _getFeaturedTemplates() {
+    final copy = [..._templates];
+    copy.sort((a, b) => b.rating.compareTo(a.rating));
+    return copy.take(6).toList();
+  }
+
   Widget _buildFeaturedCard(GameTemplate template) {
     final cs = Theme.of(context).colorScheme;
-    return Container(
-      width: 300,
-      margin: const EdgeInsets.only(right: AppSpacing.lg),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(AppBorderRadius.large),
-        gradient: AppColors.primaryGradient,
-        boxShadow: AppShadows.boxShadowLarge,
-      ),
-      child: Stack(
-        children: [
-          // Background pattern
-          Positioned.fill(
-            child: Container(
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(AppBorderRadius.large),
-                color: cs.onPrimary.withOpacity(0.10),
+    final coverUrl = _resolveMediaUrl(template.imageUrl);
+    return GestureDetector(
+      onTap: () {
+        context.go('/template/${template.id}');
+      },
+      child: Container(
+        width: 300,
+        margin: const EdgeInsets.only(right: AppSpacing.lg),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AppBorderRadius.large),
+          gradient: AppColors.primaryGradient,
+          boxShadow: AppShadows.boxShadowLarge,
+        ),
+        child: Stack(
+          children: [
+            if (coverUrl != null && coverUrl.trim().isNotEmpty)
+              Positioned.fill(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(AppBorderRadius.large),
+                  child: Image.network(
+                    coverUrl,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(AppBorderRadius.large),
+                          color: cs.onPrimary.withOpacity(0.10),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              )
+            else
+              Positioned.fill(
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(AppBorderRadius.large),
+                    color: cs.onPrimary.withOpacity(0.10),
+                  ),
+                ),
               ),
-            ),
-          ),
           
           // Content
           Padding(
@@ -451,8 +618,7 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> {
               child: InkWell(
                 borderRadius: BorderRadius.circular(AppBorderRadius.medium),
                 onTap: () {
-                  // Navigate to template selection or create project with this template
-                  context.go('/create-project');
+                  context.go('/template/${template.id}');
                 },
                 child: Container(
                   padding: const EdgeInsets.symmetric(
@@ -482,6 +648,7 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> {
             ),
           ),
         ],
+      ),
       ),
     );
   }
@@ -520,145 +687,301 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> {
 
   Widget _buildTemplateCard(GameTemplate template) {
     final cs = Theme.of(context).colorScheme;
-    return Container(
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(AppBorderRadius.large),
-        border: Border.all(color: cs.outlineVariant.withOpacity(0.6)),
-        boxShadow: AppShadows.boxShadowSmall,
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Template preview
-          Expanded(
-            flex: 3,
-            child: Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                borderRadius: const BorderRadius.vertical(
-                  top: Radius.circular(AppBorderRadius.large),
-                ),
-                gradient: AppColors.primaryGradient,
-              ),
-              child: Stack(
-                children: [
-                  Center(
-                    child: Icon(
-                      _getCategoryIcon(template.category),
-                      size: 40,
-                      color: cs.onPrimary.withOpacity(0.75),
-                    ),
+    final coverUrl = _resolveMediaUrl(template.imageUrl);
+    return GestureDetector(
+      onTap: () {
+        context.go('/template/${template.id}');
+      },
+      child: Container(
+        decoration: BoxDecoration(
+          color: cs.surface,
+          borderRadius: BorderRadius.circular(AppBorderRadius.large),
+          border: Border.all(color: cs.outlineVariant.withOpacity(0.6)),
+          boxShadow: AppShadows.boxShadowSmall,
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Template preview
+            Expanded(
+              flex: 3,
+              child: Container(
+                width: double.infinity,
+                decoration: BoxDecoration(
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(AppBorderRadius.large),
                   ),
-                  
-                  // Price badge
-                  if (template.price > 0)
-                    Positioned(
-                      top: AppSpacing.sm,
-                      right: AppSpacing.sm,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.sm,
-                          vertical: AppSpacing.xs,
+                  gradient: AppColors.primaryGradient,
+                ),
+                child: Stack(
+                  children: [
+                    if (coverUrl != null && coverUrl.trim().isNotEmpty)
+                      Positioned.fill(
+                        child: ClipRRect(
+                          borderRadius: const BorderRadius.vertical(
+                            top: Radius.circular(AppBorderRadius.large),
+                          ),
+                          child: Image.network(
+                            coverUrl,
+                            fit: BoxFit.cover,
+                            errorBuilder: (context, error, stackTrace) {
+                              return Center(
+                                child: Icon(
+                                  _getCategoryIcon(template.category),
+                                  size: 40,
+                                  color: cs.onPrimary.withOpacity(0.75),
+                                ),
+                              );
+                            },
+                          ),
                         ),
-                        decoration: BoxDecoration(
-                          color: AppColors.success,
-                          borderRadius: AppBorderRadius.allSmall,
+                      )
+                    else
+                      Center(
+                        child: Icon(
+                          _getCategoryIcon(template.category),
+                          size: 40,
+                          color: cs.onPrimary.withOpacity(0.75),
                         ),
-                        child: Text(
-                          '\$${template.price}',
-                          style: AppTypography.caption.copyWith(
-                            color: cs.onPrimary,
-                            fontWeight: FontWeight.bold,
+                      ),
+                    
+                    // Price badge
+                    if (template.price > 0)
+                      Positioned(
+                        top: AppSpacing.sm,
+                        right: AppSpacing.sm,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.sm,
+                            vertical: AppSpacing.xs,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.success,
+                            borderRadius: AppBorderRadius.allSmall,
+                          ),
+                          child: Text(
+                            '\$${template.price}',
+                            style: AppTypography.caption.copyWith(
+                              color: cs.onPrimary,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      )
+                    else
+                      Positioned(
+                        top: AppSpacing.sm,
+                        right: AppSpacing.sm,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.sm,
+                            vertical: AppSpacing.xs,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.success,
+                            borderRadius: AppBorderRadius.allSmall,
+                          ),
+                          child: Text(
+                            'FREE',
+                            style: AppTypography.caption.copyWith(
+                              color: cs.onPrimary,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ),
-                    )
-                  else
-                    Positioned(
-                      top: AppSpacing.sm,
-                      right: AppSpacing.sm,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.sm,
-                          vertical: AppSpacing.xs,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.success,
-                          borderRadius: AppBorderRadius.allSmall,
-                        ),
-                        child: Text(
-                          'FREE',
-                          style: AppTypography.caption.copyWith(
-                            color: cs.onPrimary,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-          
-          // Template info
-          Expanded(
-            flex: 2,
-            child: Padding(
-              padding: const EdgeInsets.all(AppSpacing.sm),
+            
+            // Template info
+            Expanded(
+              flex: 2,
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.sm),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      template.name,
+                      style: AppTypography.subtitle2,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    
+                    const SizedBox(height: AppSpacing.xs),
+                    
+                    Text(
+                      template.description,
+                      style: AppTypography.caption.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    
+                    const SizedBox(height: AppSpacing.xs),
+                    
+                    // Rating and creator
+                    Row(
+                      children: [
+                        Icon(
+                          Icons.star,
+                          size: 12,
+                          color: AppColors.warning,
+                        ),
+                        
+                        const SizedBox(width: 2),
+                        
+                        Expanded(
+                          child: Text(
+                            template.rating.toString(),
+                            style: AppTypography.caption.copyWith(
+                              fontWeight: FontWeight.w500,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        
+                        const SizedBox(width: AppSpacing.sm),
+                        
+                        Expanded(
+                          flex: 2,
+                          child: Text(
+                            template.creator,
+                            style: AppTypography.caption.copyWith(
+                              color: cs.onSurfaceVariant,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.end,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTemplateListItem(GameTemplate template) {
+    final cs = Theme.of(context).colorScheme;
+    final coverUrl = _resolveMediaUrl(template.imageUrl);
+    return GestureDetector(
+      onTap: () {
+        context.go('/template/${template.id}');
+      },
+      child: Container(
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        decoration: BoxDecoration(
+          color: cs.surface,
+          borderRadius: BorderRadius.circular(AppBorderRadius.large),
+          border: Border.all(color: cs.outlineVariant.withOpacity(0.6)),
+          boxShadow: AppShadows.boxShadowSmall,
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 80,
+              height: 80,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(AppBorderRadius.medium),
+                gradient: AppColors.primaryGradient,
+              ),
+              child: (coverUrl != null && coverUrl.trim().isNotEmpty)
+                  ? ClipRRect(
+                      borderRadius: BorderRadius.circular(AppBorderRadius.medium),
+                      child: Image.network(
+                        coverUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Icon(
+                            _getCategoryIcon(template.category),
+                            size: 32,
+                            color: cs.onPrimary.withOpacity(0.75),
+                          );
+                        },
+                      ),
+                    )
+                  : Icon(
+                      _getCategoryIcon(template.category),
+                      size: 32,
+                      color: cs.onPrimary.withOpacity(0.75),
+                    ),
+            ),
+            const SizedBox(width: AppSpacing.lg),
+            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    template.name,
-                    style: AppTypography.subtitle2,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          template.name,
+                          style: AppTypography.subtitle2,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      const SizedBox(width: AppSpacing.sm),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.sm,
+                          vertical: AppSpacing.xs,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.success,
+                          borderRadius: AppBorderRadius.allSmall,
+                        ),
+                        child: Text(
+                          template.price > 0 ? '\$${template.price}' : 'FREE',
+                          style: AppTypography.caption.copyWith(
+                            color: cs.onPrimary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  
                   const SizedBox(height: AppSpacing.xs),
-                  
                   Text(
                     template.description,
                     style: AppTypography.caption.copyWith(
                       color: cs.onSurfaceVariant,
                     ),
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                  
-                  const SizedBox(height: AppSpacing.xs),
-                  
-                  // Rating and creator
+                  const SizedBox(height: AppSpacing.sm),
                   Row(
                     children: [
-                      Icon(
-                        Icons.star,
-                        size: 12,
-                        color: AppColors.warning,
-                      ),
-                      
+                      Icon(Icons.star, size: 12, color: AppColors.warning),
                       const SizedBox(width: 2),
-                      
+                      Text(
+                        template.rating.toString(),
+                        style: AppTypography.caption.copyWith(fontWeight: FontWeight.w500),
+                      ),
+                      const SizedBox(width: AppSpacing.md),
                       Expanded(
                         child: Text(
-                          template.rating.toString(),
-                          style: AppTypography.caption.copyWith(
-                            fontWeight: FontWeight.w500,
-                          ),
+                          '${(template.downloads / 1000).toStringAsFixed(1)}k downloads',
+                          style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant),
+                          maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      
-                      const SizedBox(width: AppSpacing.sm),
-                      
-                      Expanded(
-                        flex: 2,
+                      const SizedBox(width: AppSpacing.md),
+                      Flexible(
                         child: Text(
-                          template.creator,
-                          style: AppTypography.caption.copyWith(
-                            color: cs.onSurfaceVariant,
-                          ),
+                          'by ${template.creator}',
+                          style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant),
+                          maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           textAlign: TextAlign.end,
                         ),
@@ -668,168 +991,38 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> {
                 ],
               ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildTemplateListItem(GameTemplate template) {
-    final cs = Theme.of(context).colorScheme;
-    return Container(
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(AppBorderRadius.large),
-        border: Border.all(color: cs.outlineVariant.withOpacity(0.6)),
-        boxShadow: AppShadows.boxShadowSmall,
-      ),
-      child: Row(
-        children: [
-          // Template preview
-          Container(
-            width: 80,
-            height: 80,
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(AppBorderRadius.medium),
-              gradient: AppColors.primaryGradient,
-            ),
-            child: Icon(
-              _getCategoryIcon(template.category),
-              size: 32,
-              color: cs.onPrimary.withOpacity(0.75),
-            ),
-          ),
-          
-          const SizedBox(width: AppSpacing.lg),
-          
-          // Template info
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Text(
-                      template.name,
-                      style: AppTypography.subtitle2,
-                    ),
-                    
-                    const Spacer(),
-                    
-                    if (template.price > 0)
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.sm,
-                          vertical: AppSpacing.xs,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.success,
-                          borderRadius: AppBorderRadius.allSmall,
-                        ),
-                        child: Text(
-                          '\$${template.price}',
-                          style: AppTypography.caption.copyWith(
-                            color: cs.onPrimary,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      )
-                    else
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: AppSpacing.sm,
-                          vertical: AppSpacing.xs,
-                        ),
-                        decoration: BoxDecoration(
-                          color: AppColors.success,
-                          borderRadius: AppBorderRadius.allSmall,
-                        ),
-                        child: Text(
-                          'FREE',
-                          style: AppTypography.caption.copyWith(
-                            color: cs.onPrimary,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                  ],
-                ),
-                
-                const SizedBox(height: AppSpacing.xs),
-                
-                Text(
-                  template.description,
-                  style: AppTypography.caption.copyWith(
-                    color: cs.onSurfaceVariant,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                
-                const SizedBox(height: AppSpacing.sm),
-                
-                Row(
-                  children: [
-                    Icon(
-                      Icons.star,
-                      size: 12,
-                      color: AppColors.warning,
-                    ),
-                    
-                    const SizedBox(width: 2),
-                    
-                    Text(
-                      template.rating.toString(),
-                      style: AppTypography.caption.copyWith(
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                    
-                    const SizedBox(width: AppSpacing.md),
-                    
-                    Text(
-                      '${(template.downloads / 1000).toStringAsFixed(1)}k downloads',
-                      style: AppTypography.caption.copyWith(
-                        color: cs.onSurfaceVariant,
-                      ),
-                    ),
-                    
-                    const Spacer(),
-                    
-                    Text(
-                      'by ${template.creator}',
-                      style: AppTypography.caption.copyWith(
-                        color: cs.onSurfaceVariant,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
 
   List<GameTemplate> _getFilteredTemplates() {
-    var templates = _allTemplates;
+    var templates = [..._templates];
     
     // Filter by category
     if (_selectedCategory != 'All') {
       templates = templates.where((t) => t.category == _selectedCategory).toList();
     }
     
-    // Filter by search
-    final searchQuery = _searchController.text.toLowerCase();
+    // Local intelligent ranking (in addition to backend filter)
+    final searchQuery = _searchController.text.trim().toLowerCase();
     if (searchQuery.isNotEmpty) {
-      templates = templates.where((t) => 
-        t.name.toLowerCase().contains(searchQuery) ||
-        t.description.toLowerCase().contains(searchQuery) ||
-        t.tags.any((tag) => tag.toLowerCase().contains(searchQuery)) ||
-        t.creator.toLowerCase().contains(searchQuery)
-      ).toList();
+      final tokens = searchQuery.split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toList();
+      int score(GameTemplate t) {
+        final hay = '${t.name} ${t.description} ${t.category} ${t.tags.join(' ')} ${t.creator}'.toLowerCase();
+        int s = 0;
+        for (final tok in tokens) {
+          if (t.name.toLowerCase().contains(tok)) s += 6;
+          if (t.tags.any((x) => x.toLowerCase().contains(tok))) s += 4;
+          if (t.description.toLowerCase().contains(tok)) s += 2;
+          if (hay.contains(tok)) s += 1;
+        }
+        return s;
+      }
+
+      templates = templates.where((t) => score(t) > 0).toList();
+      templates.sort((a, b) => score(b).compareTo(score(a)));
     }
     
     // Sort

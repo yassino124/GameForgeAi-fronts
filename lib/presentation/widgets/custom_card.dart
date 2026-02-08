@@ -81,39 +81,79 @@ class ProjectCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return CustomCard(
-      onTap: onTap,
-      padding: AppSpacing.paddingAll,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Row(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 180;
+        final coverH = compact ? 96.0 : 118.0;
+
+        return CustomCard(
+          onTap: onTap,
+          padding: EdgeInsets.zero,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              // Thumbnail
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  borderRadius: AppBorderRadius.allMedium,
-                  color: AppColors.primary.withOpacity(0.1),
-                ),
-                child: thumbnailUrl != null
-                    ? ClipRRect(
-                        borderRadius: AppBorderRadius.allMedium,
-                        child: Image.network(
-                          thumbnailUrl!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) => 
-                              const Icon(Icons.games, color: AppColors.primary),
+              // Cover
+              SizedBox(
+                height: coverH,
+                width: double.infinity,
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: ClipRRect(
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(AppBorderRadius.large),
                         ),
-                      )
-                    : const Icon(Icons.games, color: AppColors.primary),
+                        child: (thumbnailUrl != null && thumbnailUrl!.trim().isNotEmpty)
+                            ? Image.network(
+                                thumbnailUrl!,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Container(
+                                    decoration: BoxDecoration(
+                                      gradient: AppColors.primaryGradient,
+                                    ),
+                                    child: const Center(
+                                      child: Icon(Icons.games, color: Colors.white70, size: 34),
+                                    ),
+                                  );
+                                },
+                              )
+                            : Container(
+                                decoration: const BoxDecoration(
+                                  gradient: AppColors.primaryGradient,
+                                ),
+                                child: const Center(
+                                  child: Icon(Icons.games, color: Colors.white70, size: 34),
+                                ),
+                              ),
+                      ),
+                    ),
+                    Positioned(
+                      top: AppSpacing.sm,
+                      left: AppSpacing.sm,
+                      child: _buildStatusChip(),
+                    ),
+                    if (onMoreOptions != null)
+                      Positioned(
+                        top: 0,
+                        right: 0,
+                        child: IconButton(
+                          onPressed: onMoreOptions,
+                          icon: const Icon(Icons.more_vert, color: Colors.white),
+                        ),
+                      ),
+                  ],
+                ),
               ),
-              const SizedBox(width: AppSpacing.lg),
-              
-              // Project Info
-              Expanded(
+
+              Padding(
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.md,
+                  AppSpacing.md,
+                  AppSpacing.md,
+                  AppSpacing.sm,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
@@ -128,50 +168,41 @@ class ProjectCard extends StatelessWidget {
                       Text(
                         description!,
                         style: AppTypography.caption,
-                        maxLines: 2,
+                        maxLines: compact ? 1 : 2,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ],
                     const SizedBox(height: AppSpacing.sm),
-                    Row(
-                      children: [
-                        _buildStatusChip(),
-                        const Spacer(),
-                        Text(
-                          _formatDate(lastModified),
-                          style: AppTypography.caption,
-                        ),
-                      ],
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        _formatDate(lastModified),
+                        style: AppTypography.caption,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        softWrap: false,
+                      ),
                     ),
+                    if (progress != null && progress! < 1.0) ...[
+                      const SizedBox(height: AppSpacing.md),
+                      LinearProgressIndicator(
+                        value: progress,
+                        backgroundColor: AppColors.border,
+                        valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      Text(
+                        '${(progress! * 100).toInt()}% Complete',
+                        style: AppTypography.caption,
+                      ),
+                    ],
                   ],
                 ),
               ),
-              
-              // More Options
-              if (onMoreOptions != null)
-                IconButton(
-                  onPressed: onMoreOptions,
-                  icon: const Icon(Icons.more_vert, color: AppColors.textSecondary),
-                ),
             ],
           ),
-          
-          // Progress Bar
-          if (progress != null && progress! < 1.0) ...[
-            const SizedBox(height: AppSpacing.md),
-            LinearProgressIndicator(
-              value: progress,
-              backgroundColor: AppColors.border,
-              valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
-            ),
-            const SizedBox(height: AppSpacing.sm),
-            Text(
-              '${(progress! * 100).toInt()}% Complete',
-              style: AppTypography.caption,
-            ),
-          ],
-        ],
-      ),
+        );
+      },
     );
   }
 

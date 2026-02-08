@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'dart:ui';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lottie/lottie.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/providers/auth_provider.dart';
+import '../../../core/services/projects_service.dart';
 import '../../../core/themes/app_theme.dart';
 import '../../widgets/widgets.dart';
 import '../marketplace/marketplace.dart';
@@ -22,13 +24,65 @@ class HomeDashboard extends StatefulWidget {
   State<HomeDashboard> createState() => _HomeDashboardState();
 }
 
-class _HomeDashboardState extends State<HomeDashboard> {
+class _HomeDashboardState extends State<HomeDashboard> with SingleTickerProviderStateMixin {
   late int _selectedIndex;
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
+
+  late final AnimationController _drawerAnim;
+
+  Future<List<dynamic>>? _projectsFuture;
+  String? _projectsToken;
 
   @override
   void initState() {
     super.initState();
     _selectedIndex = widget.initialIndex;
+
+    _drawerAnim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 520),
+    );
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final auth = context.read<AuthProvider>();
+    final token = auth.token;
+    if (token != null && token.isNotEmpty && token != _projectsToken) {
+      _projectsToken = token;
+      _projectsFuture = ProjectsService.listProjects(token: token).then((res) {
+        final data = res['data'];
+        return data is List ? data : <dynamic>[];
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _drawerAnim.dispose();
+    super.dispose();
+  }
+
+  Widget _drawerEntry({required int index, required Widget child}) {
+    final start = (0.08 * index).clamp(0.0, 0.6);
+    final curve = CurvedAnimation(
+      parent: _drawerAnim,
+      curve: Interval(start, 1.0, curve: Curves.easeOutCubic),
+    );
+    return AnimatedBuilder(
+      animation: curve,
+      builder: (context, _) {
+        final v = curve.value;
+        return Opacity(
+          opacity: v,
+          child: Transform.translate(
+            offset: Offset((1 - v) * -14, (1 - v) * 10),
+            child: child,
+          ),
+        );
+      },
+    );
   }
 
   @override
@@ -40,7 +94,9 @@ class _HomeDashboardState extends State<HomeDashboard> {
         final username = user?['username']?.toString() ?? 'User';
         
         return Scaffold(
+          key: _scaffoldKey,
           backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+          drawer: _buildWowDrawer(context, authProvider),
           appBar: _buildCustomAppBar(),
           body: _buildBody(context, username),
           floatingActionButton: _selectedIndex == 0
@@ -56,6 +112,278 @@ class _HomeDashboardState extends State<HomeDashboard> {
           bottomNavigationBar: _buildBottomNavigationBar(),
         );
       },
+    );
+  }
+
+  Widget _buildWowDrawer(BuildContext context, AuthProvider authProvider) {
+    final cs = Theme.of(context).colorScheme;
+    final user = authProvider.user;
+    final username = user?['username']?.toString() ?? 'User';
+    final fullName = user?['fullName']?.toString().trim() ?? '';
+    final avatar = user?['avatar']?.toString();
+    final email = user?['email']?.toString() ?? '';
+
+    Widget item({
+      required IconData icon,
+      required String text,
+      required VoidCallback onTap,
+      bool danger = false,
+    }) {
+      return Material(
+        color: Colors.transparent,
+        child: InkWell(
+          onTap: () {
+            Navigator.of(context).pop();
+            onTap();
+          },
+          borderRadius: BorderRadius.circular(16),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(14),
+                    gradient: danger
+                        ? LinearGradient(
+                            colors: [
+                              cs.error.withOpacity(0.22),
+                              cs.error.withOpacity(0.08),
+                            ],
+                          )
+                        : LinearGradient(
+                            colors: [
+                              cs.primary.withOpacity(0.18),
+                              cs.secondary.withOpacity(0.10),
+                            ],
+                          ),
+                    border: Border.all(
+                      color: (danger ? cs.error : cs.primary).withOpacity(0.22),
+                    ),
+                  ),
+                  child: Icon(
+                    icon,
+                    size: 18,
+                    color: danger ? cs.error : cs.onSurface,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    text,
+                    style: AppTypography.body1.copyWith(
+                      color: danger ? cs.error : cs.onSurface,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ),
+                Icon(
+                  Icons.chevron_right_rounded,
+                  color: cs.onSurfaceVariant,
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+
+    return Drawer(
+      elevation: 0,
+      backgroundColor: Colors.transparent,
+      child: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(22),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+              child: Container(
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [
+                      cs.surface.withOpacity(0.78),
+                      cs.surface.withOpacity(0.62),
+                    ],
+                  ),
+                  borderRadius: BorderRadius.circular(22),
+                  border: Border.all(color: cs.outlineVariant.withOpacity(0.55)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.20),
+                      blurRadius: 34,
+                      offset: const Offset(0, 22),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _drawerEntry(
+                      index: 0,
+                      child: Row(
+                        children: [
+                          TweenAnimationBuilder<double>(
+                            tween: Tween(begin: 0.94, end: 1.0),
+                            duration: const Duration(milliseconds: 520),
+                            curve: Curves.easeOutBack,
+                            builder: (context, t, child) {
+                              return Transform.scale(scale: t, child: child);
+                            },
+                            child: Container(
+                              width: 46,
+                              height: 46,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                gradient: AppColors.primaryGradient,
+                                boxShadow: AppShadows.boxShadowSmall,
+                              ),
+                              child: ClipOval(
+                                child: (avatar != null && avatar.isNotEmpty)
+                                    ? Image.network(
+                                        avatar,
+                                        fit: BoxFit.cover,
+                                      )
+                                    : Center(
+                                        child: Text(
+                                          username.isNotEmpty ? username[0].toUpperCase() : 'U',
+                                          style: AppTypography.subtitle2.copyWith(
+                                            color: AppColors.textPrimary,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  fullName.isNotEmpty ? fullName : username,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTypography.subtitle2.copyWith(
+                                    color: cs.onSurface,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  email.isNotEmpty ? email : '@$username',
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTypography.caption.copyWith(
+                                    color: cs.onSurfaceVariant,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _drawerEntry(
+                      index: 1,
+                      child: Divider(color: cs.outlineVariant.withOpacity(0.55), height: 1),
+                    ),
+                    const SizedBox(height: 10),
+                    _drawerEntry(
+                      index: 2,
+                      child: item(
+                        icon: Icons.person_outline,
+                        text: 'Profile',
+                        onTap: () {
+                          setState(() {
+                            _selectedIndex = 3;
+                          });
+                        },
+                      ),
+                    ),
+                    _drawerEntry(
+                      index: 3,
+                      child: item(
+                        icon: Icons.workspace_premium_outlined,
+                        text: 'Subscription',
+                        onTap: () {
+                          context.push('/subscription');
+                        },
+                      ),
+                    ),
+                    _drawerEntry(
+                      index: 4,
+                      child: item(
+                        icon: Icons.notifications_outlined,
+                        text: 'Notifications',
+                        onTap: () {
+                          context.go('/notifications');
+                        },
+                      ),
+                    ),
+                    _drawerEntry(
+                      index: 5,
+                      child: item(
+                        icon: Icons.settings_outlined,
+                        text: 'Settings',
+                        onTap: () {
+                          context.push('/settings');
+                        },
+                      ),
+                    ),
+                    if (authProvider.isAdmin || authProvider.isDevl) ...[
+                      _drawerEntry(
+                        index: 6,
+                        child: item(
+                          icon: Icons.extension_outlined,
+                          text: 'Unity Assets',
+                          onTap: () {
+                            context.push('/assets');
+                          },
+                        ),
+                      ),
+                      _drawerEntry(
+                        index: 7,
+                        child: item(
+                          icon: Icons.upload_file,
+                          text: 'Upload Template',
+                          onTap: () {
+                            context.push('/templates/upload');
+                          },
+                        ),
+                      ),
+                    ],
+                    const Spacer(),
+                    _drawerEntry(
+                      index: 8,
+                      child: Divider(color: cs.outlineVariant.withOpacity(0.55), height: 1),
+                    ),
+                    const SizedBox(height: 10),
+                    _drawerEntry(
+                      index: 9,
+                      child: item(
+                        icon: Icons.logout_rounded,
+                        text: 'Logout',
+                        danger: true,
+                        onTap: () {
+                          authProvider.logout(context: context);
+                        },
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -91,14 +419,24 @@ class _HomeDashboardState extends State<HomeDashboard> {
             child: Row(
               children: [
                 // Menu button
-                IconButton(
-                  onPressed: () {
-                    // TODO: Open drawer
+                Consumer<AuthProvider>(
+                  builder: (context, authProvider, _) {
+                    return Builder(
+                      builder: (ctx) {
+                        return IconButton(
+                          tooltip: 'Menu',
+                          onPressed: () {
+                            _drawerAnim.forward(from: 0);
+                            _scaffoldKey.currentState?.openDrawer();
+                          },
+                          icon: Icon(
+                            Icons.menu,
+                            color: cs.onSurface,
+                          ),
+                        );
+                      },
+                    );
                   },
-                  icon: Icon(
-                    Icons.menu,
-                    color: cs.onSurface,
-                  ),
                 ),
                 
                 const Expanded(
@@ -972,157 +1310,114 @@ class _HomeDashboardState extends State<HomeDashboard> {
                 'All Projects',
                 style: AppTypography.h2,
               ),
-              const Expanded(
-                child: SizedBox(),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: AppSpacing.md,
-                  vertical: AppSpacing.sm,
-                ),
-                decoration: BoxDecoration(
-                  color: cs.primary.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(AppBorderRadius.medium),
-                ),
-                child: Text(
-                  '12 Projects',
-                  style: AppTypography.caption.copyWith(
-                    color: cs.primary,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
+              const Expanded(child: SizedBox()),
+              FutureBuilder<List<dynamic>>(
+                future: _projectsFuture,
+                builder: (context, snapshot) {
+                  final count = snapshot.data?.length;
+                  final text = count == null ? '—' : '$count Projects';
+                  return Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.md,
+                      vertical: AppSpacing.sm,
+                    ),
+                    decoration: BoxDecoration(
+                      color: cs.primary.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(AppBorderRadius.medium),
+                    ),
+                    child: Text(
+                      text,
+                      style: AppTypography.caption.copyWith(
+                        color: cs.primary,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  );
+                },
               ),
             ],
           ),
           
           const SizedBox(height: AppSpacing.xxl),
-          
-          // Projects grid
-          GridView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: 2,
-              crossAxisSpacing: AppSpacing.lg,
-              mainAxisSpacing: AppSpacing.lg,
-              childAspectRatio: 0.82,
-            ),
-            itemCount: 6,
-            itemBuilder: (context, index) {
-              return Container(
-                decoration: BoxDecoration(
-                  color: cs.surface,
-                  borderRadius: BorderRadius.circular(AppBorderRadius.large),
-                  border: Border.all(
-                    color: cs.outlineVariant.withOpacity(0.6),
-                    width: 1,
+
+          FutureBuilder<List<dynamic>>(
+            future: _projectsFuture,
+            builder: (context, snapshot) {
+              if (_projectsFuture == null) {
+                return Center(
+                  child: Text(
+                    'Sign in to view your projects',
+                    style: AppTypography.body2.copyWith(color: cs.onSurfaceVariant),
                   ),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
+                );
+              }
+
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              final items = snapshot.data ?? <dynamic>[];
+              if (items.isEmpty) {
+                return Center(
+                  child: Text(
+                    'No projects yet',
+                    style: AppTypography.body2.copyWith(color: cs.onSurfaceVariant),
+                  ),
+                );
+              }
+
+              DateTime parseDate(dynamic v) {
+                if (v == null) return DateTime.now();
+                final s = v.toString();
+                return DateTime.tryParse(s) ?? DateTime.now();
+              }
+
+              String mapStatus(String? status) {
+                switch ((status ?? '').toLowerCase()) {
+                  case 'ready':
+                    return 'completed';
+                  case 'failed':
+                    return 'failed';
+                  case 'running':
+                  case 'queued':
+                    return 'in_progress';
+                  default:
+                    return status ?? 'unknown';
+                }
+              }
+
+              return GridView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  crossAxisCount: 2,
+                  crossAxisSpacing: AppSpacing.lg,
+                  mainAxisSpacing: AppSpacing.lg,
+                  childAspectRatio: 0.82,
                 ),
-                child: Material(
-                  color: Colors.transparent,
-                  child: InkWell(
-                    borderRadius: BorderRadius.circular(AppBorderRadius.large),
+                itemCount: items.length,
+                itemBuilder: (context, index) {
+                  final p = items[index];
+                  final pm = p is Map ? Map<String, dynamic>.from(p as Map) : <String, dynamic>{};
+                  final title = pm['name']?.toString() ?? 'Untitled';
+                  final desc = pm['description']?.toString();
+                  final status = mapStatus(pm['status']?.toString());
+                  final lastModified = parseDate(pm['updatedAt'] ?? pm['createdAt']);
+                  final thumbnailUrl = pm['previewImageUrl']?.toString();
+
+                  return ProjectCard(
+                    title: title,
+                    description: desc,
+                    thumbnailUrl: thumbnailUrl,
+                    status: status,
+                    lastModified: lastModified,
+                    progress: status == 'in_progress' ? 0.5 : 1.0,
                     onTap: () {
-                      context.go('/project-detail');
+                      final id = pm['_id']?.toString() ?? pm['id']?.toString();
+                      context.go('/project-detail', extra: {'projectId': id, 'project': pm});
                     },
-                    child: Padding(
-                      padding: const EdgeInsets.all(AppSpacing.md),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Container(
-                            width: 36,
-                            height: 36,
-                            decoration: BoxDecoration(
-                              gradient: AppColors.primaryGradient,
-                              borderRadius: BorderRadius.circular(AppBorderRadius.small),
-                            ),
-                            child: Icon(
-                              Icons.games,
-                              color: cs.onPrimary,
-                              size: 18,
-                            ),
-                          ),
-                          
-                          const SizedBox(height: AppSpacing.md),
-                          
-                          Text(
-                            'Project ${index + 1}',
-                            style: AppTypography.subtitle2.copyWith(
-                              fontWeight: FontWeight.w600,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          
-                          const SizedBox(height: AppSpacing.xs),
-                          
-                          Text(
-                            'Game description...',
-                            style: AppTypography.caption.copyWith(
-                              color: cs.onSurfaceVariant,
-                            ),
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          
-                          const SizedBox(height: AppSpacing.xs),
-                          
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.download,
-                                      size: 14,
-                                      color: cs.onSurfaceVariant,
-                                    ),
-                                    const SizedBox(width: AppSpacing.xs),
-                                    Text(
-                                      '${(index + 1) * 234}',
-                                      style: AppTypography.caption.copyWith(
-                                        color: cs.onSurfaceVariant,
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: AppSpacing.xs),
-                              Expanded(
-                                child: Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.star,
-                                      size: 14,
-                                      color: AppColors.warning,
-                                    ),
-                                    const SizedBox(width: AppSpacing.xs),
-                                    Text(
-                                      '${(index + 1) * 5}',
-                                      style: AppTypography.caption.copyWith(
-                                        color: cs.onSurfaceVariant,
-                                      ),
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
+                  );
+                },
               );
             },
           ),

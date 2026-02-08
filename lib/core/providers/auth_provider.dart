@@ -10,6 +10,7 @@ import '../services/auth_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   String? _token;
+  String? _refreshToken;
   Map<String, dynamic>? _user;
   bool _isLoading = false;
   String? _errorMessage;
@@ -40,6 +41,7 @@ class AuthProvider extends ChangeNotifier {
 
   // Getters
   String? get token => _token;
+  String? get refreshToken => _refreshToken;
   Map<String, dynamic>? get user => _user;
   bool get rememberMe => _rememberMe;
   bool get biometricEnabled => _biometricEnabled;
@@ -145,6 +147,7 @@ class AuthProvider extends ChangeNotifier {
 
       if (_rememberMe) {
         _token = prefs.getString('auth_token');
+        _refreshToken = prefs.getString('refresh_token');
         final userString = prefs.getString('user_data');
 
         if (userString != null) {
@@ -154,8 +157,10 @@ class AuthProvider extends ChangeNotifier {
         }
       } else {
         _token = null;
+        _refreshToken = null;
         _user = null;
         await prefs.remove('auth_token');
+        await prefs.remove('refresh_token');
         await prefs.remove('user_data');
       }
       
@@ -210,6 +215,12 @@ class AuthProvider extends ChangeNotifier {
           await prefs.remove('auth_token');
         }
 
+        if (_refreshToken != null) {
+          await prefs.setString('refresh_token', _refreshToken!);
+        } else {
+          await prefs.remove('refresh_token');
+        }
+
         if (_user != null) {
           // Convert user map to JSON string for storage
           final userJson = jsonEncode(_user!);
@@ -219,6 +230,7 @@ class AuthProvider extends ChangeNotifier {
         }
       } else {
         await prefs.remove('auth_token');
+        await prefs.remove('refresh_token');
         await prefs.remove('user_data');
       }
       
@@ -397,6 +409,7 @@ class AuthProvider extends ChangeNotifier {
       if (result['success']) {
         final data = result['data'];
         _token = data['access_token'];
+        _refreshToken = data['refresh_token']?.toString();
         if (data['user'] is Map<String, dynamic>) {
           _user = _normalizeUser(Map<String, dynamic>.from(data['user']));
         } else {
@@ -459,6 +472,7 @@ class AuthProvider extends ChangeNotifier {
       if (result['success']) {
         final data = result['data'];
         _token = data['access_token'];
+        _refreshToken = data['refresh_token']?.toString();
         if (data['user'] is Map<String, dynamic>) {
           _user = _normalizeUser(Map<String, dynamic>.from(data['user']));
         } else {
@@ -509,6 +523,7 @@ class AuthProvider extends ChangeNotifier {
       if (result['success']) {
         final data = result['data'];
         _token = data['access_token'];
+        _refreshToken = data['refresh_token']?.toString();
         if (data['user'] is Map<String, dynamic>) {
           _user = _normalizeUser(Map<String, dynamic>.from(data['user']));
         } else {
@@ -624,6 +639,7 @@ class AuthProvider extends ChangeNotifier {
       debugPrint('Error during logout: $e');
     } finally {
       _token = null;
+      _refreshToken = null;
       _user = null;
       // Ne PAS supprimer _rememberMe pour le garder sauvegardé
       await _saveAuthToStorage();

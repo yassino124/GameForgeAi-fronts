@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:http_parser/http_parser.dart';
 import 'package:mime/mime.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ApiService {
   static const String _configuredBaseUrl = String.fromEnvironment(
@@ -25,6 +26,123 @@ class ApiService {
     return _configuredBaseUrl;
   }
   static const Duration _timeout = Duration(seconds: 30);
+
+  static Future<Map<String, dynamic>> multipartFields(
+    String endpoint, {
+    required String method,
+    Map<String, File>? files,
+    Map<String, List<File>>? fileLists,
+    String? token,
+    Map<String, String>? fields,
+    Map<String, String>? headers,
+  }) async {
+    try {
+      final request = http.MultipartRequest(
+        method,
+        Uri.parse('$baseUrl$endpoint'),
+      );
+
+      if (token != null) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
+      request.headers['Accept'] = 'application/json';
+
+      if (headers != null) {
+        request.headers.addAll(headers);
+      }
+
+      if (fields != null) {
+        request.fields.addAll(fields);
+      }
+
+      Future<void> addFile(String field, File f) async {
+        List<int>? headerBytes;
+        try {
+          final raf = await f.open();
+          headerBytes = await raf.read(32);
+          await raf.close();
+        } catch (_) {
+          headerBytes = null;
+        }
+
+        final detectedMime =
+            lookupMimeType(f.path, headerBytes: headerBytes) ?? 'application/octet-stream';
+        MediaType? mediaType;
+        final parts = detectedMime.split('/');
+        if (parts.length == 2) {
+          mediaType = MediaType(parts[0], parts[1]);
+        }
+
+        request.files.add(
+          await http.MultipartFile.fromPath(
+            field,
+            f.path,
+            contentType: mediaType,
+          ),
+        );
+      }
+
+      if (files != null) {
+        for (final entry in files.entries) {
+          await addFile(entry.key, entry.value);
+        }
+      }
+      if (fileLists != null) {
+        for (final entry in fileLists.entries) {
+          for (final f in entry.value) {
+            await addFile(entry.key, f);
+          }
+        }
+      }
+
+      final streamed = await request.send().timeout(_timeout);
+      final response = await http.Response.fromStream(streamed);
+      return _handleResponse(response);
+    } on SocketException catch (e) {
+      return _errorResponse('Connection failed: ${e.message}\nURL: $baseUrl$endpoint');
+    } on HttpException {
+      return _errorResponse('HTTP error occurred');
+    } catch (e) {
+      return _errorResponse('Network error: ${e.toString()}');
+    }
+  }
+
+  static Future<String?> _refreshAccessToken() async {
+    final prefs = await SharedPreferences.getInstance();
+    final refreshToken = prefs.getString('refresh_token');
+    if (refreshToken == null || refreshToken.trim().isEmpty) return null;
+
+    final response = await http
+        .post(
+          Uri.parse('$baseUrl/auth/refresh-token'),
+          headers: const {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: jsonEncode({'refreshToken': refreshToken}),
+        )
+        .timeout(_timeout);
+
+    if (response.statusCode < 200 || response.statusCode >= 300) {
+      return null;
+    }
+
+    final decoded = jsonDecode(response.body);
+    final data = decoded is Map ? decoded['data'] : null;
+    if (data is! Map) return null;
+
+    final newAccessToken = data['access_token']?.toString();
+    final newRefreshToken = data['refresh_token']?.toString();
+
+    if (newAccessToken == null || newAccessToken.trim().isEmpty) return null;
+
+    await prefs.setString('auth_token', newAccessToken);
+    if (newRefreshToken != null && newRefreshToken.trim().isNotEmpty) {
+      await prefs.setString('refresh_token', newRefreshToken);
+    }
+
+    return newAccessToken;
+  }
 
   static Future<Map<String, dynamic>> multipart(
     String endpoint, {
@@ -98,12 +216,24 @@ class ApiService {
     Map<String, String>? headers,
   }) async {
     try {
-      final response = await http
+      http.Response response = await http
           .get(
             Uri.parse('$baseUrl$endpoint'),
             headers: _buildHeaders(token: token, additionalHeaders: headers),
           )
           .timeout(_timeout);
+
+      if (response.statusCode == 401 && token != null) {
+        final newToken = await _refreshAccessToken();
+        if (newToken != null) {
+          response = await http
+              .get(
+                Uri.parse('$baseUrl$endpoint'),
+                headers: _buildHeaders(token: newToken, additionalHeaders: headers),
+              )
+              .timeout(_timeout);
+        }
+      }
 
       return _handleResponse(response);
     } on SocketException catch (e) {
@@ -123,13 +253,26 @@ class ApiService {
     Map<String, String>? headers,
   }) async {
     try {
-      final response = await http
+      http.Response response = await http
           .post(
             Uri.parse('$baseUrl$endpoint'),
             headers: _buildHeaders(token: token, additionalHeaders: headers),
             body: data != null ? jsonEncode(data) : null,
           )
           .timeout(_timeout);
+
+      if (response.statusCode == 401 && token != null) {
+        final newToken = await _refreshAccessToken();
+        if (newToken != null) {
+          response = await http
+              .post(
+                Uri.parse('$baseUrl$endpoint'),
+                headers: _buildHeaders(token: newToken, additionalHeaders: headers),
+                body: data != null ? jsonEncode(data) : null,
+              )
+              .timeout(_timeout);
+        }
+      }
 
       return _handleResponse(response);
     } on SocketException catch (e) {
@@ -149,13 +292,26 @@ class ApiService {
     Map<String, String>? headers,
   }) async {
     try {
-      final response = await http
+      http.Response response = await http
           .put(
             Uri.parse('$baseUrl$endpoint'),
             headers: _buildHeaders(token: token, additionalHeaders: headers),
             body: data != null ? jsonEncode(data) : null,
           )
           .timeout(_timeout);
+
+      if (response.statusCode == 401 && token != null) {
+        final newToken = await _refreshAccessToken();
+        if (newToken != null) {
+          response = await http
+              .put(
+                Uri.parse('$baseUrl$endpoint'),
+                headers: _buildHeaders(token: newToken, additionalHeaders: headers),
+                body: data != null ? jsonEncode(data) : null,
+              )
+              .timeout(_timeout);
+        }
+      }
 
       return _handleResponse(response);
     } on SocketException catch (e) {
@@ -174,12 +330,24 @@ class ApiService {
     Map<String, String>? headers,
   }) async {
     try {
-      final response = await http
+      http.Response response = await http
           .delete(
             Uri.parse('$baseUrl$endpoint'),
             headers: _buildHeaders(token: token, additionalHeaders: headers),
           )
           .timeout(_timeout);
+
+      if (response.statusCode == 401 && token != null) {
+        final newToken = await _refreshAccessToken();
+        if (newToken != null) {
+          response = await http
+              .delete(
+                Uri.parse('$baseUrl$endpoint'),
+                headers: _buildHeaders(token: newToken, additionalHeaders: headers),
+              )
+              .timeout(_timeout);
+        }
+      }
 
       return _handleResponse(response);
     } on SocketException catch (e) {

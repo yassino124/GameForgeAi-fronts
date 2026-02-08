@@ -61,11 +61,25 @@
 			<key>CFBundleTypeRole</key>
 			<string>Editor</string>
 		</dict>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>flutterstripe</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>flutterstripe</string>
+			</array>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+		</dict>
 	</array>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Allow access to your photo library to choose a profile picture.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Allow access to your camera to take a profile picture.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Allow access to the microphone to search templates by voice.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Allow speech recognition to convert your voice into text for searching templates.</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Use Face ID to quickly sign in to your account.</string>
 </dict>

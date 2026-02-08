@@ -100,6 +100,13 @@ class SettingsScreen extends StatelessWidget {
               context,
               'Security',
               [
+                _buildSettingsItem(
+                  context,
+                  'Security Center',
+                  'Password, biometrics, and best practices',
+                  Icons.shield,
+                  () => _navigateToSecurityCenter(context),
+                ),
                 Consumer<AuthProvider>(
                   builder: (context, authProvider, child) {
                     final cs = Theme.of(context).colorScheme;
@@ -218,6 +225,13 @@ class SettingsScreen extends StatelessWidget {
                 ),
                 _buildSettingsItem(
                   context,
+                  'How to use',
+                  'Quick guide to create and export games',
+                  Icons.menu_book,
+                  () => _navigateToHowToUse(context),
+                ),
+                _buildSettingsItem(
+                  context,
                   'Contact Support',
                   'Reach out to our team',
                   Icons.support_agent,
@@ -244,7 +258,7 @@ class SettingsScreen extends StatelessWidget {
                   'About GameForge AI',
                   'App version and information',
                   Icons.info,
-                  () => _showAboutDialog(context),
+                  () => _navigateToAbout(context),
                 ),
                 _buildSettingsItem(
                   context,
@@ -421,6 +435,10 @@ class SettingsScreen extends StatelessWidget {
     );
   }
 
+  void _navigateToHowToUse(BuildContext context) {
+    context.push('/how-to-use');
+  }
+
   void _navigateToContactSupport(BuildContext context) {
     // TODO: Navigate to contact support
     ScaffoldMessenger.of(context).showSnackBar(
@@ -436,17 +454,19 @@ class SettingsScreen extends StatelessWidget {
   }
 
   void _navigateToTerms(BuildContext context) {
-    // TODO: Navigate to terms of service
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Terms of Service - Coming Soon')),
-    );
+    context.push('/terms-of-service');
   }
 
   void _navigateToPrivacyPolicy(BuildContext context) {
-    // TODO: Navigate to privacy policy
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Privacy Policy - Coming Soon')),
-    );
+    context.push('/privacy-policy');
+  }
+
+  void _navigateToSecurityCenter(BuildContext context) {
+    context.push('/security-center');
+  }
+
+  void _navigateToAbout(BuildContext context) {
+    context.push('/about');
   }
 
   void _showAboutDialog(BuildContext context) {

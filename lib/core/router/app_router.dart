@@ -11,6 +11,9 @@ import '../../presentation/screens/build/build.dart';
 import '../../presentation/screens/marketplace/marketplace.dart';
 import '../../presentation/screens/profile/profile.dart';
 import '../../presentation/screens/notifications/notifications.dart';
+import '../../presentation/screens/assets/assets_library_screen.dart';
+import '../../presentation/screens/assets/assets_export_screen.dart';
+import '../../presentation/screens/project/project_export_screen.dart';
 
 class AppRouter {
   static final GoRouter router = GoRouter(
@@ -113,6 +116,16 @@ class AppRouter {
           return const TemplateSelectionScreen();
         },
       ),
+
+      GoRoute(
+        path: '/templates/upload',
+        builder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return const SignInScreen();
+          }
+          return const TemplateUploadScreen();
+        },
+      ),
       GoRoute(
         path: '/project-details',
         builder: (context, state) {
@@ -146,7 +159,9 @@ class AppRouter {
           if (!AuthGuard.canActivate(context)) {
             return const SignInScreen();
           }
-          return const ProjectDetailScreen();
+          final extra = state.extra;
+          final data = extra is Map ? Map<String, dynamic>.from(extra as Map) : <String, dynamic>{};
+          return ProjectDetailScreen(data: data);
         },
       ),
       
@@ -187,6 +202,17 @@ class AppRouter {
             return const SignInScreen();
           }
           return const TemplateMarketplaceScreen();
+        },
+      ),
+
+      GoRoute(
+        path: '/template/:id',
+        builder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return const SignInScreen();
+          }
+          final id = state.pathParameters['id'] ?? '';
+          return TemplateDetailsScreen(templateId: id);
         },
       ),
       
@@ -234,6 +260,85 @@ class AppRouter {
             return const SignInScreen();
           }
           return const SubscriptionScreen();
+        },
+      ),
+
+      GoRoute(
+        path: '/assets',
+        builder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return const SignInScreen();
+          }
+          return const AssetsLibraryScreen();
+        },
+      ),
+      GoRoute(
+        path: '/assets/export',
+        builder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return const SignInScreen();
+          }
+          final extra = state.extra;
+          final url = (extra is Map) ? extra['url']?.toString() : null;
+          return AssetsExportScreen(url: url ?? '');
+        },
+      ),
+
+      GoRoute(
+        path: '/projects/export',
+        builder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return const SignInScreen();
+          }
+          final extra = state.extra;
+          final url = (extra is Map) ? extra['url']?.toString() : null;
+          return ProjectExportScreen(url: url ?? '');
+        },
+      ),
+
+      GoRoute(
+        path: '/how-to-use',
+        builder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return const SignInScreen();
+          }
+          return const HowToUseScreen();
+        },
+      ),
+      GoRoute(
+        path: '/about',
+        builder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return const SignInScreen();
+          }
+          return const AboutAppScreen();
+        },
+      ),
+      GoRoute(
+        path: '/privacy-policy',
+        builder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return const SignInScreen();
+          }
+          return const PrivacyPolicyScreen();
+        },
+      ),
+      GoRoute(
+        path: '/terms-of-service',
+        builder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return const SignInScreen();
+          }
+          return const TermsOfServiceScreen();
+        },
+      ),
+      GoRoute(
+        path: '/security-center',
+        builder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return const SignInScreen();
+          }
+          return const SecurityCenterScreen();
         },
       ),
       
