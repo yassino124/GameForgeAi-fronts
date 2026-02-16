@@ -29,11 +29,6 @@ class AuthProvider extends ChangeNotifier {
     defaultValue: '1025078322603-odqc7615cg3v8dq1403jc4tpopifnha9.apps.googleusercontent.com',
   );
 
-  static const String _googleIosClientId = String.fromEnvironment(
-    'GOOGLE_IOS_CLIENT_ID',
-    defaultValue: '',
-  );
-
   static const String _googleMacosClientId = String.fromEnvironment(
     'GOOGLE_MACOS_CLIENT_ID',
     defaultValue: '',
@@ -65,6 +60,12 @@ class AuthProvider extends ChangeNotifier {
       return GoogleSignIn(
         scopes: ['email', 'profile'],
         clientId: _googleMacosClientId.isNotEmpty ? _googleMacosClientId : null,
+        serverClientId: _googleServerClientId,
+      );
+    }
+    if (Platform.isIOS) {
+      return GoogleSignIn(
+        scopes: ['email', 'profile'],
         serverClientId: _googleServerClientId,
       );
     }

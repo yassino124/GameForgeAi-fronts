@@ -1,8 +1,16 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
+
 import 'api_service.dart';
 
 class TemplatesService {
+  static final ValueNotifier<int> refreshNotifier = ValueNotifier<int>(0);
+
+  static void notifyTemplatesChanged() {
+    refreshNotifier.value = refreshNotifier.value + 1;
+  }
+
   static Future<Map<String, dynamic>> listPublicTemplates({
     String? q,
     String? category,
@@ -57,6 +65,22 @@ class TemplatesService {
     return ApiService.get('/templates/$templateId/access', token: token);
   }
 
+  static Future<Map<String, dynamic>> generateTemplateAiMetadata({
+    required String token,
+    required String templateId,
+    String? notes,
+    bool? overwrite,
+  }) async {
+    return ApiService.post(
+      '/templates/$templateId/ai/generate',
+      token: token,
+      data: {
+        if (notes != null) 'notes': notes,
+        if (overwrite != null) 'overwrite': overwrite,
+      },
+    );
+  }
+
   static Future<Map<String, dynamic>> createTemplatePurchasePaymentSheet({
     required String token,
     required String templateId,
@@ -85,6 +109,21 @@ class TemplatesService {
     return ApiService.get('/templates/$templateId/reviews');
   }
 
+  static Future<Map<String, dynamic>> listPendingTemplateReviews({
+    required String token,
+    required String templateId,
+  }) async {
+    return ApiService.get('/templates/$templateId/reviews/pending', token: token);
+  }
+
+  static Future<Map<String, dynamic>> approveTemplateReview({
+    required String token,
+    required String templateId,
+    required String userId,
+  }) async {
+    return ApiService.post('/templates/$templateId/reviews/$userId/approve', token: token);
+  }
+
   static Future<Map<String, dynamic>> submitTemplateReview({
     required String token,
     required String templateId,
@@ -107,7 +146,7 @@ class TemplatesService {
     File? previewImage,
     List<File>? screenshots,
     File? previewVideo,
-    required String name,
+    String? name,
     String? description,
     String? category,
     String? tagsCsv,
@@ -127,11 +166,12 @@ class TemplatesService {
       fileLists: {
         if (screenshots != null && screenshots.isNotEmpty) 'screenshots': screenshots,
       },
+      timeout: const Duration(minutes: 15),
       fields: {
-        'name': name,
-        if (description != null) 'description': description,
-        if (category != null) 'category': category,
-        if (tagsCsv != null) 'tags': tagsCsv,
+        if (name != null && name.trim().isNotEmpty) 'name': name.trim(),
+        if (description != null && description.trim().isNotEmpty) 'description': description.trim(),
+        if (category != null && category.trim().isNotEmpty) 'category': category.trim(),
+        if (tagsCsv != null && tagsCsv.trim().isNotEmpty) 'tags': tagsCsv.trim(),
         if (price != null) 'price': price.toString(),
       },
     );

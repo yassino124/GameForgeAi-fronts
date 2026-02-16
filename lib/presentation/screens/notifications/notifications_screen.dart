@@ -1,8 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../core/constants/app_constants.dart';
-import '../../core/themes/app_theme.dart';
-import '../../presentation/widgets/widgets.dart';
+import 'package:provider/provider.dart';
+import '../../../core/constants/app_constants.dart';
+import '../../../core/themes/app_theme.dart';
+import '../../../core/providers/auth_provider.dart';
+import '../../../core/services/local_notifications_service.dart';
+import '../../../core/services/notifications_service.dart';
+import '../../../core/services/templates_service.dart';
+import '../../widgets/widgets.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -12,53 +17,196 @@ class NotificationsScreen extends StatefulWidget {
 }
 
 class _NotificationsScreenState extends State<NotificationsScreen> {
-  final List<NotificationItem> _notifications = [
-    NotificationItem(
-      id: '1',
-      title: 'Game Generated Successfully!',
-      message: 'Your Space Adventure game is ready to play and customize.',
-      timestamp: DateTime.now().subtract(const Duration(minutes: 5)),
-      type: NotificationType.success,
-      isRead: false,
-      icon: Icons.check_circle,
-    ),
-    NotificationItem(
-      id: '2',
-      title: 'New Template Available',
-      message: 'Check out the new Fantasy RPG template in the marketplace.',
-      timestamp: DateTime.now().subtract(const Duration(hours: 2)),
-      type: NotificationType.info,
-      isRead: false,
-      icon: Icons.new_releases,
-    ),
-    NotificationItem(
-      id: '3',
-      title: 'Build Completed',
-      message: 'Your iOS build has completed successfully. Ready for download!',
-      timestamp: DateTime.now().subtract(const Duration(hours: 4)),
-      type: NotificationType.success,
-      isRead: true,
-      icon: Icons.build,
-    ),
-    NotificationItem(
-      id: '4',
-      title: 'Subscription Renewed',
-      message: 'Your Pro subscription has been renewed for another month.',
-      timestamp: DateTime.now().subtract(const Duration(days: 1)),
-      type: NotificationType.info,
-      isRead: true,
-      icon: Icons.workspace_premium,
-    ),
-    NotificationItem(
-      id: '5',
-      title: 'System Maintenance',
-      message: 'Scheduled maintenance will occur tonight from 2-4 AM EST.',
-      timestamp: DateTime.now().subtract(const Duration(days: 2)),
-      type: NotificationType.warning,
-      isRead: true,
-      icon: Icons.schedule,
-    ),
-  ];
+  List<NotificationItem> _notifications = [];
+  bool _loading = false;
+  String? _error;
+
+  final Set<String> _approvingNotificationIds = {};
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  Future<void> _markAsRead(String notificationId) async {
+    setState(() {
+      final notification = _notifications.firstWhere((n) => n.id == notificationId);
+      notification.isRead = true;
+    });
+
+    if (notificationId.startsWith('local_')) {
+      try {
+        await LocalNotificationsService.markInAppNotificationRead(notificationId, true);
+      } catch (_) {}
+      return;
+    }
+
+    final token = _getToken();
+    if (token == null || token.trim().isEmpty) return;
+    try {
+      await NotificationsService.markNotificationRead(
+        token: token,
+        notificationId: notificationId,
+        isRead: true,
+      );
+    } catch (_) {}
+  }
+
+  bool get _isModerator {
+    try {
+      final auth = context.read<AuthProvider>();
+      return auth.isAdmin || auth.isDevl;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  String? _getToken() {
+    try {
+      return context.read<AuthProvider>().token;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  NotificationType _mapType(String raw) {
+    final t = raw.trim().toLowerCase();
+    switch (t) {
+      case 'success':
+        return NotificationType.success;
+      case 'warning':
+        return NotificationType.warning;
+      case 'error':
+        return NotificationType.error;
+      case 'info':
+      default:
+        return NotificationType.info;
+    }
+  }
+
+  IconData _mapIcon(NotificationType type) {
+    switch (type) {
+      case NotificationType.success:
+        return Icons.check_circle;
+      case NotificationType.warning:
+        return Icons.warning_amber_rounded;
+      case NotificationType.error:
+        return Icons.error_outline;
+      case NotificationType.info:
+      default:
+        return Icons.notifications;
+    }
+  }
+
+  Future<void> _load() async {
+    if (_loading) return;
+    final token = _getToken();
+    if (token == null || token.trim().isEmpty) {
+      if (!mounted) return;
+      setState(() {
+        _notifications = [];
+        _error = 'Please sign in to view notifications.';
+      });
+      return;
+    }
+
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+
+    try {
+      final localRaw = await LocalNotificationsService.listInAppNotifications();
+
+      final res = await NotificationsService.listNotifications(token: token);
+      if (!mounted) return;
+      if (res['success'] != true) {
+        setState(() {
+          _error = res['message']?.toString() ?? 'Failed to load notifications';
+          _notifications = [];
+        });
+        return;
+      }
+
+      final data = (res['data'] is List) ? (res['data'] as List) : const [];
+      final items = <NotificationItem>[];
+
+      for (final n in localRaw) {
+        final id = n['id']?.toString() ?? '';
+        if (id.isEmpty) continue;
+        final title = n['title']?.toString() ?? '';
+        final message = n['message']?.toString() ?? '';
+        final isRead = n['isRead'] == true;
+        final createdAt = n['timestamp']?.toString() ?? '';
+        DateTime ts;
+        try {
+          ts = DateTime.parse(createdAt).toLocal();
+        } catch (_) {
+          ts = DateTime.now();
+        }
+        final type = _mapType(n['type']?.toString() ?? 'info');
+        final payload = (n['data'] is Map) ? Map<String, dynamic>.from(n['data'] as Map) : null;
+        items.add(
+          NotificationItem(
+            id: id,
+            title: title,
+            message: message,
+            timestamp: ts,
+            type: type,
+            isRead: isRead,
+            icon: _mapIcon(type),
+            data: payload,
+          ),
+        );
+      }
+
+      for (final n in data) {
+        if (n is! Map) continue;
+        final id = n['_id']?.toString() ?? '';
+        if (id.isEmpty) continue;
+        final title = n['title']?.toString() ?? '';
+        final message = n['message']?.toString() ?? '';
+        final isRead = n['isRead'] == true;
+        final createdAt = n['createdAt']?.toString() ?? '';
+        DateTime ts;
+        try {
+          ts = DateTime.parse(createdAt).toLocal();
+        } catch (_) {
+          ts = DateTime.now();
+        }
+        final type = _mapType(n['type']?.toString() ?? 'info');
+        final payload = (n['data'] is Map) ? Map<String, dynamic>.from(n['data'] as Map) : null;
+        items.add(
+          NotificationItem(
+            id: id,
+            title: title,
+            message: message,
+            timestamp: ts,
+            type: type,
+            isRead: isRead,
+            icon: _mapIcon(type),
+            data: payload,
+          ),
+        );
+      }
+
+      setState(() {
+        _notifications = items;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _notifications = [];
+      });
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+      });
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -101,19 +249,35 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           
           // Notifications list
           Expanded(
-            child: _notifications.isEmpty
-                ? const EmptyStateWidget(
-                    icon: Icons.notifications_none,
-                    title: 'No notifications',
-                    subtitle: 'You\'re all caught up!',
-                  )
-                : ListView.builder(
-                    padding: AppSpacing.paddingLarge,
-                    itemCount: _notifications.length,
-                    itemBuilder: (context, index) {
-                      return _buildNotificationItem(_notifications[index]);
-                    },
-                  ),
+            child: _loading
+                ? const Center(child: CircularProgressIndicator())
+                : _error != null
+                    ? Center(
+                        child: Padding(
+                          padding: AppSpacing.paddingLarge,
+                          child: Text(
+                            _error!,
+                            style: AppTypography.body2.copyWith(color: Theme.of(context).colorScheme.error),
+                            textAlign: TextAlign.center,
+                          ),
+                        ),
+                      )
+                    : _notifications.isEmpty
+                        ? const EmptyStateWidget(
+                            icon: Icons.notifications_none,
+                            title: 'No notifications',
+                            subtitle: 'You\'re all caught up!',
+                          )
+                        : RefreshIndicator(
+                            onRefresh: _load,
+                            child: ListView.builder(
+                              padding: AppSpacing.paddingLarge,
+                              itemCount: _notifications.length,
+                              itemBuilder: (context, index) {
+                                return _buildNotificationItem(_notifications[index]);
+                              },
+                            ),
+                          ),
           ),
         ],
       ),
@@ -240,19 +404,22 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         break;
     }
     
-    return Container(
-      margin: const EdgeInsets.only(bottom: AppSpacing.lg),
-      padding: const EdgeInsets.all(AppSpacing.lg),
-      decoration: BoxDecoration(
-        color: cs.surface,
-        borderRadius: BorderRadius.circular(AppBorderRadius.large),
-        border: Border.all(
-          color: notification.isRead ? cs.outlineVariant.withOpacity(0.6) : cs.primary,
-          width: notification.isRead ? 1 : 2,
+    return InkWell(
+      borderRadius: BorderRadius.circular(AppBorderRadius.large),
+      onTap: () => _onTapNotification(notification),
+      child: Container(
+        margin: const EdgeInsets.only(bottom: AppSpacing.lg),
+        padding: const EdgeInsets.all(AppSpacing.lg),
+        decoration: BoxDecoration(
+          color: cs.surface,
+          borderRadius: BorderRadius.circular(AppBorderRadius.large),
+          border: Border.all(
+            color: notification.isRead ? cs.outlineVariant.withOpacity(0.6) : cs.primary,
+            width: notification.isRead ? 1 : 2,
+          ),
         ),
-      ),
-      child: Column(
-        children: [
+        child: Column(
+          children: [
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -358,6 +525,39 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
           ),
           
           // Action buttons for specific notification types
+          if (_isModerator &&
+              (notification.data?['kind']?.toString() ?? '') == 'template_review_pending') ...[
+            const SizedBox(height: AppSpacing.md),
+            Row(
+              children: [
+                Expanded(
+                  child: CustomButton(
+                    text: 'Open Template',
+                    onPressed: () {
+                      final tid = notification.data?['templateId']?.toString() ?? '';
+                      if (tid.trim().isEmpty) return;
+                      context.go('/template/$tid');
+                    },
+                    type: ButtonType.secondary,
+                    size: ButtonSize.small,
+                    icon: const Icon(Icons.open_in_new),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: CustomButton(
+                    text: _approvingNotificationIds.contains(notification.id) ? 'Approving...' : 'Approve',
+                    onPressed: _approvingNotificationIds.contains(notification.id)
+                        ? null
+                        : () => _approveFromNotification(notification),
+                    type: ButtonType.primary,
+                    size: ButtonSize.small,
+                    icon: const Icon(Icons.verified),
+                  ),
+                ),
+              ],
+            ),
+          ],
           if (notification.type == NotificationType.success && 
               notification.title.contains('Generated')) ...[
             const SizedBox(height: AppSpacing.md),
@@ -390,9 +590,85 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               ],
             ),
           ],
-        ],
+          ],
+        ),
       ),
     );
+  }
+
+  Future<void> _onTapNotification(NotificationItem notification) async {
+    final kind = notification.data?['kind']?.toString() ?? '';
+    if (kind == 'build_finished') {
+      final pid = notification.data?['projectId']?.toString() ?? '';
+      if (pid.trim().isNotEmpty) {
+        await _markAsRead(notification.id);
+        if (!mounted) return;
+        context.go('/build-results?projectId=$pid');
+      }
+      return;
+    }
+
+    await _markAsRead(notification.id);
+  }
+
+  Future<void> _approveFromNotification(NotificationItem notification) async {
+    final token = _getToken();
+    if (token == null || token.trim().isEmpty) return;
+
+    final cs = Theme.of(context).colorScheme;
+    final templateId = notification.data?['templateId']?.toString() ?? '';
+    final userId = notification.data?['userId']?.toString() ?? '';
+
+    if (templateId.trim().isEmpty || userId.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: const Text('Invalid notification payload'), backgroundColor: cs.error),
+      );
+      return;
+    }
+
+    setState(() {
+      _approvingNotificationIds.add(notification.id);
+    });
+
+    try {
+      final res = await TemplatesService.approveTemplateReview(
+        token: token,
+        templateId: templateId,
+        userId: userId,
+      );
+
+      if (!mounted) return;
+      if (res['success'] != true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(res['message']?.toString() ?? 'Failed to approve review'),
+            backgroundColor: cs.error,
+          ),
+        );
+        return;
+      }
+
+      await NotificationsService.markNotificationRead(
+        token: token,
+        notificationId: notification.id,
+        isRead: true,
+      );
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: const Text('Review approved.'), backgroundColor: cs.primary),
+      );
+
+      await _load();
+
+      if (mounted) {
+        context.go('/template/$templateId');
+      }
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _approvingNotificationIds.remove(notification.id);
+      });
+    }
   }
 
   String _formatTimestamp(DateTime timestamp) {
@@ -413,18 +689,44 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   }
 
   void _markAllAsRead() {
-    setState(() {
-      for (var notification in _notifications) {
-        notification.isRead = true;
+    final token = _getToken();
+    if (token == null || token.trim().isEmpty) return;
+
+    try {
+      LocalNotificationsService.markAllInAppRead();
+    } catch (_) {}
+
+    NotificationsService.markAllRead(token: token).then((res) {
+      if (!mounted) return;
+      if (res['success'] == true) {
+        setState(() {
+          for (var notification in _notifications) {
+            notification.isRead = true;
+          }
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('All notifications marked as read'),
+            backgroundColor: AppColors.success,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(res['message']?.toString() ?? 'Failed to mark notifications as read'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
       }
+    }).catchError((_) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Failed to mark notifications as read'),
+          backgroundColor: Theme.of(context).colorScheme.error,
+        ),
+      );
     });
-    
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('All notifications marked as read'),
-        backgroundColor: AppColors.success,
-      ),
-    );
   }
 
   void _clearAllNotifications() {
@@ -448,8 +750,40 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               if (context.canPop()) {
                 context.pop();
               }
-              setState(() {
-                _notifications.clear();
+              try {
+                LocalNotificationsService.clearInAppNotifications();
+              } catch (_) {}
+
+              final token = _getToken();
+              if (token == null || token.trim().isEmpty) {
+                setState(() {
+                  _notifications.removeWhere((n) => n.id.startsWith('local_'));
+                });
+                return;
+              }
+
+              NotificationsService.clearAll(token: token).then((res) {
+                if (!mounted) return;
+                if (res['success'] == true) {
+                  setState(() {
+                    _notifications.clear();
+                  });
+                } else {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(res['message']?.toString() ?? 'Failed to clear notifications'),
+                      backgroundColor: Theme.of(context).colorScheme.error,
+                    ),
+                  );
+                }
+              }).catchError((_) {
+                if (!mounted) return;
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const Text('Failed to clear notifications'),
+                    backgroundColor: Theme.of(context).colorScheme.error,
+                  ),
+                );
               });
             },
             child: const Text(
@@ -462,24 +796,41 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     );
   }
 
-  void _markAsRead(String notificationId) {
-    setState(() {
-      final notification = _notifications.firstWhere((n) => n.id == notificationId);
-      notification.isRead = true;
-    });
-  }
-
   void _markAsUnread(String notificationId) {
     setState(() {
       final notification = _notifications.firstWhere((n) => n.id == notificationId);
       notification.isRead = false;
     });
+
+    if (notificationId.startsWith('local_')) {
+      try {
+        LocalNotificationsService.markInAppNotificationRead(notificationId, false);
+      } catch (_) {}
+      return;
+    }
+
+    final token = _getToken();
+    if (token == null || token.trim().isEmpty) return;
+    try {
+      NotificationsService.markNotificationRead(
+        token: token,
+        notificationId: notificationId,
+        isRead: false,
+      );
+    } catch (_) {}
   }
 
   void _deleteNotification(String notificationId) {
     setState(() {
       _notifications.removeWhere((n) => n.id == notificationId);
     });
+
+    if (notificationId.startsWith('local_')) {
+      try {
+        LocalNotificationsService.removeInAppNotification(notificationId);
+      } catch (_) {}
+      return;
+    }
   }
 }
 
@@ -490,6 +841,7 @@ class NotificationItem {
   final DateTime timestamp;
   final NotificationType type;
   final IconData icon;
+  final Map<String, dynamic>? data;
   bool isRead;
 
   NotificationItem({
@@ -499,6 +851,7 @@ class NotificationItem {
     required this.timestamp,
     required this.type,
     required this.icon,
+    required this.data,
     this.isRead = false,
   });
 }

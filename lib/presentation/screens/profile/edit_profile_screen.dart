@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -7,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/constants/app_constants.dart';
+import '../../../core/themes/app_theme.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../widgets/widgets.dart';
 
@@ -24,6 +26,55 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   late final TextEditingController _bioController;
   late final TextEditingController _locationController;
   late final TextEditingController _websiteController;
+
+  PreferredSizeWidget _buildGlassAppBar(ColorScheme cs) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return PreferredSize(
+      preferredSize: const Size.fromHeight(kToolbarHeight + AppSpacing.sm),
+      child: ClipRRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md),
+            decoration: BoxDecoration(
+              color: cs.surface.withOpacity(isDark ? 0.72 : 0.86),
+              border: Border(
+                bottom: BorderSide(color: cs.outlineVariant.withOpacity(0.35)),
+              ),
+            ),
+            child: SafeArea(
+              bottom: false,
+              child: SizedBox(
+                height: kToolbarHeight + AppSpacing.sm,
+                child: Row(
+                  children: [
+                    IconButton(
+                      onPressed: () {
+                        if (context.canPop()) {
+                          context.pop();
+                        } else {
+                          context.go('/dashboard?tab=profile');
+                        }
+                      },
+                      icon: Icon(Icons.arrow_back, color: cs.onSurface),
+                    ),
+                    Expanded(
+                      child: Text(
+                        'Edit Profile',
+                        textAlign: TextAlign.center,
+                        style: AppTypography.subtitle1.copyWith(fontWeight: FontWeight.w800),
+                      ),
+                    ),
+                    const SizedBox(width: 48),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -243,171 +294,219 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         final email = user?['email']?.toString() ?? '';
         final avatar = user?['avatar']?.toString();
         final username = user?['username']?.toString() ?? 'User';
+        final isDark = Theme.of(context).brightness == Brightness.dark;
 
         return Scaffold(
           backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-          appBar: AppBar(
-            backgroundColor: cs.surface,
-            elevation: 0,
-            toolbarHeight: kToolbarHeight + AppSpacing.sm,
-            leading: IconButton(
-              onPressed: () {
-                if (context.canPop()) {
-                  context.pop();
-                } else {
-                  context.go('/dashboard?tab=profile');
-                }
-              },
-              icon: Icon(Icons.arrow_back, color: cs.onSurface),
+          appBar: _buildGlassAppBar(cs),
+          body: Container(
+            decoration: BoxDecoration(
+              gradient: isDark ? AppColors.backgroundGradient : AppTheme.backgroundGradientLight,
             ),
-            title: Text(
-              'Edit Profile',
-              style: AppTypography.subtitle1.copyWith(fontWeight: FontWeight.w600),
-            ),
-            centerTitle: true,
-          ),
-          body: SingleChildScrollView(
-            padding: AppSpacing.paddingLarge,
-            child: Form(
-              key: _formKey,
+            child: SafeArea(
+              top: false,
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const SizedBox(height: AppSpacing.lg),
-                  Center(
-                    child: Stack(
-                      children: [
-                        CircleAvatar(
-                          radius: 54,
-                          backgroundColor: cs.primary,
-                          backgroundImage: avatar != null && avatar.isNotEmpty ? NetworkImage(avatar) : null,
-                          child: avatar == null || avatar.isEmpty
-                              ? Text(
-                                  username.isNotEmpty ? username[0].toUpperCase() : 'U',
-                                  style: AppTypography.h2.copyWith(
-                                    color: cs.onPrimary,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                )
-                              : null,
-                        ),
-                        Positioned(
-                          bottom: 0,
-                          right: 0,
-                          child: GestureDetector(
-                            onTap: authProvider.isLoading ? null : () => _pickAndUploadAvatar(authProvider),
-                            child: Container(
-                              width: 36,
-                              height: 36,
-                              decoration: BoxDecoration(
-                                color: cs.primary,
-                                shape: BoxShape.circle,
-                                border: Border.all(color: cs.surface, width: 2),
-                              ),
-                              child: authProvider.isLoading
-                                  ? const Padding(
-                                      padding: EdgeInsets.all(9),
-                                      child: CircularProgressIndicator(strokeWidth: 2),
-                                    )
-                                  : Icon(
-                                      Icons.camera_alt,
-                                      size: 18,
-                                      color: cs.onPrimary,
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, 12),
+                      child: Form(
+                        key: _formKey,
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Center(
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(999),
+                                child: BackdropFilter(
+                                  filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                                  child: Container(
+                                    padding: const EdgeInsets.fromLTRB(18, 18, 18, 16),
+                                    decoration: BoxDecoration(
+                                      color: cs.surface.withOpacity(isDark ? 0.40 : 0.55),
+                                      borderRadius: BorderRadius.circular(999),
+                                      border: Border.all(color: cs.outlineVariant.withOpacity(0.45)),
                                     ),
+                                    child: Stack(
+                                      clipBehavior: Clip.none,
+                                      children: [
+                                        Container(
+                                          padding: const EdgeInsets.all(3),
+                                          decoration: BoxDecoration(
+                                            shape: BoxShape.circle,
+                                            gradient: AppColors.primaryGradient,
+                                            boxShadow: [
+                                              BoxShadow(
+                                                color: cs.primary.withOpacity(0.28),
+                                                blurRadius: 22,
+                                                offset: const Offset(0, 14),
+                                              ),
+                                            ],
+                                          ),
+                                          child: CircleAvatar(
+                                            radius: 54,
+                                            backgroundColor: cs.primary,
+                                            backgroundImage: avatar != null && avatar.isNotEmpty ? NetworkImage(avatar) : null,
+                                            child: avatar == null || avatar.isEmpty
+                                                ? Text(
+                                                    username.isNotEmpty ? username[0].toUpperCase() : 'U',
+                                                    style: AppTypography.h2.copyWith(
+                                                      color: cs.onPrimary,
+                                                      fontWeight: FontWeight.bold,
+                                                    ),
+                                                  )
+                                                : null,
+                                          ),
+                                        ),
+                                        Positioned(
+                                          bottom: 2,
+                                          right: -2,
+                                          child: GestureDetector(
+                                            onTap: authProvider.isLoading ? null : () => _pickAndUploadAvatar(authProvider),
+                                            child: Container(
+                                              width: 38,
+                                              height: 38,
+                                              decoration: BoxDecoration(
+                                                gradient: AppColors.primaryGradient,
+                                                shape: BoxShape.circle,
+                                                border: Border.all(color: cs.surface.withOpacity(0.85), width: 2),
+                                                boxShadow: [
+                                                  BoxShadow(
+                                                    color: cs.primary.withOpacity(0.30),
+                                                    blurRadius: 16,
+                                                    offset: const Offset(0, 10),
+                                                  ),
+                                                ],
+                                              ),
+                                              child: authProvider.isLoading
+                                                  ? const Padding(
+                                                      padding: EdgeInsets.all(10),
+                                                      child: CircularProgressIndicator(strokeWidth: 2),
+                                                    )
+                                                  : Icon(
+                                                      Icons.camera_alt_rounded,
+                                                      size: 18,
+                                                      color: cs.onPrimary,
+                                                    ),
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.xl),
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(AppBorderRadius.large),
+                              child: BackdropFilter(
+                                filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+                                child: Container(
+                                  padding: const EdgeInsets.all(AppSpacing.lg),
+                                  decoration: BoxDecoration(
+                                    color: cs.surface.withOpacity(isDark ? 0.50 : 0.72),
+                                    borderRadius: BorderRadius.circular(AppBorderRadius.large),
+                                    border: Border.all(color: cs.outlineVariant.withOpacity(0.55)),
+                                  ),
+                                  child: Column(
+                                    children: [
+                                      CustomTextField(
+                                        label: 'Full Name',
+                                        hint: 'Enter your full name',
+                                        prefixIcon: Icons.badge,
+                                        controller: _fullNameController,
+                                        textInputAction: TextInputAction.next,
+                                        maxLength: 60,
+                                        showCharacterCount: true,
+                                        enabled: !authProvider.isLoading,
+                                        validator: _validateFullName,
+                                      ),
+                                      const SizedBox(height: AppSpacing.lg),
+                                      CustomTextField(
+                                        label: 'Username',
+                                        hint: 'Enter your username',
+                                        prefixIcon: Icons.person,
+                                        controller: _usernameController,
+                                        textInputAction: TextInputAction.done,
+                                        maxLength: 24,
+                                        showCharacterCount: true,
+                                        enabled: !authProvider.isLoading,
+                                        validator: _validateUsername,
+                                        onSubmitted: (_) => _save(authProvider),
+                                      ),
+                                      const SizedBox(height: AppSpacing.lg),
+                                      CustomTextField(
+                                        label: 'Bio',
+                                        hint: 'Tell us about you',
+                                        prefixIcon: Icons.short_text,
+                                        controller: _bioController,
+                                        keyboardType: TextInputType.multiline,
+                                        textInputAction: TextInputAction.newline,
+                                        maxLines: 4,
+                                        maxLength: 280,
+                                        showCharacterCount: true,
+                                        enabled: !authProvider.isLoading,
+                                        validator: _validateBio,
+                                      ),
+                                      const SizedBox(height: AppSpacing.lg),
+                                      CustomTextField(
+                                        label: 'Location',
+                                        hint: 'City, Country',
+                                        prefixIcon: Icons.location_on,
+                                        controller: _locationController,
+                                        textInputAction: TextInputAction.next,
+                                        maxLength: 60,
+                                        showCharacterCount: true,
+                                        enabled: !authProvider.isLoading,
+                                        validator: _validateLocation,
+                                      ),
+                                      const SizedBox(height: AppSpacing.lg),
+                                      CustomTextField(
+                                        label: 'Website',
+                                        hint: 'https://example.com',
+                                        prefixIcon: Icons.link,
+                                        controller: _websiteController,
+                                        textInputAction: TextInputAction.next,
+                                        maxLength: 200,
+                                        showCharacterCount: true,
+                                        enabled: !authProvider.isLoading,
+                                        validator: _validateWebsite,
+                                      ),
+                                      const SizedBox(height: AppSpacing.lg),
+                                      CustomTextField(
+                                        label: 'Email',
+                                        hint: email,
+                                        prefixIcon: Icons.email,
+                                        enabled: false,
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  SafeArea(
+                    top: false,
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 10, AppSpacing.lg, AppSpacing.lg),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: CustomButton(
+                              text: 'Save',
+                              onPressed: authProvider.isLoading ? null : () => _save(authProvider),
+                              isLoading: authProvider.isLoading,
+                              isFullWidth: true,
                             ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(height: AppSpacing.xl),
-                  Container(
-                    padding: const EdgeInsets.all(AppSpacing.lg),
-                    decoration: BoxDecoration(
-                      color: cs.surface,
-                      borderRadius: BorderRadius.circular(AppBorderRadius.large),
-                      border: Border.all(color: cs.outlineVariant.withOpacity(0.6)),
-                    ),
-                    child: Column(
-                      children: [
-                        CustomTextField(
-                          label: 'Full Name',
-                          hint: 'Enter your full name',
-                          prefixIcon: Icons.badge,
-                          controller: _fullNameController,
-                          textInputAction: TextInputAction.next,
-                          maxLength: 60,
-                          showCharacterCount: true,
-                          enabled: !authProvider.isLoading,
-                          validator: _validateFullName,
-                        ),
-                        const SizedBox(height: AppSpacing.lg),
-                        CustomTextField(
-                          label: 'Username',
-                          hint: 'Enter your username',
-                          prefixIcon: Icons.person,
-                          controller: _usernameController,
-                          textInputAction: TextInputAction.done,
-                          maxLength: 24,
-                          showCharacterCount: true,
-                          enabled: !authProvider.isLoading,
-                          validator: _validateUsername,
-                          onSubmitted: (_) => _save(authProvider),
-                        ),
-                        const SizedBox(height: AppSpacing.lg),
-                        CustomTextField(
-                          label: 'Bio',
-                          hint: 'Tell us about you',
-                          prefixIcon: Icons.short_text,
-                          controller: _bioController,
-                          keyboardType: TextInputType.multiline,
-                          textInputAction: TextInputAction.newline,
-                          maxLines: 4,
-                          maxLength: 280,
-                          showCharacterCount: true,
-                          enabled: !authProvider.isLoading,
-                          validator: _validateBio,
-                        ),
-                        const SizedBox(height: AppSpacing.lg),
-                        CustomTextField(
-                          label: 'Location',
-                          hint: 'City, Country',
-                          prefixIcon: Icons.location_on,
-                          controller: _locationController,
-                          textInputAction: TextInputAction.next,
-                          maxLength: 60,
-                          showCharacterCount: true,
-                          enabled: !authProvider.isLoading,
-                          validator: _validateLocation,
-                        ),
-                        const SizedBox(height: AppSpacing.lg),
-                        CustomTextField(
-                          label: 'Website',
-                          hint: 'https://example.com',
-                          prefixIcon: Icons.link,
-                          controller: _websiteController,
-                          textInputAction: TextInputAction.next,
-                          maxLength: 200,
-                          showCharacterCount: true,
-                          enabled: !authProvider.isLoading,
-                          validator: _validateWebsite,
-                        ),
-                        const SizedBox(height: AppSpacing.lg),
-                        CustomTextField(
-                          label: 'Email',
-                          hint: email,
-                          prefixIcon: Icons.email,
-                          enabled: false,
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: AppSpacing.xl),
-                  CustomButton(
-                    text: 'Save',
-                    onPressed: authProvider.isLoading ? null : () => _save(authProvider),
-                    isLoading: authProvider.isLoading,
-                    isFullWidth: true,
                   ),
                 ],
               ),

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../../core/constants/app_constants.dart';
 
 class CustomButton extends StatelessWidget {
@@ -23,31 +24,40 @@ class CustomButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final effectiveOnPressed = (isLoading || onPressed == null)
+        ? null
+        : () {
+            try {
+              HapticFeedback.selectionClick();
+            } catch (_) {}
+            onPressed?.call();
+          };
+
     return SizedBox(
       width: isFullWidth ? double.infinity : null,
-      child: _buildButton(context),
+      child: _buildButton(context, onPressed: effectiveOnPressed),
     );
   }
 
-  Widget _buildButton(BuildContext context) {
+  Widget _buildButton(BuildContext context, {required VoidCallback? onPressed}) {
     switch (type) {
       case ButtonType.primary:
-        return _buildPrimaryButton(context);
+        return _buildPrimaryButton(context, onPressed: onPressed);
       case ButtonType.secondary:
-        return _buildSecondaryButton(context);
+        return _buildSecondaryButton(context, onPressed: onPressed);
       case ButtonType.ghost:
-        return _buildGhostButton(context);
+        return _buildGhostButton(context, onPressed: onPressed);
       case ButtonType.danger:
-        return _buildDangerButton(context);
+        return _buildDangerButton(context, onPressed: onPressed);
       case ButtonType.success:
-        return _buildSuccessButton(context);
+        return _buildSuccessButton(context, onPressed: onPressed);
     }
   }
 
-  Widget _buildPrimaryButton(BuildContext context) {
+  Widget _buildPrimaryButton(BuildContext context, {required VoidCallback? onPressed}) {
     final cs = Theme.of(context).colorScheme;
     return ElevatedButton(
-      onPressed: isLoading ? null : onPressed,
+      onPressed: onPressed,
       style: ElevatedButton.styleFrom(
         backgroundColor: cs.primary,
         foregroundColor: cs.onPrimary,
@@ -62,10 +72,10 @@ class CustomButton extends StatelessWidget {
     );
   }
 
-  Widget _buildSecondaryButton(BuildContext context) {
+  Widget _buildSecondaryButton(BuildContext context, {required VoidCallback? onPressed}) {
     final cs = Theme.of(context).colorScheme;
     return OutlinedButton(
-      onPressed: isLoading ? null : onPressed,
+      onPressed: onPressed,
       style: OutlinedButton.styleFrom(
         foregroundColor: cs.primary,
         side: BorderSide(color: cs.primary),
@@ -78,10 +88,10 @@ class CustomButton extends StatelessWidget {
     );
   }
 
-  Widget _buildGhostButton(BuildContext context) {
+  Widget _buildGhostButton(BuildContext context, {required VoidCallback? onPressed}) {
     final cs = Theme.of(context).colorScheme;
     return TextButton(
-      onPressed: isLoading ? null : onPressed,
+      onPressed: onPressed,
       style: TextButton.styleFrom(
         foregroundColor: cs.primary,
         shape: RoundedRectangleBorder(
@@ -93,10 +103,10 @@ class CustomButton extends StatelessWidget {
     );
   }
 
-  Widget _buildDangerButton(BuildContext context) {
+  Widget _buildDangerButton(BuildContext context, {required VoidCallback? onPressed}) {
     final cs = Theme.of(context).colorScheme;
     return ElevatedButton(
-      onPressed: isLoading ? null : onPressed,
+      onPressed: onPressed,
       style: ElevatedButton.styleFrom(
         backgroundColor: cs.error,
         foregroundColor: cs.onError,
@@ -110,9 +120,9 @@ class CustomButton extends StatelessWidget {
     );
   }
 
-  Widget _buildSuccessButton(BuildContext context) {
+  Widget _buildSuccessButton(BuildContext context, {required VoidCallback? onPressed}) {
     return ElevatedButton(
-      onPressed: isLoading ? null : onPressed,
+      onPressed: onPressed,
       style: ElevatedButton.styleFrom(
         backgroundColor: AppColors.success,
         foregroundColor: Colors.white,
@@ -138,19 +148,30 @@ class CustomButton extends StatelessWidget {
     }
 
     final hasIcon = icon != null;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        if (hasIcon) ...[
-          icon!,
-          const SizedBox(width: AppSpacing.sm),
+    return FittedBox(
+      fit: BoxFit.scaleDown,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          if (hasIcon) ...[
+            IconTheme(
+              data: IconThemeData(color: foreground, size: _getTextSize() + 2),
+              child: icon!,
+            ),
+            const SizedBox(width: AppSpacing.sm),
+          ],
+          Flexible(
+            child: Text(
+              text,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              softWrap: false,
+              style: _getTextStyle().copyWith(color: foreground),
+            ),
+          ),
         ],
-        Text(
-          text,
-          style: _getTextStyle().copyWith(color: foreground),
-        ),
-      ],
+      ),
     );
   }
 

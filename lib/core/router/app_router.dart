@@ -14,8 +14,31 @@ import '../../presentation/screens/notifications/notifications.dart';
 import '../../presentation/screens/assets/assets_library_screen.dart';
 import '../../presentation/screens/assets/assets_export_screen.dart';
 import '../../presentation/screens/project/project_export_screen.dart';
+import '../../presentation/screens/quiz/game_quiz_screen.dart';
 
 class AppRouter {
+  static Page<T> _fadeSlidePage<T>({
+    required Widget child,
+    required GoRouterState state,
+  }) {
+    return CustomTransitionPage<T>(
+      key: state.pageKey,
+      child: child,
+      transitionDuration: const Duration(milliseconds: 260),
+      reverseTransitionDuration: const Duration(milliseconds: 220),
+      transitionsBuilder: (context, animation, secondaryAnimation, child) {
+        final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic, reverseCurve: Curves.easeInCubic);
+        return FadeTransition(
+          opacity: curved,
+          child: SlideTransition(
+            position: Tween<Offset>(begin: const Offset(0.02, 0.02), end: Offset.zero).animate(curved),
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+
   static final GoRouter router = GoRouter(
     initialLocation: '/splash',
     routes: [
@@ -73,9 +96,9 @@ class AppRouter {
       // Main app routes (protected)
       GoRoute(
         path: '/dashboard',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           if (!AuthGuard.canActivate(context)) {
-            return const SignInScreen();
+            return _fadeSlidePage(child: const SignInScreen(), state: state);
           }
 
           final tab = state.uri.queryParameters['tab'];
@@ -102,18 +125,28 @@ class AppRouter {
             }
           }
 
-          return HomeDashboard(initialIndex: initialIndex);
+          return _fadeSlidePage(child: HomeDashboard(initialIndex: initialIndex), state: state);
         },
       ),
       
       // Project creation routes (protected)
       GoRoute(
         path: '/create-project',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           if (!AuthGuard.canActivate(context)) {
-            return const SignInScreen();
+            return _fadeSlidePage(child: const SignInScreen(), state: state);
           }
-          return const TemplateSelectionScreen();
+          return _fadeSlidePage(child: const TemplateSelectionScreen(), state: state);
+        },
+      ),
+
+      GoRoute(
+        path: '/ai-create-game',
+        pageBuilder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return _fadeSlidePage(child: const SignInScreen(), state: state);
+          }
+          return _fadeSlidePage(child: const AiCreateGameScreen(), state: state);
         },
       ),
 
@@ -137,60 +170,97 @@ class AppRouter {
       ),
       GoRoute(
         path: '/ai-configuration',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           if (!AuthGuard.canActivate(context)) {
-            return const SignInScreen();
+            return _fadeSlidePage(child: const SignInScreen(), state: state);
           }
-          return const AIConfigurationScreen();
+          return _fadeSlidePage(child: const AIConfigurationScreen(), state: state);
         },
       ),
       GoRoute(
         path: '/generation-progress',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           if (!AuthGuard.canActivate(context)) {
-            return const SignInScreen();
+            return _fadeSlidePage(child: const SignInScreen(), state: state);
           }
-          return const GenerationProgressScreen();
+          return _fadeSlidePage(child: const GenerationProgressScreen(), state: state);
         },
       ),
       GoRoute(
         path: '/project-detail',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           if (!AuthGuard.canActivate(context)) {
-            return const SignInScreen();
+            return _fadeSlidePage(child: const SignInScreen(), state: state);
           }
           final extra = state.extra;
           final data = extra is Map ? Map<String, dynamic>.from(extra as Map) : <String, dynamic>{};
-          return ProjectDetailScreen(data: data);
+          return _fadeSlidePage(child: ProjectDetailScreen(data: data), state: state);
+        },
+      ),
+
+      GoRoute(
+        path: '/play-webgl',
+        pageBuilder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return _fadeSlidePage(child: const SignInScreen(), state: state);
+          }
+          final extra = state.extra;
+          final url = (extra is Map) ? extra['url']?.toString() : null;
+          return _fadeSlidePage(child: PlayWebglScreen(url: url ?? ''), state: state);
+        },
+      ),
+
+      GoRoute(
+        path: '/ai-coach',
+        pageBuilder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return _fadeSlidePage(child: const SignInScreen(), state: state);
+          }
+          final extra = state.extra;
+          final data = extra is Map ? Map<String, dynamic>.from(extra as Map) : <String, dynamic>{};
+          final rawPid = data['projectId']?.toString() ?? '';
+          final pid = rawPid.trim().isEmpty ? null : rawPid.trim();
+          final name = data['projectName']?.toString();
+          return _fadeSlidePage(child: AiCoachScreen(projectId: pid, projectName: name), state: state);
+        },
+      ),
+
+      GoRoute(
+        path: '/game-quiz',
+        pageBuilder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return _fadeSlidePage(child: const SignInScreen(), state: state);
+          }
+          return _fadeSlidePage(child: const GameQuizScreen(), state: state);
         },
       ),
       
       // Build routes (protected)
       GoRoute(
         path: '/build-configuration',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           if (!AuthGuard.canActivate(context)) {
-            return const SignInScreen();
+            return _fadeSlidePage(child: const SignInScreen(), state: state);
           }
-          return const BuildConfigurationScreen();
+          return _fadeSlidePage(child: const BuildConfigurationScreen(), state: state);
         },
       ),
       GoRoute(
         path: '/build-progress',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           if (!AuthGuard.canActivate(context)) {
-            return const SignInScreen();
+            return _fadeSlidePage(child: const SignInScreen(), state: state);
           }
-          return const BuildProgressScreen();
+          return _fadeSlidePage(child: const BuildProgressScreen(), state: state);
         },
       ),
       GoRoute(
         path: '/build-results',
-        builder: (context, state) {
+        pageBuilder: (context, state) {
           if (!AuthGuard.canActivate(context)) {
-            return const SignInScreen();
+            return _fadeSlidePage(child: const SignInScreen(), state: state);
           }
-          return const BuildResultsScreen();
+          return _fadeSlidePage(child: const BuildResultsScreen(), state: state);
         },
       ),
       

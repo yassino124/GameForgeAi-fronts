@@ -160,10 +160,54 @@ class _TemplateSelectionScreenState extends State<TemplateSelectionScreen> {
             color: cs.onSurface,
           ),
         ),
+        actions: [
+          IconButton(
+            tooltip: 'Coach Guide',
+            onPressed: () {
+              context.push('/ai-coach');
+            },
+            icon: Icon(
+              Icons.mic_rounded,
+              color: cs.onSurface,
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.only(right: AppSpacing.lg),
+            child: Center(
+              child: Text(
+                '1/3',
+                style: AppTypography.caption.copyWith(
+                  color: cs.onSurfaceVariant,
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
       
       body: Column(
         children: [
+          Container(
+            height: 4,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  cs.primary,
+                  cs.primary.withOpacity(0.3),
+                ],
+              ),
+            ),
+            child: FractionallySizedBox(
+              alignment: Alignment.centerLeft,
+              widthFactor: 0.33,
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: AppColors.primaryGradient,
+                ),
+              ),
+            ),
+          ),
+
           // Search bar
           Padding(
             padding: AppSpacing.paddingHorizontalLarge,
@@ -221,14 +265,39 @@ class _TemplateSelectionScreenState extends State<TemplateSelectionScreen> {
                 top: BorderSide(color: cs.outlineVariant.withOpacity(0.6)),
               ),
             ),
-            child: CustomButton(
-              text: 'Next',
-              onPressed: _selectedTemplate != null
-                  ? () {
-                      context.go('/project-details', extra: _selectedTemplate);
-                    }
-                  : null,
-              isFullWidth: true,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                CustomButton(
+                  text: 'Next',
+                  onPressed: _selectedTemplate != null
+                      ? () {
+                          context.go('/project-details', extra: _selectedTemplate);
+                        }
+                      : null,
+                  isFullWidth: true,
+                ),
+
+                const SizedBox(height: AppSpacing.sm),
+
+                CustomButton(
+                  text: 'Generate with AI',
+                  onPressed: _selectedTemplate != null
+                      ? () {
+                          context.go(
+                            '/ai-configuration',
+                            extra: {
+                              'templateId': _selectedTemplate!.id,
+                              'templateName': _selectedTemplate!.name,
+                            },
+                          );
+                        }
+                      : null,
+                  type: ButtonType.secondary,
+                  isFullWidth: true,
+                  icon: const Icon(Icons.auto_awesome),
+                ),
+              ],
             ),
           ),
         ],

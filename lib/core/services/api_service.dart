@@ -27,6 +27,8 @@ class ApiService {
   }
   static const Duration _timeout = Duration(seconds: 30);
 
+  static Duration _resolveTimeout(Duration? timeout) => timeout ?? _timeout;
+
   static Future<Map<String, dynamic>> multipartFields(
     String endpoint, {
     required String method,
@@ -35,6 +37,7 @@ class ApiService {
     String? token,
     Map<String, String>? fields,
     Map<String, String>? headers,
+    Duration? timeout,
   }) async {
     try {
       final request = http.MultipartRequest(
@@ -95,8 +98,48 @@ class ApiService {
         }
       }
 
-      final streamed = await request.send().timeout(_timeout);
+      final streamed = await request.send().timeout(_resolveTimeout(timeout));
       final response = await http.Response.fromStream(streamed);
+      return _handleResponse(response);
+    } on SocketException catch (e) {
+      return _errorResponse('Connection failed: ${e.message}\nURL: $baseUrl$endpoint');
+    } on HttpException {
+      return _errorResponse('HTTP error occurred');
+    } catch (e) {
+      return _errorResponse('Network error: ${e.toString()}');
+    }
+  }
+
+  // Generic PATCH request
+  static Future<Map<String, dynamic>> patch(
+    String endpoint, {
+    Map<String, dynamic>? data,
+    String? token,
+    Map<String, String>? headers,
+    Duration? timeout,
+  }) async {
+    try {
+      http.Response response = await http
+          .patch(
+            Uri.parse('$baseUrl$endpoint'),
+            headers: _buildHeaders(token: token, additionalHeaders: headers),
+            body: data != null ? jsonEncode(data) : null,
+          )
+          .timeout(_resolveTimeout(timeout));
+
+      if (response.statusCode == 401 && token != null) {
+        final newToken = await _refreshAccessToken();
+        if (newToken != null) {
+          response = await http
+              .patch(
+                Uri.parse('$baseUrl$endpoint'),
+                headers: _buildHeaders(token: newToken, additionalHeaders: headers),
+                body: data != null ? jsonEncode(data) : null,
+              )
+              .timeout(_resolveTimeout(timeout));
+        }
+      }
+
       return _handleResponse(response);
     } on SocketException catch (e) {
       return _errorResponse('Connection failed: ${e.message}\nURL: $baseUrl$endpoint');
@@ -152,6 +195,7 @@ class ApiService {
     String? token,
     Map<String, String>? fields,
     Map<String, String>? headers,
+    Duration? timeout,
   }) async {
     try {
       final request = http.MultipartRequest(
@@ -214,6 +258,7 @@ class ApiService {
     String endpoint, {
     String? token,
     Map<String, String>? headers,
+    Duration? timeout,
   }) async {
     try {
       http.Response response = await http
@@ -221,7 +266,7 @@ class ApiService {
             Uri.parse('$baseUrl$endpoint'),
             headers: _buildHeaders(token: token, additionalHeaders: headers),
           )
-          .timeout(_timeout);
+          .timeout(_resolveTimeout(timeout));
 
       if (response.statusCode == 401 && token != null) {
         final newToken = await _refreshAccessToken();
@@ -231,7 +276,7 @@ class ApiService {
                 Uri.parse('$baseUrl$endpoint'),
                 headers: _buildHeaders(token: newToken, additionalHeaders: headers),
               )
-              .timeout(_timeout);
+              .timeout(_resolveTimeout(timeout));
         }
       }
 
@@ -251,6 +296,7 @@ class ApiService {
     Map<String, dynamic>? data,
     String? token,
     Map<String, String>? headers,
+    Duration? timeout,
   }) async {
     try {
       http.Response response = await http
@@ -259,7 +305,7 @@ class ApiService {
             headers: _buildHeaders(token: token, additionalHeaders: headers),
             body: data != null ? jsonEncode(data) : null,
           )
-          .timeout(_timeout);
+          .timeout(_resolveTimeout(timeout));
 
       if (response.statusCode == 401 && token != null) {
         final newToken = await _refreshAccessToken();
@@ -270,7 +316,7 @@ class ApiService {
                 headers: _buildHeaders(token: newToken, additionalHeaders: headers),
                 body: data != null ? jsonEncode(data) : null,
               )
-              .timeout(_timeout);
+              .timeout(_resolveTimeout(timeout));
         }
       }
 
@@ -290,6 +336,7 @@ class ApiService {
     Map<String, dynamic>? data,
     String? token,
     Map<String, String>? headers,
+    Duration? timeout,
   }) async {
     try {
       http.Response response = await http
@@ -298,7 +345,7 @@ class ApiService {
             headers: _buildHeaders(token: token, additionalHeaders: headers),
             body: data != null ? jsonEncode(data) : null,
           )
-          .timeout(_timeout);
+          .timeout(_resolveTimeout(timeout));
 
       if (response.statusCode == 401 && token != null) {
         final newToken = await _refreshAccessToken();
@@ -309,7 +356,7 @@ class ApiService {
                 headers: _buildHeaders(token: newToken, additionalHeaders: headers),
                 body: data != null ? jsonEncode(data) : null,
               )
-              .timeout(_timeout);
+              .timeout(_resolveTimeout(timeout));
         }
       }
 
@@ -328,6 +375,7 @@ class ApiService {
     String endpoint, {
     String? token,
     Map<String, String>? headers,
+    Duration? timeout,
   }) async {
     try {
       http.Response response = await http
@@ -335,7 +383,7 @@ class ApiService {
             Uri.parse('$baseUrl$endpoint'),
             headers: _buildHeaders(token: token, additionalHeaders: headers),
           )
-          .timeout(_timeout);
+          .timeout(_resolveTimeout(timeout));
 
       if (response.statusCode == 401 && token != null) {
         final newToken = await _refreshAccessToken();
@@ -345,7 +393,7 @@ class ApiService {
                 Uri.parse('$baseUrl$endpoint'),
                 headers: _buildHeaders(token: newToken, additionalHeaders: headers),
               )
-              .timeout(_timeout);
+              .timeout(_resolveTimeout(timeout));
         }
       }
 

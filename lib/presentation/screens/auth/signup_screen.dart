@@ -44,8 +44,13 @@ class _SignUpScreenState extends State<SignUpScreen> {
   static const List<Map<String, String>> _roles = [
     {'value': 'user', 'label': 'User', 'description': 'Create and play games'},
     {'value': 'devl', 'label': 'Developer', 'description': 'Advanced features and APIs'},
-    {'value': 'admin', 'label': 'Admin', 'description': 'Full system access'},
   ];
+
+  String _safeRole(String? role) {
+    final r = (role ?? '').trim().toLowerCase();
+    if (r == 'devl') return 'devl';
+    return 'user';
+  }
 
   @override
   void dispose() {
@@ -491,11 +496,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
       final authProvider = Provider.of<AuthProvider>(context, listen: false);
 
       try {
+        final safeRole = _safeRole(_selectedRole);
         final success = await authProvider.register(
           username: _nameController.text.trim(),
           email: _emailController.text.trim(),
           password: _passwordController.text,
-          role: _selectedRole,
+          role: safeRole,
           rememberMe: authProvider.rememberMe,
         );
 
@@ -536,9 +542,10 @@ class _SignUpScreenState extends State<SignUpScreen> {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
 
     try {
+      final safeRole = _safeRole(_selectedRole);
       final success = await authProvider.loginWithGoogle(
         rememberMe: authProvider.rememberMe,
-        role: _selectedRole,
+        role: safeRole,
       );
 
       if (success) {

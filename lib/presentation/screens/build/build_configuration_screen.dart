@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../core/constants/app_constants.dart';
-import '../../core/themes/app_theme.dart';
-import '../../presentation/widgets/widgets.dart';
+import 'package:provider/provider.dart';
+import '../../../core/constants/app_constants.dart';
+import '../../../core/providers/auth_provider.dart';
+import '../../../core/providers/build_monitor_provider.dart';
+import '../../../core/services/app_notifier.dart';
+import '../../../core/services/projects_service.dart';
+import '../../widgets/widgets.dart';
 
 class BuildConfigurationScreen extends StatefulWidget {
   const BuildConfigurationScreen({super.key});
@@ -15,42 +19,47 @@ class _BuildConfigurationScreenState extends State<BuildConfigurationScreen> {
   final _formKey = GlobalKey<FormState>();
   final _versionController = TextEditingController(text: '1.0.0');
   final _bundleIdController = TextEditingController(text: 'com.gameforge.mygame');
+
+  String? _projectId;
+  bool _isStarting = false;
   
   final List<Platform> _platforms = [
     Platform(
       name: 'iOS',
       icon: Icons.phone_iphone,
-      isSelected: true,
+      enabled: false,
       requirements: 'iOS 12.0 or later',
     ),
     Platform(
       name: 'Android',
       icon: Icons.phone_android,
-      isSelected: true,
+      enabled: true,
+      isSelected: false,
       requirements: 'Android 5.0 or later',
     ),
     Platform(
       name: 'Web',
       icon: Icons.language,
-      isSelected: false,
+      enabled: true,
+      isSelected: true,
       requirements: 'Modern web browser',
     ),
     Platform(
       name: 'Windows',
       icon: Icons.desktop_windows,
-      isSelected: false,
+      enabled: false,
       requirements: 'Windows 10 or later',
     ),
     Platform(
       name: 'macOS',
       icon: Icons.laptop_mac,
-      isSelected: false,
+      enabled: false,
       requirements: 'macOS 10.14 or later',
     ),
     Platform(
       name: 'Linux',
       icon: Icons.computer,
-      isSelected: false,
+      enabled: false,
       requirements: 'Ubuntu 18.04 or later',
     ),
   ];
@@ -62,9 +71,25 @@ class _BuildConfigurationScreenState extends State<BuildConfigurationScreen> {
     super.dispose();
   }
 
+  List<String> _deriveBuildQueueFromSelection() {
+    final out = <String>[];
+    for (final p in _platforms) {
+      if (!p.enabled || !p.isSelected) continue;
+      if (p.name == 'Android') {
+        out.add('android_apk');
+      } else if (p.name == 'Web') {
+        out.add('webgl');
+      }
+    }
+    if (out.isEmpty) out.add('webgl');
+    return out;
+  }
+
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final extra = GoRouterState.of(context).extra;
+    _projectId ??= (extra is Map) ? extra['projectId']?.toString() : null;
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -248,6 +273,10 @@ class _BuildConfigurationScreenState extends State<BuildConfigurationScreen> {
 
     return GestureDetector(
       onTap: () {
+        if (!platform.enabled) {
+          AppNotifier.showError('Coming soon');
+          return;
+        }
         setState(() {
           _platforms[index].isSelected = !_platforms[index].isSelected;
         });
@@ -269,15 +298,17 @@ class _BuildConfigurationScreenState extends State<BuildConfigurationScreen> {
             Container(
               padding: const EdgeInsets.all(AppSpacing.md),
               decoration: BoxDecoration(
-                color: platform.isSelected 
+                color: platform.isSelected
                     ? cs.primary.withOpacity(0.12)
-                    : cs.surfaceVariant,
+                    : cs.surfaceContainerHighest,
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 platform.icon,
                 size: 28,
-                color: platform.isSelected ? cs.primary : cs.onSurfaceVariant,
+                color: platform.enabled
+                    ? (platform.isSelected ? cs.primary : cs.onSurfaceVariant)
+                    : cs.onSurfaceVariant.withOpacity(0.55),
               ),
             ),
             
@@ -287,7 +318,7 @@ class _BuildConfigurationScreenState extends State<BuildConfigurationScreen> {
             Text(
               platform.name,
               style: AppTypography.subtitle2.copyWith(
-                color: platform.isSelected ? cs.primary : cs.onSurface,
+                color: platform.enabled ? (platform.isSelected ? cs.primary : cs.onSurface) : cs.onSurfaceVariant,
                 fontWeight: platform.isSelected ? FontWeight.w600 : FontWeight.normal,
               ),
             ),
@@ -299,7 +330,7 @@ class _BuildConfigurationScreenState extends State<BuildConfigurationScreen> {
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm),
                 child: Text(
-                  platform.requirements,
+                  platform.enabled ? platform.requirements : 'Coming soon',
                   style: AppTypography.caption.copyWith(
                     color: cs.onSurfaceVariant,
                   ),
@@ -386,8 +417,9 @@ class _BuildConfigurationScreenState extends State<BuildConfigurationScreen> {
   }
 
   void _startBuild() {
+    if (_isStarting) return;
     if (_formKey.currentState!.validate()) {
-      final selectedPlatforms = _platforms.where((p) => p.isSelected).toList();
+      final selectedPlatforms = _platforms.where((p) => p.enabled && p.isSelected).toList();
       
       if (selectedPlatforms.isEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -398,8 +430,56 @@ class _BuildConfigurationScreenState extends State<BuildConfigurationScreen> {
         );
         return;
       }
-      
-      context.go('/build-progress');
+
+      final pid = _projectId;
+      if (pid == null || pid.trim().isEmpty) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Missing projectId'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+        return;
+      }
+
+      final token = context.read<AuthProvider>().token;
+      if (token == null || token.isEmpty) {
+        AppNotifier.showError('Not authenticated');
+        return;
+      }
+
+      setState(() => _isStarting = true);
+
+      final buildQueue = _deriveBuildQueueFromSelection();
+      final firstTarget = buildQueue.isNotEmpty ? buildQueue.first : 'webgl';
+
+      ProjectsService.updateProject(token: token, projectId: pid, buildTarget: firstTarget).then((_) {
+        return ProjectsService.rebuildProject(token: token, projectId: pid);
+      }).then((res) {
+        final ok = res['success'] == true;
+        if (ok) {
+          AppNotifier.showSuccess('Build started');
+          if (!mounted) return;
+          try {
+            context.read<BuildMonitorProvider>().startMonitoring(token: token, projectId: pid);
+          } catch (_) {}
+          context.go(
+            '/build-progress',
+            extra: {
+              'projectId': pid,
+              'buildQueue': buildQueue,
+              'buildIndex': 0,
+            },
+          );
+        } else {
+          AppNotifier.showError(res['message']?.toString() ?? 'Failed to start build');
+        }
+      }).catchError((e) {
+        AppNotifier.showError(e.toString());
+      }).whenComplete(() {
+        if (!mounted) return;
+        setState(() => _isStarting = false);
+      });
     }
   }
 }
@@ -409,11 +489,13 @@ class Platform {
   final IconData icon;
   final String requirements;
   bool isSelected;
+  final bool enabled;
 
   Platform({
     required this.name,
     required this.icon,
     required this.requirements,
+    required this.enabled,
     this.isSelected = false,
   });
 }

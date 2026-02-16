@@ -53,6 +53,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
     required String token,
     required String priceId,
   }) async {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final pk = Stripe.publishableKey;
     if (pk.isEmpty) {
       throw Exception('Missing Stripe publishable key');
@@ -78,6 +80,22 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
         customerId: customerId,
         customerEphemeralKeySecret: ephemeralKeySecret,
         paymentIntentClientSecret: paymentIntentClientSecret,
+        style: isDark ? ThemeMode.dark : ThemeMode.light,
+        appearance: PaymentSheetAppearance(
+          colors: PaymentSheetAppearanceColors(
+            background: cs.surface,
+            primary: cs.primary,
+            componentBackground: cs.surface,
+            componentBorder: cs.outlineVariant,
+            componentDivider: cs.outlineVariant,
+            componentText: cs.onSurface,
+            primaryText: cs.onPrimary,
+            secondaryText: cs.onSurfaceVariant,
+            placeholderText: cs.onSurfaceVariant,
+            icon: cs.onSurfaceVariant,
+            error: cs.error,
+          ),
+        ),
       ),
     );
 

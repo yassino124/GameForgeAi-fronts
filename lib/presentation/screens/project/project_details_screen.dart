@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'dart:convert';
+import 'dart:io';
+import 'dart:async';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -7,6 +10,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../widgets/widgets.dart';
 import 'template_selection_screen.dart';
 import '../../../core/providers/auth_provider.dart';
+import '../../../core/services/ai_service.dart';
 import '../../../core/services/projects_service.dart';
 
 class ProjectDetailsScreen extends StatefulWidget {
@@ -20,12 +24,16 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen> {
   final _formKey = GlobalKey<FormState>();
   final _nameController = TextEditingController();
   final _descriptionController = TextEditingController();
+  final _aiNotesController = TextEditingController();
   final List<String> _tags = [];
   bool _showAdvancedSettings = false;
   GameTemplate? _selectedTemplate;
   bool _initializedFromRoute = false;
 
   bool _creating = false;
+  bool _generatingAi = false;
+  bool _generatingCover = false;
+  File? _generatedPreviewImage;
   String? _error;
   int _buildStep = 0;
   String? _downloadUrl;
@@ -33,6 +41,93 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen> {
   @override
   void initState() {
     super.initState();
+  }
+
+  Future<void> _generateCoverImage() async {
+    if (_generatingCover) return;
+    final auth = context.read<AuthProvider>();
+    final token = auth.token;
+    if (token == null || token.isEmpty) {
+      setState(() {
+        _error = 'Session expired. Please sign in again.';
+      });
+      return;
+    }
+    if (!auth.isAdmin && !auth.isDevl) {
+      setState(() {
+        _error = 'Forbidden: dev/admin role required';
+      });
+      return;
+    }
+
+    final desc = _descriptionController.text.trim();
+    if (desc.isEmpty) {
+      setState(() {
+        _error = 'Please write a description first';
+      });
+      return;
+    }
+
+    final prompt =
+        'Create a high quality cover image for a game project. Style: modern, clean, colorful. No text. ' +
+        'Based on this description: ${desc}';
+
+    setState(() {
+      _generatingCover = true;
+      _error = null;
+    });
+
+    try {
+      final res = await AiService.generateImage(
+        token: token,
+        prompt: prompt,
+        timeout: const Duration(seconds: 180),
+      );
+      if (!mounted) return;
+      if (res['success'] == true && res['data'] is Map) {
+        final data = Map<String, dynamic>.from(res['data'] as Map);
+        final b64 = data['base64']?.toString();
+        final mime = data['mimeType']?.toString() ?? 'image/png';
+        if (b64 == null || b64.isEmpty) throw Exception('Missing base64');
+
+        final bytes = base64Decode(b64);
+        final ext = mime.contains('jpeg') ? 'jpg' : 'png';
+        final f = File('${Directory.systemTemp.path}/ai_project_cover_${DateTime.now().millisecondsSinceEpoch}.$ext');
+        await f.writeAsBytes(bytes, flush: true);
+
+        if (!mounted) return;
+        setState(() {
+          _generatedPreviewImage = f;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Cover image generated')),
+        );
+      } else {
+        final msg = res['message']?.toString() ?? 'Failed to generate image';
+        setState(() => _error = msg);
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+      }
+    } on TimeoutException {
+      if (!mounted) return;
+      const msg = 'Image generation is taking too long. Please try again in a minute.';
+      setState(() => _error = msg);
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text(msg)));
+    } catch (e) {
+      if (!mounted) return;
+      final raw = e.toString();
+      final lower = raw.toLowerCase();
+      final msg = lower.contains('quota') || lower.contains('resource_exhausted')
+          ? 'Gemini quota exceeded. Please change API key/billing or try later.'
+          : 'Failed to generate image: $raw';
+      setState(() => _error = msg);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _generatingCover = false;
+      });
+    }
   }
 
   @override
@@ -54,12 +149,93 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen> {
   void dispose() {
     _nameController.dispose();
     _descriptionController.dispose();
+    _aiNotesController.dispose();
     super.dispose();
+  }
+
+  Future<void> _generateWithAi() async {
+    if (_generatingAi) return;
+
+    final auth = context.read<AuthProvider>();
+    final token = auth.token;
+    if (token == null || token.isEmpty) {
+      setState(() {
+        _error = 'Session expired. Please sign in again.';
+      });
+      return;
+    }
+
+    if (!auth.isAdmin && !auth.isDevl) {
+      setState(() {
+        _error = 'Forbidden: dev/admin role required';
+      });
+      return;
+    }
+
+    final desc = _descriptionController.text.trim();
+    if (desc.isEmpty) {
+      setState(() {
+        _error = 'Please write a description first';
+      });
+      return;
+    }
+
+    setState(() {
+      _generatingAi = true;
+      _error = null;
+    });
+
+    try {
+      final notes = _aiNotesController.text.trim();
+      final res = await AiService.generateProjectDraft(
+        token: token,
+        description: desc,
+        notes: notes.isEmpty ? null : notes,
+      );
+
+      if (!mounted) return;
+      if (res['success'] == true && res['data'] is Map) {
+        final data = Map<String, dynamic>.from(res['data'] as Map);
+        setState(() {
+          final name = data['name']?.toString();
+          final description = data['description']?.toString();
+
+          if (name != null && name.trim().isNotEmpty) _nameController.text = name;
+          if (description != null && description.trim().isNotEmpty) _descriptionController.text = description;
+
+          final tags = (data['tags'] is List)
+              ? (data['tags'] as List)
+                  .map((e) => e?.toString() ?? '')
+                  .where((e) => e.trim().isNotEmpty)
+                  .toList()
+              : <String>[];
+          if (tags.isNotEmpty) {
+            _tags
+              ..clear()
+              ..addAll(tags);
+          }
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('AI draft generated')),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(res['message']?.toString() ?? 'Failed to generate draft')),
+        );
+      }
+    } finally {
+      if (!mounted) return;
+      setState(() {
+        _generatingAi = false;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final auth = context.read<AuthProvider>();
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
@@ -221,6 +397,47 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen> {
                 maxLength: 500,
                 showCharacterCount: true,
               ),
+
+              if (auth.isAdmin || auth.isDevl) ...[
+                const SizedBox(height: AppSpacing.lg),
+                Text(
+                  'AI',
+                  style: AppTypography.subtitle2,
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  decoration: BoxDecoration(
+                    color: cs.surface,
+                    borderRadius: BorderRadius.circular(AppBorderRadius.large),
+                    border: Border.all(color: cs.outlineVariant.withOpacity(0.6)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TextField(
+                        controller: _aiNotesController,
+                        minLines: 2,
+                        maxLines: 4,
+                        decoration: const InputDecoration(labelText: 'Notes (optional)'),
+                      ),
+                      const SizedBox(height: AppSpacing.md),
+                      CustomButton(
+                        text: _generatingAi ? 'Generating…' : 'Generate with Gemini',
+                        onPressed: _generatingAi ? null : _generateWithAi,
+                        isFullWidth: true,
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      CustomButton(
+                        text: _generatingCover ? 'Generating image…' : 'Generate cover image',
+                        onPressed: (_generatingAi || _generatingCover) ? null : _generateCoverImage,
+                        isFullWidth: true,
+                      ),
+                    ],
+                  ),
+                ),
+              ],
               
               const SizedBox(height: AppSpacing.xl),
               
