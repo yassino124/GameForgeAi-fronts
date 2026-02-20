@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:ui';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:provider/provider.dart';
@@ -12,6 +13,7 @@ import 'core/themes/app_theme.dart';
 import 'core/providers/auth_provider.dart';
 import 'core/providers/build_monitor_provider.dart';
 import 'core/providers/theme_provider.dart';
+import 'presentation/admin/admin_app.dart';
 
 void main() async {
   FlutterError.onError = (details) {
@@ -64,7 +66,7 @@ void main() async {
           ChangeNotifierProvider(create: (_) => themeProvider),
           ChangeNotifierProvider(create: (_) => BuildMonitorProvider()),
         ],
-        child: const GameForgeAI(),
+        child: kIsWeb ? const AdminApp() : const GameForgeAI(),
       ),
     );
   }, (error, stack) {

@@ -84,6 +84,11 @@ dependencies:
   flutter_local_notifications: ^17.2.2
   timezone: ^0.9.4
   flutter_colorpicker: ^1.1.0
+  
+  # Charts & Fonts (Admin Dashboard)
+  fl_chart: ^0.68.0
+  google_fonts: ^6.1.0
+  flutter_animate: ^4.3.0
 
 dev_dependencies:
   flutter_test:
