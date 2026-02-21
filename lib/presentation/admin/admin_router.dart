@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../../core/providers/auth_provider.dart';
 import 'screens/login/admin_login_screen.dart';
 import 'screens/overview/overview_screen.dart';
+import 'screens/users/admin_profile_screen.dart';
 import 'screens/users/users_screen.dart';
 import 'screens/users/user_detail_screen.dart';
 import 'screens/projects/projects_screen.dart';
@@ -27,6 +28,16 @@ class AdminRouter {
           child: child,
         ),
         routes: [
+          GoRoute(
+            path: '/admin',
+            builder: (context, state) => const OverviewScreen(),
+            routes: [
+              GoRoute(
+                path: 'profile',
+                builder: (context, state) => const AdminProfileScreen(),
+              ),
+            ],
+          ),
           GoRoute(
             path: '/admin/overview',
             builder: (context, state) => const OverviewScreen(),
@@ -90,6 +101,8 @@ class AdminRouter {
     switch (path) {
       case '/admin/overview':
         return 'Overview';
+      case '/admin/profile':
+        return 'My Profile';
       case '/admin/users':
         return 'Users';
       case '/admin/projects':

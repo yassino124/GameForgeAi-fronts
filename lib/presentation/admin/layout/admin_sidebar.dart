@@ -109,14 +109,17 @@ class AdminSidebar extends StatelessWidget {
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Text(
-                                authProvider.user?['username'] ?? 'Admin',
-                                style: GoogleFonts.rajdhani(
-                                  color: AdminTheme.textPrimary,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 14,
+                              GestureDetector(
+                                onTap: () => context.go('/admin/profile'),
+                                child: Text(
+                                  authProvider.user?['username'] ?? 'Admin',
+                                  style: GoogleFonts.rajdhani(
+                                    color: AdminTheme.textPrimary,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
-                                overflow: TextOverflow.ellipsis,
                               ),
                               Text(
                                 authProvider.user?['email'] ?? '',
