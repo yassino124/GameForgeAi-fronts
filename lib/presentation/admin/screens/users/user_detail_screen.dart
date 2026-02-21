@@ -1,36 +1,89 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import '../../../../core/providers/auth_provider.dart';
+import '../../../../core/services/admin_users_service.dart';
 import '../../constants/admin_theme.dart';
 import '../../data/mock_data.dart';
 import '../../widgets/admin_button.dart';
 
-class UserDetailScreen extends StatelessWidget {
+class UserDetailScreen extends StatefulWidget {
   final String userId;
 
   const UserDetailScreen({super.key, required this.userId});
 
   @override
-  Widget build(BuildContext context) {
-    final user = AdminMockData.mockUsers.firstWhere(
-      (u) => u['id'] == userId,
-      orElse: () => {},
-    );
+  State<UserDetailScreen> createState() => _UserDetailScreenState();
+}
 
-    if (user.isEmpty) {
+class _UserDetailScreenState extends State<UserDetailScreen> {
+  Map<String, dynamic>? _user;
+  bool _loading = true;
+  String? _error;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchUser();
+  }
+
+  Future<void> _fetchUser() async {
+    final auth = context.read<AuthProvider>();
+    final token = auth.token;
+    if (token == null || token.isEmpty) {
+      setState(() {
+        _loading = false;
+        _error = 'Not authenticated';
+      });
+      return;
+    }
+    setState(() {
+      _loading = true;
+      _error = null;
+      _user = null;
+    });
+    final res = await AdminUsersService.getUser(widget.userId, token);
+    if (!mounted) return;
+    if (res['success'] == true && res['data'] != null) {
+      setState(() {
+        _user = Map<String, dynamic>.from(res['data'] is Map ? res['data'] as Map : {});
+        _loading = false;
+        _error = null;
+      });
+    } else {
+      setState(() {
+        _user = null;
+        _loading = false;
+        _error = res['message']?.toString() ?? 'User not found';
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_loading && _user == null) {
+      return const Center(child: CircularProgressIndicator(color: AdminTheme.accentNeon));
+    }
+
+    if (_error != null && _user == null) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             const Icon(Icons.person_off, size: 64, color: AdminTheme.textMuted),
             const SizedBox(height: 16),
-            Text('User not found', style: GoogleFonts.orbitron(color: AdminTheme.textSecondary)),
+            Text(_error!, style: GoogleFonts.orbitron(color: AdminTheme.textSecondary)),
             const SizedBox(height: 24),
             AdminButton(label: 'Back to Users', icon: Icons.arrow_back, onPressed: () => context.go('/admin/users')),
           ],
         ),
       );
     }
+
+    final user = _user ?? {};
+    final status = (user['status'] ?? (user['isActive'] == true ? 'active' : 'suspended')).toString();
+    final isActive = status == 'active';
 
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -94,8 +147,12 @@ class UserDetailScreen extends StatelessWidget {
                   children: [
                     AdminButton(label: 'Change Role', icon: Icons.admin_panel_settings, outlined: true, onPressed: () => _showConfirmDialog(context, 'Change Role', 'Are you sure you want to change this user\'s role?')),
                     AdminButton(label: 'Change Plan', icon: Icons.card_membership, outlined: true, onPressed: () => _showConfirmDialog(context, 'Change Plan', 'Are you sure you want to change this user\'s subscription plan?')),
-                    AdminButton(label: 'Suspend Account', icon: Icons.block, outlined: true, color: AdminTheme.accentOrange, onPressed: () => _showConfirmDialog(context, 'Suspend Account', 'This will prevent the user from accessing the platform.')),
-                    AdminButton(label: 'Delete Account', icon: Icons.delete, outlined: true, color: AdminTheme.accentRed, onPressed: () => _showConfirmDialog(context, 'Delete Account', 'This action cannot be undone. The user and all their data will be permanently deleted.')),
+                    if (isActive) ...[
+                      AdminButton(label: 'Suspend Account', icon: Icons.block, outlined: true, color: AdminTheme.accentOrange, onPressed: () => _performStatusChange(context, 'suspended', 'Suspend Account', 'This will prevent the user from accessing the platform.')),
+                      AdminButton(label: 'Ban Account', icon: Icons.block, outlined: true, color: AdminTheme.accentRed, onPressed: () => _performStatusChange(context, 'banned', 'Ban Account', 'The user will be permanently banned.')),
+                    ] else
+                      AdminButton(label: 'Reactivate Account', icon: Icons.play_circle, outlined: true, color: AdminTheme.accentGreen, onPressed: () => _performStatusChange(context, 'active', 'Reactivate Account', 'Restore user access.')),
+                    AdminButton(label: 'Delete Account', icon: Icons.delete, outlined: true, color: AdminTheme.accentRed, onPressed: () => _performDelete(context)),
                   ],
                 ),
               ],
@@ -191,6 +248,68 @@ class UserDetailScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _performStatusChange(BuildContext context, String status, String title, String message) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AdminTheme.bgSecondary,
+        title: Text(title, style: const TextStyle(color: AdminTheme.textPrimary)),
+        content: Text(message, style: const TextStyle(color: AdminTheme.textSecondary)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.accentNeon, foregroundColor: AdminTheme.bgPrimary),
+            child: const Text('Confirm'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final token = context.read<AuthProvider>().token;
+    if (token == null) return;
+    final res = await AdminUsersService.updateUserStatus(id: widget.userId, status: status, token: token);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(res['success'] == true ? '$title successful' : 'Failed'),
+        backgroundColor: res['success'] == true ? AdminTheme.accentGreen : AdminTheme.accentRed,
+      ),
+    );
+    if (res['success'] == true) await _fetchUser();
+  }
+
+  Future<void> _performDelete(BuildContext context) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AdminTheme.bgSecondary,
+        title: const Text('Delete Account', style: TextStyle(color: AdminTheme.textPrimary)),
+        content: const Text('This action cannot be undone. The user will be soft-deleted.', style: TextStyle(color: AdminTheme.textSecondary)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.accentRed, foregroundColor: AdminTheme.textPrimary),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final token = context.read<AuthProvider>().token;
+    if (token == null) return;
+    final res = await AdminUsersService.deleteUser(widget.userId, token);
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(res['success'] == true ? 'User deleted' : 'Delete failed'),
+        backgroundColor: res['success'] == true ? AdminTheme.accentGreen : AdminTheme.accentRed,
+      ),
+    );
+    if (res['success'] == true) context.go('/admin/users');
   }
 
   String _formatDate(dynamic d) {

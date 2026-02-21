@@ -253,6 +253,54 @@ class ApiService {
     }
   }
 
+  /// GET request that returns raw body (for non-JSON like CSV).
+  static Future<Map<String, dynamic>> getRaw(
+    String endpoint, {
+    String? token,
+    Map<String, String>? headers,
+    Duration? timeout,
+  }) async {
+    try {
+      http.Response response = await http
+          .get(
+            Uri.parse('$baseUrl$endpoint'),
+            headers: _buildHeaders(token: token, additionalHeaders: headers),
+          )
+          .timeout(_resolveTimeout(timeout));
+
+      if (response.statusCode == 401 && token != null) {
+        final newToken = await _refreshAccessToken();
+        if (newToken != null) {
+          response = await http
+              .get(
+                Uri.parse('$baseUrl$endpoint'),
+                headers: _buildHeaders(token: newToken, additionalHeaders: headers),
+              )
+              .timeout(_resolveTimeout(timeout));
+        }
+      }
+
+      if (response.statusCode >= 200 && response.statusCode < 300) {
+        return {
+          'success': true,
+          'data': response.body,
+          'statusCode': response.statusCode,
+        };
+      }
+      return {
+        'success': false,
+        'message': 'Request failed with status ${response.statusCode}',
+        'statusCode': response.statusCode,
+      };
+    } on SocketException catch (e) {
+      return _errorResponse('Connection failed: ${e.message}\nURL: $baseUrl$endpoint');
+    } on HttpException {
+      return _errorResponse('HTTP error occurred');
+    } catch (e) {
+      return _errorResponse('Network error: ${e.toString()}');
+    }
+  }
+
   // Generic GET request
   static Future<Map<String, dynamic>> get(
     String endpoint, {

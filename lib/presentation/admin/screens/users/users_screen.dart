@@ -2,31 +2,67 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import '../../../../core/providers/auth_provider.dart';
 import '../../constants/admin_theme.dart';
 import '../../providers/admin_provider.dart';
 import '../../widgets/status_chip.dart';
 import '../../widgets/admin_button.dart';
 
-class UsersScreen extends StatelessWidget {
+class UsersScreen extends StatefulWidget {
   const UsersScreen({super.key});
 
-  void _exportCsv(BuildContext context) {
-    final provider = context.read<AdminProvider>();
-    final users = provider.filteredUsers;
-    final sb = StringBuffer();
-    sb.writeln('id,username,email,role,subscription,isActive,lastLogin');
-    for (final u in users) {
-      sb.writeln('${u['id']},${u['username']},${u['email']},${u['role']},${u['subscription']},${u['isActive']},${u['lastLogin']}');
+  @override
+  State<UsersScreen> createState() => _UsersScreenState();
+}
+
+class _UsersScreenState extends State<UsersScreen> {
+  bool _initialized = false;
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    if (!_initialized) {
+      _initialized = true;
+      final provider = context.read<AdminProvider>();
+      final auth = context.read<AuthProvider>();
+      provider.setTokenGetter(() => auth.token);
+      WidgetsBinding.instance.addPostFrameCallback((_) => provider.fetchUsers());
     }
-    // In web, we could trigger download - for now just copy to clipboard
-    // ignore: avoid_web_libraries_in_flutter
-    // Clipboard.setData(ClipboardData(text: sb.toString()));
+  }
+
+  Future<void> _exportCsv(BuildContext context) async {
+    final provider = context.read<AdminProvider>();
+    final ok = await provider.exportUsersCsv();
+    if (context.mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(ok ? 'CSV exported' : 'Export failed'),
+          backgroundColor: ok ? AdminTheme.accentGreen : AdminTheme.accentRed,
+        ),
+      );
+    }
   }
 
   @override
   Widget build(BuildContext context) {
     return Consumer<AdminProvider>(
       builder: (context, provider, _) {
+        if (provider.usersLoading && provider.paginatedUsers.isEmpty) {
+          return const Center(child: CircularProgressIndicator(color: AdminTheme.accentNeon));
+        }
+        if (provider.usersError != null && provider.paginatedUsers.isEmpty) {
+          return Center(
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(provider.usersError!, style: GoogleFonts.rajdhani(color: AdminTheme.accentRed)),
+                const SizedBox(height: 16),
+                AdminButton(label: 'Retry', icon: Icons.refresh, onPressed: () => provider.fetchUsers()),
+              ],
+            ),
+          );
+        }
+
         final users = provider.paginatedUsers;
 
         return Column(
@@ -71,7 +107,18 @@ class UsersScreen extends StatelessWidget {
                   ],
                   onChanged: (v) => provider.setUsersPlanFilter(v ?? 'all'),
                 ),
-                AdminButton(label: 'Export CSV', icon: Icons.download, outlined: true, onPressed: () => _exportCsv(context)),
+                DropdownButton<String>(
+                  value: provider.usersStatusFilter,
+                  dropdownColor: AdminTheme.bgSecondary,
+                  items: const [
+                    DropdownMenuItem(value: 'all', child: Text('All Status')),
+                    DropdownMenuItem(value: 'active', child: Text('Active')),
+                    DropdownMenuItem(value: 'suspended', child: Text('Suspended')),
+                    DropdownMenuItem(value: 'banned', child: Text('Banned')),
+                  ],
+                  onChanged: (v) => provider.setUsersStatusFilter(v ?? 'all'),
+                ),
+                AdminButton(label: 'Export CSV', icon: Icons.download, outlined: true, onPressed: provider.usersLoading ? null : () => _exportCsv(context)),
               ],
             ),
             const SizedBox(height: 24),
@@ -101,7 +148,9 @@ class UsersScreen extends StatelessWidget {
                     DataColumn(label: _header('Actions')),
                   ],
                   rows: users.map((u) {
-                    final isActive = provider.isUserActive(u['id']?.toString() ?? '');
+                    final id = u['id']?.toString() ?? u['_id']?.toString() ?? '';
+                    final status = (u['status'] ?? (u['isActive'] == true ? 'active' : 'suspended')).toString();
+                    final isActive = status == 'active';
                     return DataRow(
                       cells: [
                         DataCell(CircleAvatar(
@@ -117,18 +166,22 @@ class UsersScreen extends StatelessWidget {
                         DataCell(StatusChip(label: (u['role'] ?? '').toString().toUpperCase(), status: u['role']?.toString() ?? '', clickable: false, color: AdminTheme.roleColor(u['role']?.toString() ?? ''))),
                         DataCell(StatusChip(label: (u['subscription'] ?? '').toString().toUpperCase(), status: u['subscription']?.toString() ?? '', clickable: false, color: AdminTheme.planColor(u['subscription']?.toString() ?? ''))),
                         DataCell(StatusChip(
-                          label: isActive ? 'Active' : 'Inactive',
-                          status: isActive ? 'active' : 'inactive',
-                          clickable: true,
-                          onTap: () => provider.toggleUserActive(u['id']?.toString() ?? ''),
+                          label: status == 'active' ? 'Active' : (status == 'suspended' ? 'Suspended' : 'Banned'),
+                          status: status,
+                          clickable: false,
+                          color: status == 'active' ? AdminTheme.accentGreen : (status == 'suspended' ? AdminTheme.accentOrange : AdminTheme.accentRed),
                         )),
                         DataCell(Text(_formatDate(u['lastLogin']), style: GoogleFonts.jetBrainsMono(color: AdminTheme.textSecondary, fontSize: 12))),
                         DataCell(Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            IconButton(icon: const Icon(Icons.visibility, size: 20, color: AdminTheme.accentNeon), onPressed: () => context.go('/admin/users/${u['id']}'), tooltip: 'View'),
-                            IconButton(icon: const Icon(Icons.edit, size: 20, color: AdminTheme.accentPurple), onPressed: () {}, tooltip: 'Edit role'),
-                            IconButton(icon: const Icon(Icons.block, size: 20, color: AdminTheme.accentRed), onPressed: () {}, tooltip: 'Ban'),
+                            IconButton(icon: const Icon(Icons.visibility, size: 20, color: AdminTheme.accentNeon), onPressed: () => context.go('/admin/users/$id'), tooltip: 'View'),
+                            if (isActive) ...[
+                              IconButton(icon: const Icon(Icons.pause_circle, size: 20, color: AdminTheme.accentOrange), onPressed: () => _confirmAction(context, provider, id, 'Suspend', 'suspended', 'This will prevent the user from accessing the platform.'), tooltip: 'Suspend'),
+                              IconButton(icon: const Icon(Icons.block, size: 20, color: AdminTheme.accentRed), onPressed: () => _confirmAction(context, provider, id, 'Ban', 'banned', 'The user will be permanently banned.'), tooltip: 'Ban'),
+                            ] else
+                              IconButton(icon: const Icon(Icons.play_circle, size: 20, color: AdminTheme.accentGreen), onPressed: () => _confirmAction(context, provider, id, 'Reactivate', 'active', 'Restore user access.'), tooltip: 'Reactivate'),
+                            IconButton(icon: const Icon(Icons.delete, size: 20, color: AdminTheme.accentRed), onPressed: () => _confirmDelete(context, provider, id), tooltip: 'Delete'),
                           ],
                         )),
                       ],
@@ -165,6 +218,60 @@ class UsersScreen extends StatelessWidget {
         );
       },
     );
+  }
+
+  Future<void> _confirmAction(BuildContext context, AdminProvider provider, String id, String title, String status, String message) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AdminTheme.bgSecondary,
+        title: Text(title, style: const TextStyle(color: AdminTheme.textPrimary)),
+        content: Text(message, style: const TextStyle(color: AdminTheme.textSecondary)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.accentNeon, foregroundColor: AdminTheme.bgPrimary),
+            child: const Text('Confirm'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true && context.mounted) {
+      final success = await provider.updateUserStatus(id, status);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(success ? '$title successful' : 'Failed'), backgroundColor: success ? AdminTheme.accentGreen : AdminTheme.accentRed),
+        );
+      }
+    }
+  }
+
+  Future<void> _confirmDelete(BuildContext context, AdminProvider provider, String id) async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AdminTheme.bgSecondary,
+        title: const Text('Delete User', style: TextStyle(color: AdminTheme.textPrimary)),
+        content: const Text('This action cannot be undone. The user will be soft-deleted.', style: TextStyle(color: AdminTheme.textSecondary)),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.accentRed, foregroundColor: AdminTheme.textPrimary),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    if (ok == true && context.mounted) {
+      final success = await provider.deleteUser(id);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(success ? 'User deleted' : 'Delete failed'), backgroundColor: success ? AdminTheme.accentGreen : AdminTheme.accentRed),
+        );
+      }
+    }
   }
 
   Widget _header(String text) => Text(

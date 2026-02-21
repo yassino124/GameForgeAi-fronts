@@ -41,7 +41,8 @@ void main() async {
       } catch (_) {}
     }
 
-    if (stripePublishableKey.isNotEmpty) {
+    // Stripe uses dart:io Platform which is not available on web - skip init on web
+    if (stripePublishableKey.isNotEmpty && !kIsWeb) {
       Stripe.publishableKey = stripePublishableKey;
       Stripe.urlScheme = 'flutterstripe';
       await Stripe.instance.applySettings();

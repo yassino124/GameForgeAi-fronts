@@ -1,13 +1,26 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
+
+import '../../../core/services/admin_users_service.dart';
 import '../data/mock_data.dart';
 
 class AdminProvider extends ChangeNotifier {
-  // Users screen state
+  // Users screen state (API-backed)
   String _usersSearch = '';
   String _usersRoleFilter = 'all';
   String _usersPlanFilter = 'all';
+  String _usersStatusFilter = 'all';
   int _usersPage = 0;
-  static const int usersPerPage = 10;
+  static const int usersPerPage = 20;
+  bool _usersLoading = false;
+  String? _usersError;
+  List<Map<String, dynamic>> _usersList = [];
+  int _usersTotal = 0;
+  int _usersTotalPages = 1;
+  bool _usersActionLoading = false;
+  Timer? _searchDebounce;
+  String? Function()? _tokenGetter;
 
   // Projects screen state
   String _projectsSearch = '';
@@ -24,48 +37,123 @@ class AdminProvider extends ChangeNotifier {
   String get usersSearch => _usersSearch;
   String get usersRoleFilter => _usersRoleFilter;
   String get usersPlanFilter => _usersPlanFilter;
+  String get usersStatusFilter => _usersStatusFilter;
   int get usersPage => _usersPage;
+  bool get usersLoading => _usersLoading;
+  String? get usersError => _usersError;
+  bool get usersActionLoading => _usersActionLoading;
   String get projectsSearch => _projectsSearch;
   String get projectsStatusFilter => _projectsStatusFilter;
   String get marketplaceCategoryFilter => _marketplaceCategoryFilter;
   bool get marketplaceGridView => _marketplaceGridView;
   String get buildsStatusFilter => _buildsStatusFilter;
 
-  // Filtered users
-  List<Map<String, dynamic>> get filteredUsers {
-    var list = List<Map<String, dynamic>>.from(AdminMockData.mockUsers);
-
-    if (_usersSearch.isNotEmpty) {
-      final q = _usersSearch.toLowerCase();
-      list = list.where((u) {
-        final username = (u['username'] ?? '').toString().toLowerCase();
-        final email = (u['email'] ?? '').toString().toLowerCase();
-        return username.contains(q) || email.contains(q);
-      }).toList();
-    }
-
-    if (_usersRoleFilter != 'all') {
-      list = list.where((u) => (u['role'] ?? '').toString().toLowerCase() == _usersRoleFilter).toList();
-    }
-
-    if (_usersPlanFilter != 'all') {
-      list = list.where((u) => (u['subscription'] ?? '').toString().toLowerCase() == _usersPlanFilter).toList();
-    }
-
-    return list;
-  }
-
-  List<Map<String, dynamic>> get paginatedUsers {
-    final filtered = filteredUsers;
-    final start = _usersPage * usersPerPage;
-    final end = (start + usersPerPage).clamp(0, filtered.length);
-    if (start >= filtered.length) return [];
-    return filtered.sublist(start, end);
-  }
-
-  int get usersTotalPages => (filteredUsers.length / usersPerPage).ceil();
+  // Users from API
+  List<Map<String, dynamic>> get filteredUsers => _usersList;
+  List<Map<String, dynamic>> get paginatedUsers => _usersList;
+  int get usersTotalPages => _usersTotalPages;
+  int get usersTotal => _usersTotal;
   bool get usersHasNextPage => _usersPage < usersTotalPages - 1;
   bool get usersHasPrevPage => _usersPage > 0;
+
+  void setTokenGetter(String? Function() getter) {
+    _tokenGetter = getter;
+  }
+
+  Future<void> fetchUsers() async {
+    final token = _tokenGetter?.call();
+    if (token == null || token.isEmpty) {
+      _usersError = 'Not authenticated';
+      notifyListeners();
+      return;
+    }
+    _usersLoading = true;
+    _usersError = null;
+    notifyListeners();
+    try {
+      final res = await AdminUsersService.getUsers(
+        token: token,
+        page: _usersPage + 1,
+        limit: usersPerPage,
+        search: _usersSearch.trim().isEmpty ? null : _usersSearch.trim(),
+        status: _usersStatusFilter == 'all' ? null : _usersStatusFilter,
+        role: _usersRoleFilter == 'all' ? null : _usersRoleFilter,
+        subscription: _usersPlanFilter == 'all' ? null : _usersPlanFilter,
+      );
+      if (res['success'] == true && res['data'] != null) {
+        final data = res['data'] is Map ? res['data'] as Map : {};
+        final users = data['users'] is List ? data['users'] as List : [];
+        _usersList = users.map((e) => Map<String, dynamic>.from(e is Map ? e : {})).toList();
+        _usersTotal = (data['total'] is int) ? data['total'] as int : 0;
+        _usersTotalPages = (data['totalPages'] is int) ? (data['totalPages'] as int).clamp(1, 999999) : 1;
+        _usersError = null;
+      } else {
+        _usersList = [];
+        _usersError = res['message']?.toString() ?? 'Failed to load users';
+      }
+    } catch (e) {
+      _usersList = [];
+      _usersError = e.toString();
+    } finally {
+      _usersLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> updateUserStatus(String id, String status) async {
+    final token = _tokenGetter?.call();
+    if (token == null || token.isEmpty) return false;
+    _usersActionLoading = true;
+    notifyListeners();
+    try {
+      final res = await AdminUsersService.updateUserStatus(id: id, status: status, token: token);
+      if (res['success'] == true) {
+        await fetchUsers();
+        return true;
+      }
+      return false;
+    } finally {
+      _usersActionLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> deleteUser(String id) async {
+    final token = _tokenGetter?.call();
+    if (token == null || token.isEmpty) return false;
+    _usersActionLoading = true;
+    notifyListeners();
+    try {
+      final res = await AdminUsersService.deleteUser(id, token);
+      if (res['success'] == true) {
+        await fetchUsers();
+        return true;
+      }
+      return false;
+    } finally {
+      _usersActionLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<bool> exportUsersCsv() async {
+    final token = _tokenGetter?.call();
+    if (token == null || token.isEmpty) return false;
+    return AdminUsersService.downloadCsv(
+      token: token,
+      search: _usersSearch.trim().isEmpty ? null : _usersSearch.trim(),
+      status: _usersStatusFilter == 'all' ? null : _usersStatusFilter,
+      role: _usersRoleFilter == 'all' ? null : _usersRoleFilter,
+      subscription: _usersPlanFilter == 'all' ? null : _usersPlanFilter,
+    );
+  }
+
+  void _debouncedFetchUsers() {
+    _searchDebounce?.cancel();
+    _searchDebounce = Timer(const Duration(milliseconds: 400), () {
+      fetchUsers();
+    });
+  }
 
   // Filtered projects
   List<Map<String, dynamic>> get filteredProjects {
@@ -109,52 +197,47 @@ class AdminProvider extends ChangeNotifier {
     return list;
   }
 
-  // Toggle user active state (local mock)
-  final Set<String> _toggledUserIds = {};
-
-  bool isUserActive(String id) {
-    final user = AdminMockData.mockUsers.firstWhere((u) => u['id'] == id, orElse: () => {});
-    final baseActive = user['isActive'] == true;
-    if (_toggledUserIds.contains(id)) {
-      return !baseActive;
-    }
-    return baseActive;
-  }
-
-  void toggleUserActive(String id) {
-    _toggledUserIds.contains(id) ? _toggledUserIds.remove(id) : _toggledUserIds.add(id);
-    notifyListeners();
-  }
-
   // Setters
   void setUsersSearch(String value) {
     _usersSearch = value;
     _usersPage = 0;
     notifyListeners();
+    _debouncedFetchUsers();
   }
 
   void setUsersRoleFilter(String value) {
     _usersRoleFilter = value;
     _usersPage = 0;
     notifyListeners();
+    fetchUsers();
   }
 
   void setUsersPlanFilter(String value) {
     _usersPlanFilter = value;
     _usersPage = 0;
     notifyListeners();
+    fetchUsers();
+  }
+
+  void setUsersStatusFilter(String value) {
+    _usersStatusFilter = value;
+    _usersPage = 0;
+    notifyListeners();
+    fetchUsers();
   }
 
   void setUsersPage(int page) {
     final max = (usersTotalPages - 1).clamp(0, 999);
     _usersPage = page.clamp(0, max);
     notifyListeners();
+    fetchUsers();
   }
 
   void nextUsersPage() {
     if (usersHasNextPage) {
       _usersPage++;
       notifyListeners();
+      fetchUsers();
     }
   }
 
@@ -162,6 +245,7 @@ class AdminProvider extends ChangeNotifier {
     if (usersHasPrevPage) {
       _usersPage--;
       notifyListeners();
+      fetchUsers();
     }
   }
 
