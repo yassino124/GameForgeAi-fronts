@@ -1,6 +1,6 @@
 {
-    "name": "gamefrogai",
-    "short_name": "gamefrogai",
+    "name": "gameforgeai",
+    "short_name": "gameforgeai",
     "start_url": ".",
     "display": "standalone",
     "background_color": "#0175C2",

@@ -1,15 +1,36 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
+import 'package:fl_chart/fl_chart.dart';
 import '../../constants/admin_theme.dart';
 import '../../data/mock_data.dart';
 import '../../widgets/premium_card.dart';
 import '../../widgets/status_badge.dart';
+import '../../providers/admin_provider.dart';
 
-class OverviewScreen extends StatelessWidget {
+class OverviewScreen extends StatefulWidget {
   const OverviewScreen({super.key});
 
   @override
+  State<OverviewScreen> createState() => _OverviewScreenState();
+}
+
+class _OverviewScreenState extends State<OverviewScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AdminProvider>().fetchDashboard();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final adminProvider = context.watch<AdminProvider>();
+    final dashboardData = adminProvider.dashboardData?['dashboard'] ?? {};
+    final totalUsers = dashboardData['totalUsers'] ?? 1247;
+    final totalUsersChange = dashboardData['totalUsersChange'] ?? '+12%';
+    final newUsersData = dashboardData['newUsersLast30Days'] as List? ?? [];
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -25,8 +46,8 @@ class OverviewScreen extends StatelessWidget {
                     width: (constraints.maxWidth > 1200 ? (constraints.maxWidth - 60) / 4 : constraints.maxWidth > 768 ? (constraints.maxWidth - 40) / 2 : constraints.maxWidth) - 20,
                     child: StatCard(
                       title: 'Total Users',
-                      value: '1,247',
-                      change: '+12%',
+                      value: totalUsers.toString(),
+                      change: totalUsersChange,
                       iconColor: AdminTheme.accentNeon,
                       icon: Icons.people,
                     ),
@@ -92,19 +113,104 @@ class OverviewScreen extends StatelessWidget {
                           const SizedBox(height: 20),
                           Container(
                             height: 200,
-                            decoration: BoxDecoration(
-                              color: AdminTheme.bgTertiary,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Center(
-                              child: Text(
-                                'Chart Component\n(To be implemented)',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: AdminTheme.textSecondary,
-                                ),
-                              ),
-                            ),
+                            child: newUsersData.isEmpty
+                                ? const Center(
+                                    child: Text(
+                                      'No data available',
+                                      style: TextStyle(color: AdminTheme.textSecondary),
+                                    ),
+                                  )
+                                : LineChart(
+                                    LineChartData(
+                                      gridData: FlGridData(
+                                        show: true,
+                                        getDrawingHorizontalLine: (value) => FlLine(
+                                          color: AdminTheme.borderGlow.withOpacity(0.3),
+                                          strokeWidth: 1,
+                                        ),
+                                        getDrawingVerticalLine: (value) => FlLine(
+                                          color: AdminTheme.borderGlow.withOpacity(0.3),
+                                          strokeWidth: 1,
+                                        ),
+                                      ),
+                                      titlesData: FlTitlesData(
+                                        rightTitles: const AxisTitles(
+                                          sideTitles: SideTitles(showTitles: false),
+                                        ),
+                                        topTitles: const AxisTitles(
+                                          sideTitles: SideTitles(showTitles: false),
+                                        ),
+                                        bottomTitles: AxisTitles(
+                                          sideTitles: SideTitles(
+                                            showTitles: true,
+                                            reservedSize: 22,
+                                            interval: 7,
+                                            getTitlesWidget: (value, meta) {
+                                              final index = value.toInt();
+                                              if (index < 0 || index >= newUsersData.length) {
+                                                return const Text('');
+                                              }
+                                              final date = newUsersData[index]['_id'] as String;
+                                              return Text(
+                                                date.substring(5),
+                                                style: const TextStyle(
+                                                  color: AdminTheme.textSecondary,
+                                                  fontSize: 10,
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                        leftTitles: AxisTitles(
+                                          sideTitles: SideTitles(
+                                            showTitles: true,
+                                            interval: 1,
+                                            getTitlesWidget: (value, meta) {
+                                              return Text(
+                                                value.toInt().toString(),
+                                                style: const TextStyle(
+                                                  color: AdminTheme.textSecondary,
+                                                  fontSize: 10,
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                      ),
+                                      borderData: FlBorderData(
+                                        show: true,
+                                        border: Border.all(
+                                          color: AdminTheme.borderGlow.withOpacity(0.3),
+                                        ),
+                                      ),
+                                      lineBarsData: [
+                                        LineChartBarData(
+                                          spots: newUsersData.asMap().entries.map((entry) {
+                                            return FlSpot(
+                                              entry.key.toDouble(),
+                                              (entry.value['count'] as num).toDouble(),
+                                            );
+                                          }).toList(),
+                                          isCurved: true,
+                                          color: AdminTheme.accentNeon,
+                                          barWidth: 3,
+                                          isStrokeCapRound: true,
+                                          dotData: FlDotData(
+                                            show: true,
+                                            getDotPainter: (spot, percent, barData, index) {
+                                              return FlDotCirclePainter(
+                                                radius: 4,
+                                                color: AdminTheme.accentNeon,
+                                                strokeColor: AdminTheme.bgPrimary,
+                                                strokeWidth: 2,
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                      ],
+                                      minY: 0,
+                                    ),
+                                  ),
                           ),
                         ],
                       ),

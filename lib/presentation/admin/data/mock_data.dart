@@ -133,7 +133,7 @@ class AdminMockData {
     {'id': 'n4', 'title': 'Build Engine Update', 'message': 'Build times improved by 20% with our latest update.', 'target': 'All Users', 'sentAt': '2025-02-10T16:00:00', 'readRate': 0.78},
     {'id': 'n5', 'title': 'New Templates Available', 'message': 'Check out our new RPG and Puzzle templates.', 'target': 'Pro Users', 'sentAt': '2025-02-10T11:00:00', 'readRate': 0.71},
     {'id': 'n6', 'title': 'API Rate Limit Notice', 'message': 'Free tier rate limits have been updated.', 'target': 'Specific Role', 'sentAt': '2025-02-09T09:00:00', 'readRate': 0.55},
-    {'id': 'n7', 'title': 'Welcome to GameFrogAI', 'message': 'Get started with our quick start guide.', 'target': 'All Users', 'sentAt': '2025-02-08T12:00:00', 'readRate': 0.95},
+    {'id': 'n7', 'title': 'Welcome to GameForgeAI', 'message': 'Get started with our quick start guide.', 'target': 'All Users', 'sentAt': '2025-02-08T12:00:00', 'readRate': 0.95},
     {'id': 'n8', 'title': 'Enterprise Support', 'message': 'Enterprise customers now have 24/7 support.', 'target': 'Specific Role', 'sentAt': '2025-02-07T15:00:00', 'readRate': 0.88},
     {'id': 'n9', 'title': 'Bug Fix Release', 'message': 'Critical bug fixes deployed for build engine.', 'target': 'All Users', 'sentAt': '2025-02-06T10:00:00', 'readRate': 0.82},
     {'id': 'n10', 'title': 'Holiday Sale', 'message': '50% off Pro plan for Valentine\'s Day!', 'target': 'Pro Users', 'sentAt': '2025-02-05T09:00:00', 'readRate': 0.93},

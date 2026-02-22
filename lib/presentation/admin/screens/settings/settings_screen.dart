@@ -34,7 +34,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
             children: [
               TextField(
                 decoration: const InputDecoration(labelText: 'App Name'),
-                controller: TextEditingController(text: 'GameFrogAI'),
+                controller: TextEditingController(text: 'GameForgeAI'),
                 style: const TextStyle(color: AdminTheme.textPrimary),
               ),
               const SizedBox(height: 16),
@@ -94,7 +94,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 decoration: const InputDecoration(labelText: 'From Email'),
                 readOnly: true,
                 obscureText: true,
-                controller: TextEditingController(text: 'noreply@gamefrogai.com'),
+                controller: TextEditingController(text: 'noreply@gameforgeai.com'),
                 style: const TextStyle(color: AdminTheme.textSecondary),
               ),
               const SizedBox(height: 24),

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../core/services/admin_users_service.dart';
+import '../../../core/services/admin_service.dart';
 import '../data/mock_data.dart';
 
 class AdminProvider extends ChangeNotifier {
@@ -21,6 +22,11 @@ class AdminProvider extends ChangeNotifier {
   bool _usersActionLoading = false;
   Timer? _searchDebounce;
   String? Function()? _tokenGetter;
+  
+  // Dashboard state
+  bool _dashboardLoading = false;
+  String? _dashboardError;
+  Map<String, dynamic>? _dashboardData;
 
   // Projects screen state
   String _projectsSearch = '';
@@ -47,6 +53,11 @@ class AdminProvider extends ChangeNotifier {
   String get marketplaceCategoryFilter => _marketplaceCategoryFilter;
   bool get marketplaceGridView => _marketplaceGridView;
   String get buildsStatusFilter => _buildsStatusFilter;
+  
+  // Dashboard getters
+  bool get dashboardLoading => _dashboardLoading;
+  String? get dashboardError => _dashboardError;
+  Map<String, dynamic>? get dashboardData => _dashboardData;
 
   // Users from API
   List<Map<String, dynamic>> get filteredUsers => _usersList;
@@ -55,6 +66,37 @@ class AdminProvider extends ChangeNotifier {
   int get usersTotal => _usersTotal;
   bool get usersHasNextPage => _usersPage < usersTotalPages - 1;
   bool get usersHasPrevPage => _usersPage > 0;
+
+  Future<void> fetchDashboard() async {
+    final token = _tokenGetter?.call();
+    if (token == null || token.isEmpty) {
+      _dashboardError = 'Not authenticated';
+      notifyListeners();
+      return;
+    }
+    _dashboardLoading = true;
+    _dashboardError = null;
+    notifyListeners();
+    try {
+      final res = await AdminService.getDashboard(token: token);
+      if (res['success'] == true && res['data'] != null) {
+        _dashboardData = res['data'] is Map 
+          ? Map<String, dynamic>.from(res['data'] as Map) 
+          : {};
+        _dashboardError = null;
+      } else {
+        _dashboardData = null;
+        _dashboardError = res['message']?.toString() ?? 'Failed to load dashboard';
+      }
+    } catch (e) {
+      _dashboardData = null;
+      _dashboardError = e.toString();
+
+    } finally {
+      _dashboardLoading = false;
+      notifyListeners();
+    }
+  }
 
   void setTokenGetter(String? Function() getter) {
     _tokenGetter = getter;
