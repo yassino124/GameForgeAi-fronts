@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 
@@ -38,6 +39,7 @@ class AdminProvider extends ChangeNotifier {
   List<Map<String, dynamic>>? _templates;
   bool _templatesLoading = false;
   String? _templatesError;
+  bool _uploadingTemplate = false;
 
   // Builds screen state
   String _buildsStatusFilter = 'all';
@@ -58,6 +60,7 @@ class AdminProvider extends ChangeNotifier {
   List<Map<String, dynamic>>? get templates => _templates;
   bool get templatesLoading => _templatesLoading;
   String? get templatesError => _templatesError;
+  bool get uploadingTemplate => _uploadingTemplate;
   String get buildsStatusFilter => _buildsStatusFilter;
   
   // Dashboard getters
@@ -130,6 +133,108 @@ class AdminProvider extends ChangeNotifier {
       _templatesError = 'Error loading templates';
     } finally {
       _templatesLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Upload a new template - returns true on success, false on failure
+  /// Uses Uint8List for web compatibility
+  Future<bool> uploadTemplate({
+    required Uint8List zipFileBytes,
+    required String zipFileName,
+    String? name,
+    String? description,
+    String? category,
+    String? tags,
+    String? price,
+    Uint8List? previewImageBytes,
+    String? previewImageFileName,
+    List<Uint8List>? screenshotsBytes,
+    List<String>? screenshotFileNames,
+  }) async {
+    final token = _tokenGetter?.call();
+    if (token == null || token.isEmpty) {
+      return false;
+    }
+    _uploadingTemplate = true;
+    notifyListeners();
+    try {
+      final res = await AdminService.uploadTemplate(
+        token: token,
+        zipFileBytes: zipFileBytes,
+        zipFileName: zipFileName,
+        name: name,
+        description: description,
+        category: category,
+        tags: tags,
+        price: price,
+        previewImageBytes: previewImageBytes,
+        previewImageFileName: previewImageFileName,
+        screenshotsBytes: screenshotsBytes,
+        screenshotFileNames: screenshotFileNames,
+      );
+      if (res['success'] == true) {
+        // Refresh templates list after successful upload
+        await fetchTemplates();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    } finally {
+      _uploadingTemplate = false;
+      notifyListeners();
+    }
+  }
+
+  /// Edit an existing template - returns true on success, false on failure
+  /// Uses Uint8List for web compatibility
+  Future<bool> editTemplate({
+    required String templateId,
+    Uint8List? zipFileBytes,
+    String? zipFileName,
+    String? name,
+    String? description,
+    String? category,
+    String? tags,
+    String? price,
+    Uint8List? previewImageBytes,
+    String? previewImageFileName,
+    List<Uint8List>? screenshotsBytes,
+    List<String>? screenshotFileNames,
+  }) async {
+    final token = _tokenGetter?.call();
+    if (token == null || token.isEmpty) {
+      return false;
+    }
+    _uploadingTemplate = true;
+    notifyListeners();
+    try {
+      final res = await AdminService.updateTemplate(
+        token: token,
+        templateId: templateId,
+        zipFileBytes: zipFileBytes,
+        zipFileName: zipFileName,
+        name: name,
+        description: description,
+        category: category,
+        tags: tags,
+        price: price,
+        previewImageBytes: previewImageBytes,
+        previewImageFileName: previewImageFileName,
+        screenshotsBytes: screenshotsBytes,
+        screenshotFileNames: screenshotFileNames,
+      );
+      if (res['success'] == true) {
+        // Refresh templates list after successful update
+        await fetchTemplates();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    } finally {
+      _uploadingTemplate = false;
       notifyListeners();
     }
   }

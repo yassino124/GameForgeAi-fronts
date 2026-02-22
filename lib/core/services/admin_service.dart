@@ -1,3 +1,8 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:http/http.dart' as http;
+
 import 'api_service.dart';
 
 /// Admin dashboard API - uses ApiService for HTTP calls.
@@ -10,5 +15,149 @@ class AdminService {
 
   static Future<Map<String, dynamic>> getTemplates({required String token}) {
     return ApiService.get('/templates', token: token);
+  }
+
+  /// Upload a new template to the backend
+  /// POST /templates/upload with multipart/form-data
+  /// Uses Uint8List for web compatibility (no file paths on web)
+  static Future<Map<String, dynamic>> uploadTemplate({
+    required String token,
+    required Uint8List zipFileBytes,
+    required String zipFileName,
+    String? name,
+    String? description,
+    String? category,
+    String? tags,
+    String? price,
+    Uint8List? previewImageBytes,
+    String? previewImageFileName,
+    List<Uint8List>? screenshotsBytes,
+    List<String>? screenshotFileNames,
+  }) async {
+    try {
+      final request = http.MultipartRequest(
+        'POST',
+        Uri.parse('${ApiService.baseUrl}/templates/upload'),
+      );
+
+      request.headers['Authorization'] = 'Bearer $token';
+      request.headers['Accept'] = 'application/json';
+
+      // Add text fields
+      final fields = <String, String>{};
+      if (name != null) fields['name'] = name;
+      if (description != null) fields['description'] = description;
+      if (category != null) fields['category'] = category;
+      if (tags != null) fields['tags'] = tags;
+      if (price != null) fields['price'] = price;
+      request.fields.addAll(fields);
+
+      // Add zip file (required)
+      request.files.add(
+        http.MultipartFile.fromBytes('file', zipFileBytes, filename: zipFileName),
+      );
+
+      // Add preview image if provided
+      if (previewImageBytes != null && previewImageFileName != null) {
+        request.files.add(
+          http.MultipartFile.fromBytes('previewImage', previewImageBytes, filename: previewImageFileName),
+        );
+      }
+
+      // Add screenshots if provided
+      if (screenshotsBytes != null && screenshotFileNames != null) {
+        for (int i = 0; i < screenshotsBytes.length && i < screenshotFileNames.length; i++) {
+          request.files.add(
+            http.MultipartFile.fromBytes('screenshots', screenshotsBytes[i], filename: screenshotFileNames[i]),
+          );
+        }
+      }
+
+      final response = await request.send();
+      final responseBody = await response.stream.bytesToString();
+      final jsonResponse = jsonDecode(responseBody) as Map<String, dynamic>;
+      return jsonResponse;
+    } catch (e) {
+      return {'success': false, 'message': 'Upload failed: $e'};
+    }
+  }
+
+  /// Update an existing template metadata
+  /// PATCH /templates/:id with JSON body
+  /// Optional zipFileBytes for re-uploading the template file
+  static Future<Map<String, dynamic>> updateTemplate({
+    required String token,
+    required String templateId,
+    Uint8List? zipFileBytes,
+    String? zipFileName,
+    String? name,
+    String? description,
+    String? category,
+    String? tags,
+    String? price,
+    Uint8List? previewImageBytes,
+    String? previewImageFileName,
+    List<Uint8List>? screenshotsBytes,
+    List<String>? screenshotFileNames,
+  }) async {
+    try {
+      // If zip file is provided, use multipart request (like upload)
+      if (zipFileBytes != null) {
+        final request = http.MultipartRequest(
+          'PATCH',
+          Uri.parse('${ApiService.baseUrl}/templates/$templateId'),
+        );
+
+        request.headers['Authorization'] = 'Bearer $token';
+        request.headers['Accept'] = 'application/json';
+
+        // Add text fields
+        final fields = <String, String>{};
+        if (name != null) fields['name'] = name;
+        if (description != null) fields['description'] = description;
+        if (category != null) fields['category'] = category;
+        if (tags != null) fields['tags'] = tags;
+        if (price != null) fields['price'] = price;
+        request.fields.addAll(fields);
+
+        // Add zip file
+        request.files.add(
+          http.MultipartFile.fromBytes('file', zipFileBytes, filename: zipFileName ?? 'template.zip'),
+        );
+
+        // Add preview image if provided
+        if (previewImageBytes != null && previewImageFileName != null) {
+          request.files.add(
+            http.MultipartFile.fromBytes('previewImage', previewImageBytes, filename: previewImageFileName),
+          );
+        }
+
+        // Add screenshots if provided
+        if (screenshotsBytes != null && screenshotFileNames != null) {
+          for (int i = 0; i < screenshotsBytes.length && i < screenshotFileNames.length; i++) {
+            request.files.add(
+              http.MultipartFile.fromBytes('screenshots', screenshotsBytes[i], filename: screenshotFileNames[i]),
+            );
+          }
+        }
+
+        final response = await request.send();
+        final responseBody = await response.stream.bytesToString();
+        final jsonResponse = jsonDecode(responseBody) as Map<String, dynamic>;
+        return jsonResponse;
+      } else {
+        // No zip file: use simple PATCH with JSON body for metadata only
+        final data = <String, dynamic>{};
+        if (name != null) data['name'] = name;
+        if (description != null) data['description'] = description;
+        if (category != null) data['category'] = category;
+        if (tags != null) data['tags'] = tags;
+        if (price != null) data['price'] = price;
+
+        return ApiService.patch('/templates/$templateId', data: data, token: token);
+      }
+    } catch (e) {
+      return {'success': false, 'message': 'Update failed: $e'};
+    }
   }
 }
