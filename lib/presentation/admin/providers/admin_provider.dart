@@ -35,6 +35,9 @@ class AdminProvider extends ChangeNotifier {
   // Marketplace screen state
   String _marketplaceCategoryFilter = 'all';
   bool _marketplaceGridView = true;
+  List<Map<String, dynamic>>? _templates;
+  bool _templatesLoading = false;
+  String? _templatesError;
 
   // Builds screen state
   String _buildsStatusFilter = 'all';
@@ -52,6 +55,9 @@ class AdminProvider extends ChangeNotifier {
   String get projectsStatusFilter => _projectsStatusFilter;
   String get marketplaceCategoryFilter => _marketplaceCategoryFilter;
   bool get marketplaceGridView => _marketplaceGridView;
+  List<Map<String, dynamic>>? get templates => _templates;
+  bool get templatesLoading => _templatesLoading;
+  String? get templatesError => _templatesError;
   String get buildsStatusFilter => _buildsStatusFilter;
   
   // Dashboard getters
@@ -94,6 +100,36 @@ class AdminProvider extends ChangeNotifier {
 
     } finally {
       _dashboardLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> fetchTemplates() async {
+    final token = _tokenGetter?.call();
+    if (token == null || token.isEmpty) {
+      _templatesError = 'Not authenticated';
+      notifyListeners();
+      return;
+    }
+    _templatesLoading = true;
+    _templatesError = null;
+    notifyListeners();
+    try {
+      final res = await AdminService.getTemplates(token: token);
+      if (res['success'] == true && res['data'] != null) {
+        _templates = (res['data'] as List)
+          .map((item) => Map<String, dynamic>.from(item as Map))
+          .toList();
+        _templatesError = null;
+      } else {
+        _templates = [];
+        _templatesError = res['message']?.toString() ?? 'Failed to load templates';
+      }
+    } catch (e) {
+      _templates = [];
+      _templatesError = 'Error loading templates';
+    } finally {
+      _templatesLoading = false;
       notifyListeners();
     }
   }
@@ -219,7 +255,7 @@ class AdminProvider extends ChangeNotifier {
 
   // Filtered templates
   List<Map<String, dynamic>> get filteredTemplates {
-    var list = List<Map<String, dynamic>>.from(AdminMockData.mockTemplates);
+    var list = List<Map<String, dynamic>>.from(_templates ?? []);
 
     if (_marketplaceCategoryFilter != 'all') {
       list = list.where((t) => (t['category'] ?? '').toString().toLowerCase() == _marketplaceCategoryFilter.toLowerCase()).toList();

@@ -5,8 +5,21 @@ import '../../constants/admin_theme.dart';
 import '../../providers/admin_provider.dart';
 import '../../widgets/admin_button.dart';
 
-class TemplatesScreen extends StatelessWidget {
+class TemplatesScreen extends StatefulWidget {
   const TemplatesScreen({super.key});
+
+  @override
+  State<TemplatesScreen> createState() => _TemplatesScreenState();
+}
+
+class _TemplatesScreenState extends State<TemplatesScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AdminProvider>().fetchTemplates();
+    });
+  }
 
   static const _categoryColors = {
     'Platformer': AdminTheme.accentNeon,
@@ -31,6 +44,8 @@ class TemplatesScreen extends StatelessWidget {
       builder: (context, provider, _) {
         final templates = provider.filteredTemplates;
         final isGrid = provider.marketplaceGridView;
+        final isLoading = provider.templatesLoading;
+        final error = provider.templatesError;
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -58,7 +73,44 @@ class TemplatesScreen extends StatelessWidget {
             ),
             const SizedBox(height: 24),
             // Content
-            if (isGrid)
+            if (isLoading)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(40.0),
+                  child: CircularProgressIndicator(color: AdminTheme.accentNeon),
+                ),
+              )
+            else if (error != null)
+              Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(40.0),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.error_outline, color: AdminTheme.accentRed, size: 48),
+                      const SizedBox(height: 16),
+                      Text(error, style: const TextStyle(color: AdminTheme.textSecondary)),
+                      const SizedBox(height: 16),
+                      AdminButton(
+                        label: 'Retry',
+                        icon: Icons.refresh,
+                        onPressed: () => provider.fetchTemplates(),
+                      ),
+                    ],
+                  ),
+                ),
+              )
+            else if (templates.isEmpty)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(40.0),
+                  child: Text(
+                    'No templates found',
+                    style: TextStyle(color: AdminTheme.textSecondary, fontSize: 16),
+                  ),
+                ),
+              )
+            else if (isGrid)
               LayoutBuilder(
                 builder: (context, constraints) {
                   final crossAxisCount = constraints.maxWidth > 1200 ? 4 : (constraints.maxWidth > 800 ? 3 : 2);

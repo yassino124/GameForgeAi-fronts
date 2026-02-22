@@ -7,4 +7,8 @@ class AdminService {
   static Future<Map<String, dynamic>> getDashboard({required String token}) {
     return ApiService.get('/admin/dashboard', token: token);
   }
+
+  static Future<Map<String, dynamic>> getTemplates({required String token}) {
+    return ApiService.get('/templates', token: token);
+  }
 }
