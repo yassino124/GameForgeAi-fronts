@@ -8,7 +8,9 @@ import 'package:provider/provider.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/themes/app_theme.dart';
 import '../../../core/providers/auth_provider.dart';
+import '../../../core/services/local_notifications_service.dart';
 import '../../../core/services/projects_service.dart';
+import '../../../core/utils/app_refresh_bus.dart';
 import '../../widgets/widgets.dart';
 
 class GenerationProgressScreen extends StatefulWidget {
@@ -74,6 +76,8 @@ class _GenerationProgressScreenState extends State<GenerationProgressScreen>
   double _overallProgress = 0.2;
   bool _isCompleted = false;
   bool _isMinimized = false;
+
+  bool _completionLogged = false;
 
   @override
   void initState() {
@@ -262,6 +266,19 @@ class _GenerationProgressScreenState extends State<GenerationProgressScreen>
         _overallProgress = prog;
         _isCompleted = done;
       });
+
+      if (done && !_completionLogged) {
+        _completionLogged = true;
+        try {
+          await LocalNotificationsService.addGenerationFinishedInAppNotification(
+            projectId: id,
+            projectName: data['name']?.toString(),
+            prompt: _prompt,
+            templateName: _templateName,
+          );
+        } catch (_) {}
+        AppRefreshBus.bump();
+      }
 
       if (done) {
         _pollTimer?.cancel();

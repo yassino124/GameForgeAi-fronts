@@ -15,6 +15,7 @@ import '../../presentation/screens/assets/assets_library_screen.dart';
 import '../../presentation/screens/assets/assets_export_screen.dart';
 import '../../presentation/screens/project/project_export_screen.dart';
 import '../../presentation/screens/quiz/game_quiz_screen.dart';
+import '../../presentation/screens/project/ai_phaser_game_screen.dart';
 
 class AppRouter {
   static Page<T> _fadeSlidePage<T>({
@@ -114,12 +115,15 @@ class AppRouter {
               case 'templates':
                 initialIndex = 2;
                 break;
-              case 'profile':
+              case 'arcade':
                 initialIndex = 3;
+                break;
+              case 'profile':
+                initialIndex = 4;
                 break;
               default:
                 final parsed = int.tryParse(tab);
-                if (parsed != null && parsed >= 0 && parsed <= 3) {
+                if (parsed != null && parsed >= 0 && parsed <= 4) {
                   initialIndex = parsed;
                 }
             }
@@ -149,6 +153,27 @@ class AppRouter {
           return _fadeSlidePage(child: const AiCreateGameScreen(), state: state);
         },
       ),
+
+      GoRoute(
+        path: '/ai-scratch',
+        pageBuilder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return _fadeSlidePage(child: const SignInScreen(), state: state);
+          }
+          return _fadeSlidePage(child: const AiScratchGameScreen(), state: state);
+        },
+      ),
+
+      GoRoute(
+        path: '/ai-phaser',
+        pageBuilder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return _fadeSlidePage(child: const SignInScreen(), state: state);
+          }
+          return _fadeSlidePage(child: const AiPhaserGameScreen(), state: state);
+        },
+      ),
+
 
       GoRoute(
         path: '/templates/upload',

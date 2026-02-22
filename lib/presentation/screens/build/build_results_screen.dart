@@ -256,7 +256,7 @@ class _BuildResultsScreenState extends State<BuildResultsScreen> {
                   onPressed: (!isReady || !hasPreview)
                       ? null
                       : () {
-                          context.go('/play-webgl', extra: {'url': previewUrl!});
+                          context.push('/play-webgl', extra: {'url': previewUrl!});
                         },
                   type: ButtonType.primary,
                   icon: const Icon(Icons.play_arrow),
@@ -466,7 +466,7 @@ class _BuildResultsScreenState extends State<BuildResultsScreen> {
                     }
                     return;
                   }
-                  if (context.mounted) context.go('/play-webgl', extra: {'url': url});
+                  if (context.mounted) context.push('/play-webgl', extra: {'url': url});
                 },
                 type: ButtonType.primary,
                 icon: const Icon(Icons.play_arrow),

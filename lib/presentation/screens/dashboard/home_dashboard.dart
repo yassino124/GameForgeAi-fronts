@@ -10,15 +10,18 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/providers/build_monitor_provider.dart';
+import '../../../core/services/coach_overlay_controller.dart';
 import '../../../core/services/local_notifications_service.dart';
 import '../../../core/services/notifications_service.dart';
 import '../../../core/services/ai_service.dart';
 import '../../../core/services/projects_service.dart';
+import '../../../core/utils/app_refresh_bus.dart';
 import '../../../core/themes/app_theme.dart';
 import '../../widgets/widgets.dart';
 import '../marketplace/marketplace.dart';
 import '../profile/profile.dart';
 import '../notifications/notifications.dart';
+import '../arcade/arcade_feed_screen.dart';
 
 class GradientTranslation extends GradientTransform {
   final double dx;
@@ -44,6 +47,7 @@ class HomeDashboard extends StatefulWidget {
 
 class _HomeDashboardState extends State<HomeDashboard> with TickerProviderStateMixin {
   late int _selectedIndex;
+  int _lastNonArcadeIndex = 0;
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   late final AnimationController _drawerAnim;
@@ -66,6 +70,8 @@ class _HomeDashboardState extends State<HomeDashboard> with TickerProviderStateM
   int _unreadNotifCount = 0;
   bool _unreadNotifLoading = false;
   Timer? _notifTimer;
+
+  late final VoidCallback _refreshListener;
 
   static const List<String> _trendFallbackImages = [
     'https://images.unsplash.com/photo-1550745165-9bc0b252726f?auto=format&fit=crop&w=1200&q=80',
@@ -100,6 +106,30 @@ class _HomeDashboardState extends State<HomeDashboard> with TickerProviderStateM
   void initState() {
     super.initState();
     _selectedIndex = widget.initialIndex;
+    _lastNonArcadeIndex = (_selectedIndex == 3) ? 0 : _selectedIndex;
+
+    _refreshListener = () {
+      final token = _projectsToken;
+      if (token != null && token.trim().isNotEmpty) {
+        setState(() {
+          _projectsFuture = ProjectsService.listProjects(token: token).then((res) {
+            final data = res['data'];
+            if (data is Map && data['projects'] is List) {
+              return (data['projects'] as List)
+                  .whereType<Map>()
+                  .map((e) => Map<String, dynamic>.from(e))
+                  .toList();
+            }
+            if (data is List) {
+              return data.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+            }
+            return <dynamic>[];
+          });
+        });
+        _loadUnreadNotifications();
+      }
+    };
+    AppRefreshBus.notifier.addListener(_refreshListener);
 
     _drawerAnim = AnimationController(
       vsync: this,
@@ -188,6 +218,7 @@ class _HomeDashboardState extends State<HomeDashboard> with TickerProviderStateM
 
   @override
   void dispose() {
+    AppRefreshBus.notifier.removeListener(_refreshListener);
     _drawerAnim.dispose();
     _homeIntroAnim.dispose();
     _wowAnim.dispose();
@@ -440,25 +471,29 @@ class _HomeDashboardState extends State<HomeDashboard> with TickerProviderStateM
         final cs = Theme.of(context).colorScheme;
         final user = authProvider.user;
         final username = user?['username']?.toString() ?? 'User';
+        final isArcade = _selectedIndex == 3;
         
         return Scaffold(
           key: _scaffoldKey,
-          backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+          backgroundColor: isArcade ? Colors.black : Theme.of(context).scaffoldBackgroundColor,
           drawer: _buildWowDrawer(context, authProvider),
-          appBar: _buildCustomAppBar(),
+          appBar: isArcade ? null : _buildCustomAppBar(),
           body: _buildBody(context, username),
           floatingActionButton: _selectedIndex == 0
             ? Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  FloatingActionButton.small(
-                    heroTag: 'fab_coach',
-                    onPressed: () {
-                      context.push('/ai-coach');
+                  _CoachMicFab(
+                    onTap: () {
+                      final coach = context.read<CoachOverlayController>();
+                      if (coach.overlayEnabled) {
+                        coach.hideOverlay();
+                      } else {
+                        coach.showOverlay();
+                      }
                     },
-                    backgroundColor: cs.surface,
-                    foregroundColor: cs.onSurface,
-                    child: const Icon(Icons.mic_rounded),
+                    onLongPress: () => context.push('/ai-coach'),
+                    wow: _wowAnim,
                   ),
                   const SizedBox(height: 10),
                   FloatingActionButton(
@@ -473,7 +508,7 @@ class _HomeDashboardState extends State<HomeDashboard> with TickerProviderStateM
                 ],
               )
             : null,
-          bottomNavigationBar: _buildBottomNavigationBar(),
+          bottomNavigationBar: isArcade ? null : _buildBottomNavigationBar(),
         );
       },
     );
@@ -758,6 +793,13 @@ class _HomeDashboardState extends State<HomeDashboard> with TickerProviderStateM
         _buildHomeContent(username),
         _buildRecentProjects(),
         _buildTemplatesContent(),
+        ArcadeFeedScreen(
+          onBack: () {
+            setState(() {
+              _selectedIndex = _lastNonArcadeIndex;
+            });
+          },
+        ),
         _buildProfileContent(),
       ],
     );
@@ -967,7 +1009,7 @@ class _HomeDashboardState extends State<HomeDashboard> with TickerProviderStateM
                         final user = authProvider.user;
                         final avatar = user?['avatar']?.toString();
                         return GestureDetector(
-                          onTap: () => setState(() => _selectedIndex = 3),
+                          onTap: () => setState(() => _selectedIndex = 4),
                           child: Container(
                             padding: const EdgeInsets.all(2.5),
                             decoration: BoxDecoration(
@@ -1213,7 +1255,7 @@ class _HomeDashboardState extends State<HomeDashboard> with TickerProviderStateM
               builder: (context, snapshot) {
                 final raw = snapshot.data ?? const <dynamic>[];
                 final items = raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
-                final builds = items.fold<int>(0, (sum, p) => sum + _toInt(p['buildCount'] ?? p['buildsCount'] ?? p['builds']));
+                final buildsFromProject = items.fold<int>(0, (sum, p) => sum + _toInt(p['buildCount'] ?? p['buildsCount'] ?? p['builds']));
                 final gens = items.fold<int>(0, (sum, p) => sum + _toInt(p['generationCount'] ?? p['generationsCount'] ?? p['generations']));
 
                 String fmt(int n) {
@@ -1222,28 +1264,49 @@ class _HomeDashboardState extends State<HomeDashboard> with TickerProviderStateM
                   return n.toString();
                 }
 
-                return Row(
-                  children: [
-                    Expanded(
-                      child: _buildStatsCard(
-                        title: 'Builds',
-                        value: _projectsFuture == null ? '—' : fmt(builds),
-                        icon: Icons.build,
-                        color: AppColors.success,
-                        percentage: 0.0,
-                      ),
-                    ),
-                    const SizedBox(width: AppSpacing.lg),
-                    Expanded(
-                      child: _buildStatsCard(
-                        title: 'Generations',
-                        value: _projectsFuture == null ? '—' : fmt(gens),
-                        icon: Icons.auto_awesome,
-                        color: AppColors.accent,
-                        percentage: 0.0,
-                      ),
-                    ),
-                  ],
+                return FutureBuilder<List<Map<String, dynamic>>>(
+                  future: LocalNotificationsService.listInAppNotifications(),
+                  builder: (context, notifSnap) {
+                    final notifs = notifSnap.data ?? const <Map<String, dynamic>>[];
+                    final buildsFromNotifs = notifs.where((n) {
+                      final data = n['data'];
+                      if (data is! Map) return false;
+                      return data['kind']?.toString() == 'build_finished';
+                    }).length;
+
+                    final gensFromNotifs = notifs.where((n) {
+                      final data = n['data'];
+                      if (data is! Map) return false;
+                      return data['kind']?.toString() == 'generation_finished';
+                    }).length;
+
+                    final builds = buildsFromNotifs > 0 ? buildsFromNotifs : buildsFromProject;
+                    final gensValue = gensFromNotifs > 0 ? gensFromNotifs : gens;
+
+                    return Row(
+                      children: [
+                        Expanded(
+                          child: _buildStatsCard(
+                            title: 'Builds',
+                            value: _projectsFuture == null ? '—' : fmt(builds),
+                            icon: Icons.build,
+                            color: AppColors.success,
+                            percentage: 0.0,
+                          ),
+                        ),
+                        const SizedBox(width: AppSpacing.lg),
+                        Expanded(
+                          child: _buildStatsCard(
+                            title: 'Generations',
+                            value: _projectsFuture == null ? '—' : fmt(gensValue),
+                            icon: Icons.auto_awesome,
+                            color: AppColors.accent,
+                            percentage: 0.0,
+                          ),
+                        ),
+                      ],
+                    );
+                  },
                 );
               },
             ),
@@ -1771,79 +1834,86 @@ class _HomeDashboardState extends State<HomeDashboard> with TickerProviderStateM
                                             Expanded(
                                               child: Align(
                                                 alignment: Alignment.centerLeft,
-                                                child: Wrap(
-                                                  spacing: AppSpacing.sm,
-                                                  runSpacing: AppSpacing.sm,
-                                                  children: [
-                                                    if (source.isNotEmpty)
-                                                      Container(
-                                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                                        decoration: BoxDecoration(
-                                                          color: Colors.white.withOpacity(0.14),
-                                                          borderRadius: BorderRadius.circular(99),
-                                                          border: Border.all(color: Colors.white.withOpacity(0.14)),
-                                                        ),
-                                                        child: Text(
-                                                          source,
-                                                          maxLines: 1,
-                                                          overflow: TextOverflow.ellipsis,
-                                                          style: AppTypography.caption.copyWith(
-                                                            color: Colors.white.withOpacity(0.90),
-                                                            fontWeight: FontWeight.w800,
+                                                child: SizedBox(
+                                                  height: 30,
+                                                  child: ListView(
+                                                    scrollDirection: Axis.horizontal,
+                                                    children: [
+                                                      if (source.isNotEmpty)
+                                                        Container(
+                                                          margin: const EdgeInsets.only(right: AppSpacing.sm),
+                                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                                          decoration: BoxDecoration(
+                                                            color: Colors.white.withOpacity(0.14),
+                                                            borderRadius: BorderRadius.circular(99),
+                                                            border: Border.all(color: Colors.white.withOpacity(0.14)),
+                                                          ),
+                                                          child: Text(
+                                                            source,
+                                                            maxLines: 1,
+                                                            overflow: TextOverflow.ellipsis,
+                                                            style: AppTypography.caption.copyWith(
+                                                              color: Colors.white.withOpacity(0.90),
+                                                              fontWeight: FontWeight.w800,
+                                                            ),
                                                           ),
                                                         ),
-                                                      ),
-                                                    if (host.isNotEmpty)
-                                                      Container(
-                                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                                        decoration: BoxDecoration(
-                                                          color: Colors.black.withOpacity(0.22),
-                                                          borderRadius: BorderRadius.circular(99),
-                                                          border: Border.all(color: Colors.white.withOpacity(0.10)),
-                                                        ),
-                                                        child: Text(
-                                                          host,
-                                                          maxLines: 1,
-                                                          overflow: TextOverflow.ellipsis,
-                                                          style: AppTypography.caption.copyWith(
-                                                            color: Colors.white.withOpacity(0.90),
-                                                            fontWeight: FontWeight.w800,
+                                                      if (host.isNotEmpty)
+                                                        Container(
+                                                          margin: const EdgeInsets.only(right: AppSpacing.sm),
+                                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                                          decoration: BoxDecoration(
+                                                            color: Colors.black.withOpacity(0.22),
+                                                            borderRadius: BorderRadius.circular(99),
+                                                            border: Border.all(color: Colors.white.withOpacity(0.10)),
+                                                          ),
+                                                          child: Text(
+                                                            host,
+                                                            maxLines: 1,
+                                                            overflow: TextOverflow.ellipsis,
+                                                            style: AppTypography.caption.copyWith(
+                                                              color: Colors.white.withOpacity(0.90),
+                                                              fontWeight: FontWeight.w800,
+                                                            ),
                                                           ),
                                                         ),
-                                                      ),
-                                                    if (dateText.isNotEmpty)
-                                                      Container(
-                                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                                        decoration: BoxDecoration(
-                                                          color: Colors.black.withOpacity(0.22),
-                                                          borderRadius: BorderRadius.circular(99),
-                                                          border: Border.all(color: Colors.white.withOpacity(0.10)),
-                                                        ),
-                                                        child: Text(
-                                                          dateText,
-                                                          maxLines: 1,
-                                                          overflow: TextOverflow.ellipsis,
-                                                          style: AppTypography.caption.copyWith(
-                                                            color: Colors.white.withOpacity(0.90),
-                                                            fontWeight: FontWeight.w800,
+                                                      if (dateText.isNotEmpty)
+                                                        Container(
+                                                          margin: const EdgeInsets.only(right: AppSpacing.sm),
+                                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                                          decoration: BoxDecoration(
+                                                            color: Colors.black.withOpacity(0.22),
+                                                            borderRadius: BorderRadius.circular(99),
+                                                            border: Border.all(color: Colors.white.withOpacity(0.10)),
+                                                          ),
+                                                          child: Text(
+                                                            dateText,
+                                                            maxLines: 1,
+                                                            overflow: TextOverflow.ellipsis,
+                                                            style: AppTypography.caption.copyWith(
+                                                              color: Colors.white.withOpacity(0.90),
+                                                              fontWeight: FontWeight.w800,
+                                                            ),
                                                           ),
                                                         ),
-                                                      ),
-                                                  ],
+                                                    ],
+                                                  ),
                                                 ),
                                               ),
                                             ),
                                             Icon(Icons.chevron_right_rounded, color: Colors.white.withOpacity(0.92)),
                                           ],
                                         ),
-                                        const Spacer(),
-                                        Text(
-                                          title,
-                                          maxLines: 2,
-                                          overflow: TextOverflow.ellipsis,
-                                          style: AppTypography.subtitle1.copyWith(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.w900,
+                                        const SizedBox(height: 10),
+                                        Expanded(
+                                          child: Text(
+                                            title,
+                                            maxLines: 3,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: AppTypography.subtitle1.copyWith(
+                                              color: Colors.white,
+                                              fontWeight: FontWeight.w900,
+                                            ),
                                           ),
                                         ),
                                         const SizedBox(height: 12),
@@ -2010,7 +2080,7 @@ class _HomeDashboardState extends State<HomeDashboard> with TickerProviderStateM
             final when = p['updatedAt']?.toString() ?? p['createdAt']?.toString();
             final id = p['_id']?.toString() ?? p['id']?.toString();
             final downloads = toInt(p['downloadCount'] ?? p['downloadsCount'] ?? p['downloads']);
-            final avatarText = name.isNotEmpty ? name[0].toUpperCase() : 'G';
+            final thumbnailUrl = (p['previewImageUrl'] ?? p['thumbnailUrl'] ?? p['iconUrl'] ?? p['imageUrl'])?.toString();
 
             return Container(
               margin: const EdgeInsets.only(bottom: AppSpacing.lg),
@@ -2056,15 +2126,21 @@ class _HomeDashboardState extends State<HomeDashboard> with TickerProviderStateM
                             gradient: AppColors.primaryGradient,
                             borderRadius: BorderRadius.circular(AppBorderRadius.medium),
                           ),
-                          child: Center(
-                            child: Text(
-                              avatarText,
-                              style: const TextStyle(
-                                fontSize: 26,
-                                fontWeight: FontWeight.w900,
-                                color: Colors.white,
-                              ),
-                            ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(AppBorderRadius.medium),
+                            child: (thumbnailUrl != null && thumbnailUrl.trim().isNotEmpty)
+                                ? Image.network(
+                                    thumbnailUrl.trim(),
+                                    fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) {
+                                      return const Center(
+                                        child: Icon(Icons.sports_esports_rounded, color: Colors.white, size: 28),
+                                      );
+                                    },
+                                  )
+                                : const Center(
+                                    child: Icon(Icons.sports_esports_rounded, color: Colors.white, size: 28),
+                                  ),
                           ),
                         ),
                         const SizedBox(width: AppSpacing.lg),
@@ -2294,39 +2370,64 @@ class _HomeDashboardState extends State<HomeDashboard> with TickerProviderStateM
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header
-          Row(
-            children: [
-              Text(
-                'All Projects',
-                style: AppTypography.h2,
+          Container(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(AppBorderRadius.large),
+              gradient: LinearGradient(
+                colors: [
+                  cs.surface.withOpacity(0.55),
+                  cs.surfaceContainerHighest.withOpacity(0.22),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
               ),
-              const Expanded(child: SizedBox()),
-              FutureBuilder<List<dynamic>>(
-                future: _projectsFuture,
-                builder: (context, snapshot) {
-                  final count = snapshot.data?.length;
-                  final text = count == null ? '—' : '$count Projects';
-                  return Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: AppSpacing.md,
-                      vertical: AppSpacing.sm,
-                    ),
-                    decoration: BoxDecoration(
-                      color: cs.primary.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(AppBorderRadius.medium),
-                    ),
-                    child: Text(
-                      text,
-                      style: AppTypography.caption.copyWith(
-                        color: cs.primary,
-                        fontWeight: FontWeight.w600,
+              border: Border.all(color: cs.outlineVariant.withOpacity(0.55)),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.14),
+                  blurRadius: 22,
+                  offset: const Offset(0, 12),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                Text(
+                  'All Projects',
+                  style: AppTypography.h2.copyWith(fontWeight: FontWeight.w900),
+                ),
+                const Expanded(child: SizedBox()),
+                FutureBuilder<List<dynamic>>(
+                  future: _projectsFuture,
+                  builder: (context, snapshot) {
+                    final count = snapshot.data?.length;
+                    final text = count == null ? '—' : '$count Projects';
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(colors: [cs.primary, cs.secondary]),
+                        borderRadius: BorderRadius.circular(999),
+                        boxShadow: [
+                          BoxShadow(
+                            color: cs.primary.withOpacity(0.28),
+                            blurRadius: 16,
+                            offset: const Offset(0, 10),
+                          ),
+                        ],
                       ),
-                    ),
-                  );
-                },
-              ),
-            ],
+                      child: Text(
+                        text,
+                        style: AppTypography.caption.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              ],
+            ),
           ),
           
           const SizedBox(height: AppSpacing.xxl),
@@ -2396,17 +2497,20 @@ class _HomeDashboardState extends State<HomeDashboard> with TickerProviderStateM
                   final lastModified = parseDate(pm['updatedAt'] ?? pm['createdAt']);
                   final thumbnailUrl = pm['previewImageUrl']?.toString();
 
-                  return ProjectCard(
-                    title: title,
-                    description: desc,
-                    thumbnailUrl: thumbnailUrl,
-                    status: status,
-                    lastModified: lastModified,
-                    progress: status == 'in_progress' ? 0.5 : 1.0,
-                    onTap: () {
-                      final id = pm['_id']?.toString() ?? pm['id']?.toString();
-                      context.go('/project-detail', extra: {'projectId': id, 'project': pm});
-                    },
+                  return AnimatedCard(
+                    delay: Duration(milliseconds: 60 + (index.clamp(0, 10) * 40)),
+                    child: ProjectCard(
+                      title: title,
+                      description: desc,
+                      thumbnailUrl: thumbnailUrl,
+                      status: status,
+                      lastModified: lastModified,
+                      progress: status == 'in_progress' ? 0.5 : 1.0,
+                      onTap: () {
+                        final id = pm['_id']?.toString() ?? pm['id']?.toString();
+                        context.go('/project-detail', extra: {'projectId': id, 'project': pm});
+                      },
+                    ),
                   );
                 },
               );
@@ -2439,6 +2543,9 @@ class _HomeDashboardState extends State<HomeDashboard> with TickerProviderStateM
         currentIndex: _selectedIndex,
         onTap: (index) {
           setState(() {
+            if (_selectedIndex != 3) {
+              _lastNonArcadeIndex = _selectedIndex;
+            }
             _selectedIndex = index;
           });
         },
@@ -2464,6 +2571,11 @@ class _HomeDashboardState extends State<HomeDashboard> with TickerProviderStateM
             icon: Icon(Icons.grid_view_outlined),
             activeIcon: Icon(Icons.grid_view),
             label: 'Templates',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.sports_esports_outlined),
+            activeIcon: Icon(Icons.sports_esports),
+            label: 'Arcade',
           ),
           BottomNavigationBarItem(
             icon: Icon(Icons.person_outline),
@@ -2574,6 +2686,90 @@ class _HomeDashboardState extends State<HomeDashboard> with TickerProviderStateM
         ),
       ),
       onTap: onTap,
+    );
+  }
+}
+
+class _CoachMicFab extends StatefulWidget {
+  final VoidCallback onTap;
+  final VoidCallback? onLongPress;
+  final Animation<double> wow;
+
+  const _CoachMicFab({
+    required this.onTap,
+    this.onLongPress,
+    required this.wow,
+  });
+
+  @override
+  State<_CoachMicFab> createState() => _CoachMicFabState();
+}
+
+class _CoachMicFabState extends State<_CoachMicFab> {
+  bool _down = false;
+
+  void _set(bool v) {
+    if (_down == v) return;
+    setState(() => _down = v);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return AnimatedBuilder(
+      animation: widget.wow,
+      builder: (context, _) {
+        final w = widget.wow.value;
+        final pulse = (math.sin(w * math.pi * 2) + 1) / 2;
+        final glow = 0.18 + pulse * 0.22;
+        final scale = _down ? 0.96 : (0.98 + pulse * 0.03);
+
+        return GestureDetector(
+          onTap: widget.onTap,
+          onLongPress: widget.onLongPress,
+          onTapDown: (_) => _set(true),
+          onTapCancel: () => _set(false),
+          onTapUp: (_) => _set(false),
+          child: AnimatedScale(
+            duration: const Duration(milliseconds: 120),
+            curve: Curves.easeOutCubic,
+            scale: scale,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(999),
+                gradient: LinearGradient(
+                  colors: [AppColors.accent, cs.primary],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: cs.primary.withOpacity(glow),
+                    blurRadius: 18,
+                    offset: const Offset(0, 10),
+                  ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.auto_awesome_rounded, color: cs.onPrimary, size: 18),
+                  const SizedBox(width: 8),
+                  Text(
+                    'AI Coach',
+                    style: AppTypography.caption.copyWith(
+                      color: cs.onPrimary,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 0.2,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 }

@@ -725,124 +725,173 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> {
               duration: const Duration(milliseconds: 300),
               padding: AppSpacing.paddingLarge,
               decoration: BoxDecoration(
-                color: cs.surface.withOpacity(isDark ? 0.45 : 0.65),
+                color: cs.surface.withOpacity(isDark ? 0.35 : 0.55),
                 border: Border(
                   bottom: BorderSide(color: cs.outlineVariant.withOpacity(0.3)),
                 ),
               ),
               child: Column(
                 children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: CustomSearchField(
-                          controller: _searchController,
-                          hint: 'Search templates...',
-                          onChanged: (_) {},
-                          onClear: () {
-                            _searchController.clear();
-                            _loadTemplates();
-                          },
-                        ),
+                  Container(
+                    padding: const EdgeInsets.all(AppSpacing.lg),
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(AppBorderRadius.large),
+                      gradient: LinearGradient(
+                        colors: [
+                          cs.surface.withOpacity(isDark ? 0.50 : 0.72),
+                          cs.surfaceContainerHighest.withOpacity(isDark ? 0.22 : 0.52),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
                       ),
-                      const SizedBox(width: AppSpacing.md),
-                      InkWell(
-                        onTap: _toggleVoiceSearch,
-                        borderRadius: BorderRadius.circular(AppBorderRadius.medium),
-                        child: Container(
-                          width: 48,
-                          height: 48,
-                          decoration: BoxDecoration(
-                            color: _isListening ? AppColors.accent : cs.primary,
-                            borderRadius: BorderRadius.circular(AppBorderRadius.medium),
-                          ),
-                          child: Icon(
-                            _isListening ? Icons.graphic_eq_rounded : Icons.mic_rounded,
-                            color: cs.onPrimary,
-                          ),
+                      border: Border.all(color: cs.outlineVariant.withOpacity(0.55)),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(isDark ? 0.26 : 0.12),
+                          blurRadius: 26,
+                          offset: const Offset(0, 14),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        decoration: BoxDecoration(
-                          color: cs.surfaceContainerHighest.withOpacity(0.6),
-                          borderRadius: BorderRadius.circular(AppBorderRadius.medium),
-                          border: Border.all(color: cs.outlineVariant.withOpacity(0.6)),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: CustomSearchField(
+                                controller: _searchController,
+                                hint: 'Search templates...',
+                                onChanged: (_) {},
+                                onClear: () {
+                                  _searchController.clear();
+                                  _loadTemplates();
+                                },
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.md),
+                            _PressableGlow(
+                              onTap: _toggleVoiceSearch,
+                              onLongPress: null,
+                              child: Container(
+                                width: 48,
+                                height: 48,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(AppBorderRadius.medium),
+                                  gradient: _isListening
+                                      ? LinearGradient(
+                                          colors: [AppColors.accent, cs.primary],
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                        )
+                                      : LinearGradient(
+                                          colors: [cs.primary, cs.secondary],
+                                          begin: Alignment.topLeft,
+                                          end: Alignment.bottomRight,
+                                        ),
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: (_isListening ? AppColors.accent : cs.primary).withOpacity(0.28),
+                                      blurRadius: 18,
+                                      offset: const Offset(0, 10),
+                                    ),
+                                  ],
+                                ),
+                                child: Icon(
+                                  _isListening ? Icons.graphic_eq_rounded : Icons.mic_rounded,
+                                  color: cs.onPrimary,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<String>(
-                            value: _sortBy,
-                            onChanged: (value) {
-                              if (value == null) return;
-                              setState(() {
-                                _sortBy = value;
-                              });
-                            },
-                            style: AppTypography.caption.copyWith(fontWeight: FontWeight.w500),
-                            underline: const SizedBox(),
-                            icon: Icon(Icons.keyboard_arrow_down, color: cs.onSurfaceVariant),
-                            items: _sortOptions
-                                .map((option) => DropdownMenuItem(value: option, child: Text(option)))
-                                .toList(),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: AppSpacing.lg),
-
-                      // Category chips
-                      Expanded(
-                        child: SizedBox(
-                          height: 40,
-                          child: ListView.builder(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: _categories.length,
-                            itemBuilder: (context, index) {
-                              final category = _categories[index];
-                              final isSelected = category == _selectedCategory;
-
-                              return Padding(
-                                padding: const EdgeInsets.only(right: AppSpacing.sm),
-                                child: _AnimatedChoiceChip(
-                                  label: category,
-                                  selected: isSelected,
-                                  onTap: () {
+                        const SizedBox(height: AppSpacing.lg),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(AppBorderRadius.medium),
+                                gradient: LinearGradient(
+                                  colors: [
+                                    cs.surfaceContainerHighest.withOpacity(isDark ? 0.28 : 0.62),
+                                    cs.surface.withOpacity(isDark ? 0.22 : 0.52),
+                                  ],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                border: Border.all(color: cs.outlineVariant.withOpacity(0.55)),
+                              ),
+                              child: DropdownButtonHideUnderline(
+                                child: DropdownButton<String>(
+                                  value: _sortBy,
+                                  onChanged: (value) {
+                                    if (value == null) return;
                                     setState(() {
-                                      _selectedCategory = category;
+                                      _sortBy = value;
                                     });
-                                    _loadTemplates();
+                                  },
+                                  style: AppTypography.caption.copyWith(fontWeight: FontWeight.w800),
+                                  underline: const SizedBox(),
+                                  icon: Icon(Icons.keyboard_arrow_down, color: cs.onSurfaceVariant),
+                                  items: _sortOptions
+                                      .map((option) => DropdownMenuItem(value: option, child: Text(option)))
+                                      .toList(),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.lg),
+
+                            Expanded(
+                              child: SizedBox(
+                                height: 40,
+                                child: ListView.builder(
+                                  scrollDirection: Axis.horizontal,
+                                  itemCount: _categories.length,
+                                  itemBuilder: (context, index) {
+                                    final category = _categories[index];
+                                    final isSelected = category == _selectedCategory;
+
+                                    return Padding(
+                                      padding: const EdgeInsets.only(right: AppSpacing.sm),
+                                      child: _AnimatedChoiceChip(
+                                        label: category,
+                                        selected: isSelected,
+                                        onTap: () {
+                                          setState(() {
+                                            _selectedCategory = category;
+                                          });
+                                          _loadTemplates();
+                                        },
+                                      ),
+                                    );
                                   },
                                 ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: AppSpacing.md),
+                        SizedBox(
+                          height: 40,
+                          child: ListView.separated(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: _proFilters.length,
+                            separatorBuilder: (_, __) => const SizedBox(width: 8),
+                            itemBuilder: (context, i) {
+                              final f = _proFilters[i];
+                              final selected = f == _proFilter;
+                              return _AnimatedChoiceChip(
+                                label: f,
+                                selected: selected,
+                                densePill: true,
+                                onTap: () {
+                                  setState(() => _proFilter = f);
+                                },
                               );
                             },
                           ),
                         ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.md),
-                  SizedBox(
-                    height: 40,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: _proFilters.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 8),
-                      itemBuilder: (context, i) {
-                        final f = _proFilters[i];
-                        final selected = f == _proFilter;
-                        return _AnimatedChoiceChip(
-                          label: f,
-                          selected: selected,
-                          densePill: true,
-                          onTap: () {
-                            setState(() => _proFilter = f);
-                          },
-                        );
-                      },
+                      ],
                     ),
                   ),
                 ],
@@ -915,7 +964,21 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> {
                     ],
 
                     // All templates
-                    Text('All Templates', style: AppTypography.subtitle2),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      decoration: BoxDecoration(
+                        color: cs.surface.withOpacity(Theme.of(context).brightness == Brightness.dark ? 0.18 : 0.55),
+                        borderRadius: BorderRadius.circular(AppBorderRadius.large),
+                        border: Border.all(color: cs.outlineVariant.withOpacity(0.45)),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.grid_view_rounded, size: 18, color: cs.primary),
+                          const SizedBox(width: 8),
+                          Expanded(child: Text('All Templates', style: AppTypography.subtitle2)),
+                        ],
+                      ),
+                    ),
                     const SizedBox(height: AppSpacing.lg),
 
                     // Templates grid/list
@@ -933,6 +996,7 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> {
 
   Widget _buildCompareTray(ColorScheme cs) {
     final visible = _compareTrayVisible;
+    if (!visible) return const SizedBox.shrink();
     return AnimatedSlide(
       duration: const Duration(milliseconds: 260),
       curve: Curves.easeOutCubic,
@@ -1166,7 +1230,25 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> {
       ),
       itemCount: filteredTemplates.length,
       itemBuilder: (context, index) {
-        return _buildTemplateCard(filteredTemplates[index]);
+        final t = filteredTemplates[index];
+        return TweenAnimationBuilder<double>(
+          tween: Tween(begin: 0.0, end: 1.0),
+          duration: Duration(milliseconds: 320 + (index.clamp(0, 8) * 40)),
+          curve: Curves.easeOutCubic,
+          builder: (context, v, child) {
+            return Opacity(
+              opacity: v,
+              child: Transform.translate(
+                offset: Offset(0, (1 - v) * 14),
+                child: Transform.scale(
+                  scale: 0.98 + (v * 0.02),
+                  child: child,
+                ),
+              ),
+            );
+          },
+          child: _buildTemplateCard(t),
+        );
       },
     );
   }
@@ -1328,157 +1410,237 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> {
     final saved = _savedTemplateIds.contains(template.id);
     final compared = _compareSelection.any((t) => t.id == template.id);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final priceText = template.price > 0 ? '\$${template.price.toStringAsFixed(0)}' : 'FREE';
 
-    return Container(
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        color: cs.surface.withOpacity(isDark ? 0.4 : 0.7),
-        border: Border.all(color: cs.outlineVariant.withOpacity(0.2)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(20),
-        child: Material(
-          color: Colors.transparent,
-          child: InkWell(
-            onTap: () => context.go('/template/${template.id}'),
-            onLongPress: () => _toggleCompare(template),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                AspectRatio(
-                  aspectRatio: 16 / 10,
-                  child: Stack(
-                    children: [
-                      Positioned.fill(
-                        child: (videoUrl != null && videoUrl.trim().isNotEmpty)
-                            ? InlineAutoplayVideo(
-                                url: videoUrl,
-                                fallbackImageUrl: coverUrl,
-                                fallbackIcon: _getCategoryIcon(template.category),
-                              )
-                            : (coverUrl != null && coverUrl.trim().isNotEmpty)
-                                ? Image.network(
-                                    coverUrl,
-                                    fit: BoxFit.cover,
-                                    errorBuilder: (context, error, stackTrace) {
-                                      return Container(
-                                        decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
-                                        child: Center(
-                                          child: Icon(
-                                            _getCategoryIcon(template.category),
-                                            size: 32,
-                                            color: cs.onPrimary.withOpacity(0.80),
+    return _PressableGlow(
+      onTap: () => context.go('/template/${template.id}'),
+      onLongPress: () => _toggleCompare(template),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(22),
+          color: cs.surface.withOpacity(isDark ? 0.36 : 0.72),
+          border: Border.all(color: cs.outlineVariant.withOpacity(0.26)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(isDark ? 0.22 : 0.10),
+              blurRadius: 22,
+              offset: const Offset(0, 12),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(22),
+          child: Stack(
+            children: [
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  AspectRatio(
+                    aspectRatio: 16 / 10,
+                    child: Stack(
+                      children: [
+                        Positioned.fill(
+                          child: (videoUrl != null && videoUrl.trim().isNotEmpty)
+                              ? InlineAutoplayVideo(
+                                  url: videoUrl,
+                                  fallbackImageUrl: coverUrl,
+                                  fallbackIcon: _getCategoryIcon(template.category),
+                                )
+                              : (coverUrl != null && coverUrl.trim().isNotEmpty)
+                                  ? Image.network(
+                                      coverUrl,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) {
+                                        return Container(
+                                          decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
+                                          child: Center(
+                                            child: Icon(
+                                              _getCategoryIcon(template.category),
+                                              size: 34,
+                                              color: cs.onPrimary.withOpacity(0.82),
+                                            ),
                                           ),
+                                        );
+                                      },
+                                    )
+                                  : Container(
+                                      decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
+                                      child: Center(
+                                        child: Icon(
+                                          _getCategoryIcon(template.category),
+                                          size: 34,
+                                          color: cs.onPrimary.withOpacity(0.82),
                                         ),
-                                      );
-                                    },
-                                  )
-                                : Container(
-                                    decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
-                                    child: Center(
-                                      child: Icon(
-                                        _getCategoryIcon(template.category),
-                                        size: 32,
-                                        color: cs.onPrimary.withOpacity(0.80),
                                       ),
                                     ),
-                                  ),
-                      ),
-                      Positioned.fill(
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [Colors.transparent, Colors.black.withOpacity(0.4)],
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
+                        ),
+                        Positioned.fill(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [
+                                  Colors.black.withOpacity(0.00),
+                                  Colors.black.withOpacity(0.22),
+                                  Colors.black.withOpacity(0.62),
+                                ],
+                                begin: Alignment.topCenter,
+                                end: Alignment.bottomCenter,
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                      Positioned(
-                        top: 8,
-                        right: 8,
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            GestureDetector(
-                              onTap: () => _toggleCompare(template),
-                              child: Container(
-                                padding: const EdgeInsets.all(6),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.3),
-                                  shape: BoxShape.circle,
+                        Positioned(
+                          left: 10,
+                          bottom: 10,
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (template.isFeatured)
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(colors: [cs.primary, cs.secondary]),
+                                    borderRadius: BorderRadius.circular(999),
+                                  ),
+                                  child: Text(
+                                    'FEATURED',
+                                    style: AppTypography.caption.copyWith(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w900,
+                                      fontSize: 10,
+                                    ),
+                                  ),
                                 ),
-                                child: Icon(
-                                  compared ? Icons.check_circle_rounded : Icons.compare_arrows_rounded,
-                                  color: compared ? cs.primary : Colors.white,
-                                  size: 18,
+                              if (template.isFeatured) const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: Colors.black.withOpacity(0.34),
+                                  borderRadius: BorderRadius.circular(999),
+                                  border: Border.all(color: Colors.white.withOpacity(0.18)),
+                                ),
+                                child: Text(
+                                  priceText,
+                                  style: AppTypography.caption.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w900,
+                                    fontSize: 10,
+                                  ),
                                 ),
                               ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          template.name,
+                          style: AppTypography.subtitle2.copyWith(fontWeight: FontWeight.w900, color: cs.onSurface),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                template.category,
+                                style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
                             ),
-                            const SizedBox(width: 6),
-                            GestureDetector(
-                              onTap: () => _toggleSaved(template),
-                              child: Container(
-                                padding: const EdgeInsets.all(6),
+                            Icon(Icons.star_rounded, size: 14, color: Colors.amber[700]),
+                            const SizedBox(width: 4),
+                            Text(
+                              template.rating.toStringAsFixed(1),
+                              style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w800),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Row(
+                          children: [
+                            if (badges.isNotEmpty)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                 decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.3),
-                                  shape: BoxShape.circle,
+                                  color: cs.primary.withOpacity(0.10),
+                                  borderRadius: BorderRadius.circular(999),
+                                  border: Border.all(color: cs.primary.withOpacity(0.16)),
                                 ),
-                                child: Icon(
-                                  saved ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                                  color: saved ? Colors.redAccent : Colors.white,
-                                  size: 18,
+                                child: Text(
+                                  badges.first.label,
+                                  style: AppTypography.caption.copyWith(color: cs.primary, fontWeight: FontWeight.w900, fontSize: 10),
                                 ),
+                              ),
+                            if (badges.isNotEmpty) const SizedBox(width: 8),
+                            Icon(Icons.download_rounded, size: 14, color: cs.onSurfaceVariant),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                '${template.downloads}',
+                                style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w800),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
                           ],
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        template.name,
-                        style: AppTypography.caption.copyWith(fontWeight: FontWeight.w900, color: cs.onSurface),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 2),
-                      Text(
-                        template.category,
-                        style: AppTypography.caption.copyWith(fontSize: 10, color: cs.onSurfaceVariant),
-                      ),
-                      const SizedBox(height: 6),
-                      if (badges.isNotEmpty)
-                        Wrap(
-                          spacing: 4,
-                          children: badges.take(1).map((b) => Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: cs.primary.withOpacity(0.1),
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                            child: Text(b.label, style: TextStyle(color: cs.primary, fontSize: 8, fontWeight: FontWeight.bold)),
-                          )).toList(),
+                ],
+              ),
+              Positioned(
+                top: 10,
+                right: 10,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    GestureDetector(
+                      onTap: () => _toggleCompare(template),
+                      child: Container(
+                        padding: const EdgeInsets.all(7),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.34),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white.withOpacity(0.18)),
                         ),
-                    ],
-                  ),
+                        child: Icon(
+                          compared ? Icons.check_circle_rounded : Icons.compare_arrows_rounded,
+                          color: compared ? cs.primary : Colors.white,
+                          size: 18,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    GestureDetector(
+                      onTap: () => _toggleSaved(template),
+                      child: Container(
+                        padding: const EdgeInsets.all(7),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.34),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white.withOpacity(0.18)),
+                        ),
+                        child: Icon(
+                          saved ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                          color: saved ? Colors.redAccent : Colors.white,
+                          size: 18,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
+              ),
+            ],
           ),
         ),
       ),
@@ -1566,62 +1728,143 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
-        return DraggableScrollableSheet(
-          initialChildSize: 0.78,
-          minChildSize: 0.50,
-          maxChildSize: 0.94,
-          builder: (context, scrollController) {
-            return Container(
-              decoration: BoxDecoration(
-                color: cs.surface,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(AppBorderRadius.large)),
-                border: Border.all(color: cs.outlineVariant.withOpacity(0.55)),
-              ),
-              child: ListView(
-                controller: scrollController,
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                children: [
-                  Row(
-                    children: [
-                      Text('Compare (${_compareSelection.length}/3)', style: AppTypography.subtitle1.copyWith(fontWeight: FontWeight.w900)),
-                      const Spacer(),
-                      IconButton(onPressed: () => Navigator.of(context).pop(), icon: const Icon(Icons.close_rounded)),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  ..._compareSelection.map((t) {
-                    final badges = _compatBadges(t);
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 12),
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            var compared = List<GameTemplate>.from(_compareSelection);
+
+            return DraggableScrollableSheet(
+              initialChildSize: 0.78,
+              minChildSize: 0.50,
+              maxChildSize: 0.94,
+              builder: (context, scrollController) {
+                final isDark = Theme.of(context).brightness == Brightness.dark;
+
+                Widget compareCard(GameTemplate t, int index) {
+                  final badges = _compatBadges(t);
+                  final coverUrl = _resolveMediaUrl(t.imageUrl);
+                  return AnimatedCard(
+                    delay: Duration(milliseconds: 40 + (index.clamp(0, 10) * 35)),
+                    child: Container(
                       padding: const EdgeInsets.all(AppSpacing.lg),
                       decoration: BoxDecoration(
-                        color: cs.surfaceContainerHighest.withOpacity(0.18),
-                        borderRadius: BorderRadius.circular(AppBorderRadius.large),
-                        border: Border.all(color: cs.outlineVariant.withOpacity(0.55)),
+                        color: cs.surfaceContainerHighest.withOpacity(isDark ? 0.18 : 0.22),
+                        borderRadius: BorderRadius.circular(22),
+                        border: Border.all(color: cs.outlineVariant.withOpacity(0.22)),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              Expanded(child: Text(t.name, style: AppTypography.subtitle2.copyWith(fontWeight: FontWeight.w900))),
-                              const SizedBox(width: 10),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: t.price > 0 ? cs.primary.withOpacity(0.14) : AppColors.success.withOpacity(0.14),
-                                  borderRadius: BorderRadius.circular(999),
-                                  border: Border.all(color: cs.outlineVariant.withOpacity(0.35)),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(16),
+                                child: SizedBox(
+                                  width: 88,
+                                  height: 68,
+                                  child: Stack(
+                                    children: [
+                                      Positioned.fill(
+                                        child: (coverUrl != null && coverUrl.trim().isNotEmpty)
+                                            ? Image.network(coverUrl, fit: BoxFit.cover)
+                                            : Container(
+                                                decoration: BoxDecoration(
+                                                  gradient: LinearGradient(
+                                                    colors: [cs.primary.withOpacity(0.35), cs.secondary.withOpacity(0.20)],
+                                                    begin: Alignment.topLeft,
+                                                    end: Alignment.bottomRight,
+                                                  ),
+                                                ),
+                                                child: Center(
+                                                  child: Icon(_getCategoryIcon(t.category), color: cs.primary, size: 22),
+                                                ),
+                                              ),
+                                      ),
+                                      Positioned.fill(
+                                        child: DecoratedBox(
+                                          decoration: BoxDecoration(
+                                            gradient: LinearGradient(
+                                              colors: [
+                                                Colors.black.withOpacity(0.0),
+                                                Colors.black.withOpacity(0.40),
+                                              ],
+                                              begin: Alignment.topCenter,
+                                              end: Alignment.bottomCenter,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      if (t.isFeatured)
+                                        Positioned(
+                                          top: 6,
+                                          left: 6,
+                                          child: Container(
+                                            padding: const EdgeInsets.all(4),
+                                            decoration: const BoxDecoration(color: Colors.amber, shape: BoxShape.circle),
+                                            child: const Icon(Icons.star_rounded, size: 10, color: Colors.white),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
                                 ),
-                                child: Text(
-                                  t.price > 0 ? '\$${t.price.toStringAsFixed(2)}' : 'FREE',
-                                  style: AppTypography.caption.copyWith(fontWeight: FontWeight.w900, color: cs.onSurface),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            t.name,
+                                            style: AppTypography.subtitle2.copyWith(fontWeight: FontWeight.w900),
+                                            maxLines: 2,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 10),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                          decoration: BoxDecoration(
+                                            color: t.price > 0
+                                                ? cs.primary.withOpacity(0.14)
+                                                : AppColors.success.withOpacity(0.14),
+                                            borderRadius: BorderRadius.circular(999),
+                                            border: Border.all(color: cs.outlineVariant.withOpacity(0.35)),
+                                          ),
+                                          child: Text(
+                                            t.price > 0 ? '\$${t.price.toStringAsFixed(0)}' : 'FREE',
+                                            style: AppTypography.caption.copyWith(fontWeight: FontWeight.w900, color: cs.onSurface),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      t.category,
+                                      style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ],
                                 ),
+                              ),
+                              IconButton(
+                                tooltip: 'Remove',
+                                onPressed: () {
+                                  _toggleCompare(t);
+                                  setSheetState(() {
+                                    compared = List<GameTemplate>.from(_compareSelection);
+                                  });
+                                  if (_compareSelection.isEmpty && context.mounted) {
+                                    Navigator.of(context).pop();
+                                  }
+                                },
+                                icon: Icon(Icons.close_rounded, color: cs.onSurfaceVariant),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 6),
-                          Text(t.category, style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant)),
                           const SizedBox(height: 10),
                           Wrap(
                             spacing: 8,
@@ -1648,16 +1891,20 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> {
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                 decoration: BoxDecoration(
-                                  color: cs.surface,
+                                  color: cs.surfaceContainerHighest.withOpacity(0.35),
                                   borderRadius: BorderRadius.circular(999),
-                                  border: Border.all(color: cs.outlineVariant.withOpacity(0.55)),
+                                  border: Border.all(color: cs.outlineVariant.withOpacity(0.45)),
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    const Icon(Icons.star, size: 14, color: AppColors.warning),
+                                    const Icon(Icons.star_rounded, size: 14, color: AppColors.warning),
                                     const SizedBox(width: 6),
-                                    Text(t.rating.toStringAsFixed(1), style: AppTypography.caption.copyWith(fontWeight: FontWeight.w800)),
+                                    Text(t.rating.toStringAsFixed(1), style: AppTypography.caption.copyWith(fontWeight: FontWeight.w900)),
+                                    const SizedBox(width: 12),
+                                    Icon(Icons.download_rounded, size: 14, color: cs.onSurfaceVariant),
+                                    const SizedBox(width: 6),
+                                    Text('${t.downloads}', style: AppTypography.caption.copyWith(fontWeight: FontWeight.w800)),
                                   ],
                                 ),
                               ),
@@ -1670,37 +1917,142 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> {
                             maxLines: 3,
                             overflow: TextOverflow.ellipsis,
                           ),
+                          const SizedBox(height: 12),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: CustomButton(
+                                  text: 'View details',
+                                  onPressed: () {
+                                    Navigator.of(context).pop();
+                                    context.go('/template/${t.id}');
+                                  },
+                                  type: ButtonType.primary,
+                                  size: ButtonSize.small,
+                                  icon: const Icon(Icons.open_in_new_rounded),
+                                ),
+                              ),
+                            ],
+                          ),
                         ],
                       ),
-                    );
-                  }),
-                  const SizedBox(height: 10),
-                  Row(
+                    ),
+                  );
+                }
+
+                return Container(
+                  decoration: BoxDecoration(
+                    borderRadius: const BorderRadius.vertical(top: Radius.circular(AppBorderRadius.xlarge)),
+                    gradient: LinearGradient(
+                      colors: [
+                        cs.surface.withOpacity(0.96),
+                        cs.surfaceContainerHighest.withOpacity(0.92),
+                      ],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                    ),
+                    border: Border(top: BorderSide(color: cs.outlineVariant.withOpacity(0.6))),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.18),
+                        blurRadius: 26,
+                        offset: const Offset(0, -10),
+                      ),
+                    ],
+                  ),
+                  child: Column(
                     children: [
-                      Expanded(
-                        child: CustomButton(
-                          text: 'Clear',
-                          onPressed: () {
-                            Navigator.of(context).pop();
-                            _clearCompare();
-                          },
-                          type: ButtonType.secondary,
-                          size: ButtonSize.small,
+                      const SizedBox(height: 10),
+                      Container(
+                        width: 44,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: cs.onSurfaceVariant.withOpacity(0.35),
+                          borderRadius: BorderRadius.circular(999),
                         ),
                       ),
-                      const SizedBox(width: 10),
+                      const SizedBox(height: 12),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 38,
+                              height: 38,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(14),
+                                gradient: LinearGradient(colors: [cs.primary, cs.secondary]),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: cs.primary.withOpacity(0.22),
+                                    blurRadius: 18,
+                                    offset: const Offset(0, 10),
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(Icons.compare_arrows_rounded, color: Colors.white, size: 18),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Compare',
+                                    style: AppTypography.subtitle1.copyWith(fontWeight: FontWeight.w900),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '${_compareSelection.length}/3 selected',
+                                    style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            TextButton(
+                              onPressed: () => Navigator.of(context).pop(),
+                              child: const Text('Close'),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 10),
                       Expanded(
-                        child: CustomButton(
-                          text: 'Close',
-                          onPressed: () => Navigator.of(context).pop(),
-                          type: ButtonType.primary,
-                          size: ButtonSize.small,
+                        child: ListView.separated(
+                          controller: scrollController,
+                          padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.lg),
+                          itemCount: compared.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 12),
+                          itemBuilder: (context, i) => compareCard(compared[i], i),
+                        ),
+                      ),
+                      Padding(
+                        padding: EdgeInsets.only(
+                          left: AppSpacing.lg,
+                          right: AppSpacing.lg,
+                          bottom: MediaQuery.of(context).padding.bottom + AppSpacing.lg,
+                        ),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: CustomButton(
+                                text: 'Clear all',
+                                onPressed: () {
+                                  Navigator.of(context).pop();
+                                  _clearCompare();
+                                },
+                                type: ButtonType.secondary,
+                                size: ButtonSize.small,
+                                icon: const Icon(Icons.delete_sweep_rounded),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
                     ],
                   ),
-                ],
-              ),
+                );
+              },
             );
           },
         );
@@ -1792,11 +2144,174 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> {
               minChildSize: 0.4,
               maxChildSize: 0.92,
               builder: (context, scrollController) {
+                Widget savedTile(GameTemplate t, int index) {
+                  final coverUrl = _resolveMediaUrl(t.imageUrl);
+                  final isDark = Theme.of(context).brightness == Brightness.dark;
+                  return AnimatedCard(
+                    delay: Duration(milliseconds: 40 + (index.clamp(0, 10) * 35)),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(20),
+                        color: cs.surfaceContainerHighest.withOpacity(isDark ? 0.18 : 0.22),
+                        border: Border.all(color: cs.outlineVariant.withOpacity(0.22)),
+                      ),
+                      child: InkWell(
+                        onTap: () {
+                          Navigator.of(context).pop();
+                          context.go('/template/${t.id}');
+                        },
+                        borderRadius: BorderRadius.circular(20),
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(14),
+                                child: SizedBox(
+                                  width: 96,
+                                  height: 72,
+                                  child: Stack(
+                                    children: [
+                                      Positioned.fill(
+                                        child: (coverUrl != null && coverUrl.trim().isNotEmpty)
+                                            ? Image.network(coverUrl, fit: BoxFit.cover)
+                                            : Container(
+                                                decoration: BoxDecoration(
+                                                  gradient: LinearGradient(
+                                                    colors: [cs.primary.withOpacity(0.35), cs.secondary.withOpacity(0.20)],
+                                                    begin: Alignment.topLeft,
+                                                    end: Alignment.bottomRight,
+                                                  ),
+                                                ),
+                                                child: Center(
+                                                  child: Icon(_getCategoryIcon(t.category), color: cs.primary, size: 22),
+                                                ),
+                                              ),
+                                      ),
+                                      Positioned.fill(
+                                        child: DecoratedBox(
+                                          decoration: BoxDecoration(
+                                            gradient: LinearGradient(
+                                              colors: [
+                                                Colors.black.withOpacity(0.0),
+                                                Colors.black.withOpacity(0.35),
+                                              ],
+                                              begin: Alignment.topCenter,
+                                              end: Alignment.bottomCenter,
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                      if (t.isFeatured)
+                                        Positioned(
+                                          top: 6,
+                                          left: 6,
+                                          child: Container(
+                                            padding: const EdgeInsets.all(4),
+                                            decoration: const BoxDecoration(color: Colors.amber, shape: BoxShape.circle),
+                                            child: const Icon(Icons.star_rounded, size: 10, color: Colors.white),
+                                          ),
+                                        ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            t.name,
+                                            style: AppTypography.subtitle2.copyWith(fontWeight: FontWeight.w900),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ),
+                                        Container(
+                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                          decoration: BoxDecoration(
+                                            color: cs.surfaceContainerHighest.withOpacity(0.35),
+                                            borderRadius: BorderRadius.circular(999),
+                                            border: Border.all(color: cs.outlineVariant.withOpacity(0.45)),
+                                          ),
+                                          child: Text(
+                                            t.price > 0 ? '\$${t.price.toStringAsFixed(0)}' : 'FREE',
+                                            style: AppTypography.caption.copyWith(fontWeight: FontWeight.w900),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      t.category,
+                                      style: AppTypography.caption.copyWith(fontSize: 10, color: cs.onSurfaceVariant),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Row(
+                                      children: [
+                                        Icon(Icons.star_rounded, size: 14, color: Colors.amber[700]),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          t.rating.toStringAsFixed(1),
+                                          style: AppTypography.caption.copyWith(fontWeight: FontWeight.bold),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Icon(Icons.download_rounded, size: 14, color: cs.onSurfaceVariant),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          '${t.downloads}',
+                                          style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              IconButton(
+                                tooltip: 'Remove',
+                                onPressed: () {
+                                  _toggleSaved(t);
+                                  setSheetState(() {
+                                    saved = _templates.where((x) => _savedTemplateIds.contains(x.id)).toList();
+                                  });
+                                },
+                                icon: Icon(Icons.bookmark_remove_rounded, color: cs.onSurfaceVariant),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                }
+
                 return Container(
                   decoration: BoxDecoration(
-                    color: cs.surface,
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(AppBorderRadius.xlarge)),
+                    gradient: LinearGradient(
+                      colors: [
+                        cs.surface.withOpacity(0.96),
+                        cs.surfaceContainerHighest.withOpacity(0.92),
+                      ],
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                    ),
                     border: Border(top: BorderSide(color: cs.outlineVariant.withOpacity(0.6))),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.18),
+                        blurRadius: 26,
+                        offset: const Offset(0, -10),
+                      ),
+                    ],
                   ),
                   child: Column(
                     children: [
@@ -1814,8 +2329,35 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> {
                         padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
                         child: Row(
                           children: [
+                            Container(
+                              width: 38,
+                              height: 38,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(14),
+                                gradient: LinearGradient(colors: [cs.primary, cs.secondary]),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: cs.primary.withOpacity(0.22),
+                                    blurRadius: 18,
+                                    offset: const Offset(0, 10),
+                                  ),
+                                ],
+                              ),
+                              child: const Icon(Icons.bookmarks_rounded, color: Colors.white, size: 18),
+                            ),
+                            const SizedBox(width: 12),
                             Expanded(
-                              child: Text('Saved templates', style: AppTypography.subtitle1.copyWith(fontWeight: FontWeight.w900)),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Saved templates', style: AppTypography.subtitle1.copyWith(fontWeight: FontWeight.w900)),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    '${saved.length} saved',
+                                    style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant),
+                                  ),
+                                ],
+                              ),
                             ),
                             TextButton(
                               onPressed: () => Navigator.of(context).pop(),
@@ -1824,16 +2366,40 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> {
                           ],
                         ),
                       ),
-                      const SizedBox(height: 8),
+                      const SizedBox(height: 10),
                       Expanded(
                         child: saved.isEmpty
                             ? Center(
                                 child: Padding(
-                                  padding: const EdgeInsets.all(AppSpacing.lg),
-                                  child: Text(
-                                    'No saved templates yet.',
-                                    style: AppTypography.body2.copyWith(color: cs.onSurfaceVariant),
-                                    textAlign: TextAlign.center,
+                                  padding: const EdgeInsets.all(AppSpacing.xl),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Container(
+                                        width: 74,
+                                        height: 74,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          gradient: LinearGradient(
+                                            colors: [cs.primary.withOpacity(0.18), cs.secondary.withOpacity(0.10)],
+                                          ),
+                                          border: Border.all(color: cs.outlineVariant.withOpacity(0.4)),
+                                        ),
+                                        child: Icon(Icons.bookmark_add_rounded, color: cs.primary, size: 30),
+                                      ),
+                                      const SizedBox(height: 14),
+                                      Text(
+                                        'No saved templates yet',
+                                        style: AppTypography.subtitle2.copyWith(fontWeight: FontWeight.w900),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                      const SizedBox(height: 6),
+                                      Text(
+                                        'Tap the heart icon in Marketplace to save your favorite templates here.',
+                                        style: AppTypography.body2.copyWith(color: cs.onSurfaceVariant, height: 1.35),
+                                        textAlign: TextAlign.center,
+                                      ),
+                                    ],
                                   ),
                                 ),
                               )
@@ -1842,51 +2408,7 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> {
                                 padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.lg),
                                 itemCount: saved.length,
                                 separatorBuilder: (_, __) => const SizedBox(height: 10),
-                                itemBuilder: (context, i) {
-                                  final t = saved[i];
-                                  return InkWell(
-                                    onTap: () {
-                                      Navigator.of(context).pop();
-                                      context.go('/template/${t.id}');
-                                    },
-                                    borderRadius: BorderRadius.circular(AppBorderRadius.large),
-                                    child: Container(
-                                      padding: const EdgeInsets.all(AppSpacing.md),
-                                      decoration: BoxDecoration(
-                                        color: cs.surfaceContainerHighest.withOpacity(0.55),
-                                        borderRadius: BorderRadius.circular(AppBorderRadius.large),
-                                        border: Border.all(color: cs.outlineVariant.withOpacity(0.55)),
-                                      ),
-                                      child: Row(
-                                        children: [
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                Text(t.name, style: AppTypography.subtitle2, maxLines: 1, overflow: TextOverflow.ellipsis),
-                                                const SizedBox(height: 4),
-                                                Text(
-                                                  t.category,
-                                                  style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                          IconButton(
-                                            tooltip: 'Remove',
-                                            onPressed: () {
-                                              _toggleSaved(t);
-                                              setSheetState(() {
-                                                saved = _templates.where((x) => _savedTemplateIds.contains(x.id)).toList();
-                                              });
-                                            },
-                                            icon: const Icon(Icons.bookmark_remove_rounded),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  );
-                                },
+                                itemBuilder: (context, i) => savedTile(saved[i], i),
                               ),
                       ),
                     ],
@@ -2006,8 +2528,8 @@ class _AnimatedChoiceChipState extends State<_AnimatedChoiceChip> {
     final cs = Theme.of(context).colorScheme;
     final sel = widget.selected;
     final br = widget.densePill ? 999.0 : AppBorderRadius.medium.toDouble();
-    final bg = sel ? cs.primary.withOpacity(0.22) : cs.surface;
-    final fg = sel ? cs.primary : cs.onSurfaceVariant;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final fg = sel ? Colors.white : cs.onSurfaceVariant;
     final fw = sel ? FontWeight.w900 : FontWeight.w700;
 
     return GestureDetector(
@@ -2024,14 +2546,27 @@ class _AnimatedChoiceChipState extends State<_AnimatedChoiceChip> {
           curve: Curves.easeOutCubic,
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
-            color: bg,
+            gradient: sel
+                ? LinearGradient(
+                    colors: [cs.primary, cs.secondary],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
+                : LinearGradient(
+                    colors: [
+                      cs.surfaceContainerHighest.withOpacity(isDark ? 0.22 : 0.55),
+                      cs.surface.withOpacity(isDark ? 0.16 : 0.45),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
             borderRadius: BorderRadius.circular(br),
-            border: Border.all(color: cs.outlineVariant.withOpacity(0.6)),
+            border: Border.all(color: sel ? cs.primary.withOpacity(0.38) : cs.outlineVariant.withOpacity(0.55)),
             boxShadow: sel
                 ? [
                     BoxShadow(
-                      color: cs.primary.withOpacity(0.16),
-                      blurRadius: 16,
+                      color: cs.primary.withOpacity(0.22),
+                      blurRadius: 18,
                       offset: const Offset(0, 10),
                     ),
                   ]

@@ -11,6 +11,20 @@ class ProjectsService {
     return s;
   }
 
+  static Future<Map<String, dynamic>> createFromModulesAi({
+    required String token,
+    required String prompt,
+  }) async {
+    return ApiService.post(
+      '/ai/generate-template-from-modules',
+      token: token,
+      data: {
+        'prompt': prompt.trim(),
+      },
+      timeout: const Duration(seconds: 120),
+    );
+  }
+
   static Future<Map<String, dynamic>> listProjects({
     required String token,
   }) async {

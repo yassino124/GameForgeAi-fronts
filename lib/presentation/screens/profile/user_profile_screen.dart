@@ -7,10 +7,12 @@ import 'package:image_picker/image_picker.dart';
 import 'package:image_cropper/image_cropper.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/services/local_notifications_service.dart';
 import '../../../core/themes/app_theme.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/billing_service.dart';
 import '../../../core/services/projects_service.dart';
+import '../../../core/utils/app_refresh_bus.dart';
 import '../../widgets/widgets.dart';
 
 class UserProfileScreen extends StatefulWidget {
@@ -48,10 +50,26 @@ class _UserProfileScreenState extends State<UserProfileScreen>
   late final Animation<double> _fadeIn;
   late final Animation<Offset> _slideUp;
 
+  late final VoidCallback _refreshListener;
+
+  int _toInt(dynamic v) {
+    if (v == null) return 0;
+    if (v is int) return v;
+    if (v is num) return v.toInt();
+    final s = v.toString().trim();
+    if (s.isEmpty) return 0;
+    return int.tryParse(s) ?? double.tryParse(s)?.toInt() ?? 0;
+  }
+
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+
+    _refreshListener = () {
+      _loadQuizPrefs();
+    };
+    AppRefreshBus.notifier.addListener(_refreshListener);
 
     _appearController = AnimationController(
       vsync: this,
@@ -101,6 +119,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    AppRefreshBus.notifier.removeListener(_refreshListener);
     _appearController.dispose();
     super.dispose();
   }
@@ -686,7 +705,7 @@ class _UserProfileScreenState extends State<UserProfileScreen>
             future: (token == null || token.isEmpty) ? null : ProjectsService.listProjects(token: token),
             builder: (context, snapshot) {
               int projects = 0;
-              int builds = 0;
+              int buildsFromProjects = 0;
               int downloads = 0;
               int generations = 0;
 
@@ -705,86 +724,111 @@ class _UserProfileScreenState extends State<UserProfileScreen>
               projects = list.length;
               for (final p in list) {
                 final bc = p['buildCount'] ?? p['buildsCount'] ?? p['builds'];
-                final dc = p['downloadCount'] ?? p['downloadsCount'] ?? p['downloads'];
+                final dc = p['downloadCount'] ??
+                    p['downloadsCount'] ??
+                    p['downloads'] ??
+                    p['downloadsTotal'] ??
+                    p['totalDownloads'];
                 final gc = p['generationCount'] ?? p['generationsCount'] ?? p['generations'];
-                if (bc is num) builds += bc.toInt();
-                if (dc is num) downloads += dc.toInt();
-                if (gc is num) generations += gc.toInt();
+                buildsFromProjects += _toInt(bc);
+                downloads += _toInt(dc);
+                generations += _toInt(gc);
               }
 
-              return Column(
-                children: [
-                  Row(
+              return FutureBuilder<List<Map<String, dynamic>>>(
+                future: LocalNotificationsService.listInAppNotifications(),
+                builder: (context, notifSnap) {
+                  final notifs = notifSnap.data ?? const <Map<String, dynamic>>[];
+                  final buildsFromNotifs = notifs.where((n) {
+                    final data = n['data'];
+                    if (data is! Map) return false;
+                    return data['kind']?.toString() == 'build_finished';
+                  }).length;
+
+                  final gensFromNotifs = notifs.where((n) {
+                    final data = n['data'];
+                    if (data is! Map) return false;
+                    return data['kind']?.toString() == 'generation_finished';
+                  }).length;
+
+                  final builds = buildsFromNotifs > 0 ? buildsFromNotifs : buildsFromProjects;
+                  final generationsValue = gensFromNotifs > 0 ? gensFromNotifs : generations;
+
+                  return Column(
                     children: [
-                      Expanded(
-                        child: _buildStatItem(
-                          context,
-                          'Projects',
-                          projects.toString(),
-                          Icons.videogame_asset,
-                          AppColors.primary,
-                        ),
-                      ),
-                      Expanded(
-                        child: _buildStatItem(
-                          context,
-                          'Quiz XP',
-                          _formatCompactNumber(_quizTotalXp),
-                          Icons.local_fire_department_rounded,
-                          AppColors.secondary,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: AppSpacing.lg),
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildStatItem(
-                          context,
-                          'Builds',
-                          _formatCompactNumber(builds),
-                          Icons.build,
-                          AppColors.success,
-                        ),
-                      ),
-                      Expanded(
-                        child: _buildStatItem(
-                          context,
-                          'Downloads',
-                          _formatCompactNumber(downloads),
-                          Icons.download,
-                          AppColors.accent,
-                        ),
-                      ),
-                    ],
-                  ),
-                  if (generations > 0) ...[
-                    const SizedBox(height: AppSpacing.lg),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: _buildStatItem(
-                            context,
-                            'Generations',
-                            _formatCompactNumber(generations),
-                            Icons.auto_awesome,
-                            AppColors.primary,
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildStatItem(
+                              context,
+                              'Projects',
+                              projects.toString(),
+                              Icons.videogame_asset,
+                              AppColors.primary,
+                            ),
                           ),
-                        ),
-                        Expanded(
-                          child: _buildStatItem(
-                            context,
-                            'Quiz Streak',
-                            _quizStreak.toString(),
-                            Icons.local_fire_department_outlined,
-                            AppColors.warning,
+                          Expanded(
+                            child: _buildStatItem(
+                              context,
+                              'Quiz XP',
+                              _formatCompactNumber(_quizTotalXp),
+                              Icons.local_fire_department_rounded,
+                              AppColors.secondary,
+                            ),
                           ),
+                        ],
+                      ),
+                      const SizedBox(height: AppSpacing.lg),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildStatItem(
+                              context,
+                              'Builds',
+                              _formatCompactNumber(builds),
+                              Icons.build,
+                              AppColors.success,
+                            ),
+                          ),
+                          Expanded(
+                            child: _buildStatItem(
+                              context,
+                              'Downloads',
+                              _formatCompactNumber(downloads),
+                              Icons.download,
+                              AppColors.accent,
+                            ),
+                          ),
+                        ],
+                      ),
+                      if (generationsValue > 0) ...[
+                        const SizedBox(height: AppSpacing.lg),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _buildStatItem(
+                                context,
+                                'Generations',
+                                _formatCompactNumber(generationsValue),
+                                Icons.auto_awesome,
+                                AppColors.primary,
+                              ),
+                            ),
+                            Expanded(
+                              child: _buildStatItem(
+                                context,
+                                'Quiz Streak',
+                                _quizStreak.toString(),
+                                Icons.local_fire_department_outlined,
+                                AppColors.warning,
+                              ),
+                            ),
+                          ],
                         ),
                       ],
-                    ),
-                  ],
-                ],
+                    ],
+                  );
+                },
               );
             },
           ),

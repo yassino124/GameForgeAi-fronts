@@ -10,10 +10,16 @@ import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_colorpicker/flutter_colorpicker.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+import 'package:flutter/rendering.dart';
+import 'dart:typed_data';
+import 'package:image_gallery_saver/image_gallery_saver.dart';
+import 'package:permission_handler/permission_handler.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/providers/build_monitor_provider.dart';
 import '../../../core/services/api_service.dart';
+import '../../../core/services/game_feed_service.dart';
 import '../../../core/services/projects_service.dart';
 import '../../../core/services/app_notifier.dart';
 import '../../widgets/widgets.dart';
@@ -30,7 +36,7 @@ class ProjectDetailScreen extends StatefulWidget {
   State<ProjectDetailScreen> createState() => _ProjectDetailScreenState();
 }
 
-class _ProjectDetailScreenState extends State<ProjectDetailScreen> with SingleTickerProviderStateMixin {
+class _ProjectDetailScreenState extends State<ProjectDetailScreen> with TickerProviderStateMixin {
   Map<String, dynamic>? _project;
   bool _loading = false;
   String? _error;
@@ -38,18 +44,569 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> with SingleTi
   bool _savingEdits = false;
   bool _loadingPreviewUrl = false;
   bool _loadingDownloadUrl = false;
+  bool _publishingArcade = false;
+
+  bool _openingShare = false;
 
   late final AnimationController _heroGlow;
+  late final AnimationController _neonCtrl;
 
   @override
   void initState() {
     super.initState();
     _heroGlow = AnimationController(vsync: this, duration: const Duration(milliseconds: 2600));
     _heroGlow.repeat();
+    _neonCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1800))..repeat();
     _project = widget.data['project'] is Map
         ? Map<String, dynamic>.from(widget.data['project'] as Map)
         : null;
     _loadIfNeeded();
+  }
+
+  Future<Uint8List?> _qrPng(String data) async {
+    try {
+      final painter = QrPainter(
+        data: data,
+        version: QrVersions.auto,
+        gapless: true,
+        eyeStyle: const QrEyeStyle(eyeShape: QrEyeShape.square, color: Colors.black),
+        dataModuleStyle: const QrDataModuleStyle(dataModuleShape: QrDataModuleShape.square, color: Colors.black),
+      );
+      final imgData = await painter.toImageData(720, format: ImageByteFormat.png);
+      return imgData?.buffer.asUint8List();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<bool> _requestSavePermission() async {
+    try {
+      final st = await Permission.photosAddOnly.request();
+      if (st.isGranted) return true;
+    } catch (_) {}
+
+    try {
+      final st = await Permission.photos.request();
+      return st.isGranted;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> _savePngToPhotos(Uint8List bytes, {required String name}) async {
+    final ok = await _requestSavePermission();
+    if (!ok) {
+      if (mounted) AppNotifier.showError('Photos permission denied');
+      return;
+    }
+
+    try {
+      final res = await ImageGallerySaver.saveImage(
+        bytes,
+        quality: 100,
+        name: name,
+      );
+      final success = (res is Map) ? (res['isSuccess'] == true || res['success'] == true) : true;
+      if (mounted) {
+        success ? AppNotifier.showSuccess('Saved to Photos') : AppNotifier.showError('Failed to save');
+      }
+    } catch (e) {
+      if (mounted) AppNotifier.showError(e.toString());
+    }
+  }
+
+  Future<Uint8List?> _capturePng(GlobalKey key) async {
+    try {
+      final ctx = key.currentContext;
+      if (ctx == null) return null;
+      final boundary = ctx.findRenderObject() as RenderRepaintBoundary?;
+      if (boundary == null) return null;
+      final img = await boundary.toImage(pixelRatio: 3.0);
+      final data = await img.toByteData(format: ImageByteFormat.png);
+      return data?.buffer.asUint8List();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _openShareBuildSheet() async {
+    if (_openingShare) return;
+    setState(() => _openingShare = true);
+
+    final auth = context.read<AuthProvider>();
+    final token = auth.token;
+    if (token == null || token.isEmpty) {
+      setState(() => _openingShare = false);
+      AppNotifier.showError('Session expired. Please sign in again.');
+      return;
+    }
+
+    final id = _projectId();
+    if (id == null || id.trim().isEmpty) {
+      setState(() => _openingShare = false);
+      AppNotifier.showError('Missing project id');
+      return;
+    }
+
+    final p = _project ?? <String, dynamic>{};
+    final name = (p['name'] ?? widget.data['name'] ?? 'Game').toString();
+    final description = (p['description'] ?? widget.data['description'] ?? '').toString();
+    final previewImageUrl = _resolveMediaUrl(p['previewImageUrl']?.toString());
+
+    final buildTarget = (p['buildTarget'] ?? '').toString().trim().toLowerCase();
+    final isAndroidApk = buildTarget == 'android_apk' || buildTarget == 'android';
+
+    String? webglUrl;
+    String? downloadUrl;
+
+    try {
+      if (!isAndroidApk) {
+        final res = await ProjectsService.getProjectPreviewUrl(token: token, projectId: id);
+        webglUrl = (res['data'] is Map) ? res['data']['url']?.toString() : null;
+      }
+    } catch (_) {}
+
+    try {
+      final res = await ProjectsService.getProjectDownloadUrl(token: token, projectId: id, target: isAndroidApk ? 'android_apk' : 'webgl');
+      downloadUrl = (res['data'] is Map) ? res['data']['url']?.toString() : null;
+    } catch (_) {}
+
+    if (!mounted) return;
+    setState(() => _openingShare = false);
+
+    final shareCardKey = GlobalKey();
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      isScrollControlled: true,
+      builder: (context) {
+        final cs = Theme.of(context).colorScheme;
+        final maxH = MediaQuery.of(context).size.height * 0.86;
+
+        Future<void> copy(String v) async {
+          await Clipboard.setData(ClipboardData(text: v));
+          if (context.mounted) AppNotifier.showSuccess('Copied');
+        }
+
+        final shareTextParts = <String>[name];
+        if (description.trim().isNotEmpty) shareTextParts.add(description.trim());
+        if (webglUrl != null && webglUrl!.trim().isNotEmpty) shareTextParts.add(webglUrl!.trim());
+        if (downloadUrl != null && downloadUrl!.trim().isNotEmpty) {
+          shareTextParts.add(isAndroidApk ? 'APK: ${downloadUrl!.trim()}' : 'Build: ${downloadUrl!.trim()}');
+        }
+        final shareText = shareTextParts.join('\n\n');
+
+        final qrValue = (webglUrl ?? downloadUrl ?? '').trim();
+
+        Future<void> shareNow() async {
+          final bytes = await _capturePng(shareCardKey);
+          try {
+            if (bytes != null && bytes.isNotEmpty) {
+              final dir = Directory.systemTemp;
+              final f = File('${dir.path}/gameforge_share_${DateTime.now().millisecondsSinceEpoch}.png');
+              await f.writeAsBytes(bytes);
+              final caption = 'Play my game in 10s — scan the QR\n$shareText';
+              await Share.shareXFiles([XFile(f.path)], text: caption);
+              _confetti();
+              return;
+            }
+          } catch (e) {
+            AppNotifier.showError(e.toString());
+          }
+
+          await Share.share(shareText);
+        }
+
+        Future<void> saveCard() async {
+          final bytes = await _capturePng(shareCardKey);
+          if (bytes == null || bytes.isEmpty) {
+            AppNotifier.showError('Failed to generate share card');
+            return;
+          }
+          await _savePngToPhotos(bytes, name: 'gameforge_card_${DateTime.now().millisecondsSinceEpoch}');
+          _confetti();
+        }
+
+        Future<void> saveQr() async {
+          if (qrValue.isEmpty) return;
+          final png = await _qrPng(qrValue);
+          if (png == null || png.isEmpty) {
+            AppNotifier.showError('Failed to generate QR');
+            return;
+          }
+          await _savePngToPhotos(png, name: 'gameforge_qr_${DateTime.now().millisecondsSinceEpoch}');
+          _confetti();
+        }
+
+        Widget lineTitle(String t) {
+          return Text(t, style: AppTypography.subtitle2.copyWith(fontWeight: FontWeight.w900));
+        }
+
+        Widget glass({required Widget child}) {
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(22),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: cs.surface.withOpacity(0.82),
+                  border: Border.all(color: cs.outlineVariant.withOpacity(0.55)),
+                  borderRadius: BorderRadius.circular(22),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.20),
+                      blurRadius: 22,
+                      offset: const Offset(0, 16),
+                    ),
+                  ],
+                ),
+                child: child,
+              ),
+            ),
+          );
+        }
+
+        Widget actionChip({required IconData icon, required String label, required VoidCallback onTap}) {
+          return GestureDetector(
+            onTap: onTap,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(999),
+                color: cs.surfaceContainerHighest.withOpacity(0.55),
+                border: Border.all(color: cs.outlineVariant.withOpacity(0.5)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(icon, size: 18, color: cs.onSurface),
+                  const SizedBox(width: 8),
+                  Text(label, style: AppTypography.caption.copyWith(fontWeight: FontWeight.w900)),
+                ],
+              ),
+            ),
+          );
+        }
+
+        Widget linkRow({required String label, required String url}) {
+          return Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: cs.surfaceContainerHighest.withOpacity(0.35),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(color: cs.outlineVariant.withOpacity(0.5)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(label, style: AppTypography.caption.copyWith(fontWeight: FontWeight.w900, color: cs.onSurfaceVariant)),
+                const SizedBox(height: 8),
+                Text(url, maxLines: 2, overflow: TextOverflow.ellipsis, style: AppTypography.body2.copyWith(fontWeight: FontWeight.w700)),
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    actionChip(icon: Icons.copy_rounded, label: 'Copy', onTap: () => copy(url)),
+                    const SizedBox(width: 10),
+                    actionChip(
+                      icon: Icons.open_in_new_rounded,
+                      label: 'Open',
+                      onTap: () async {
+                        try {
+                          await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                        } catch (_) {}
+                      },
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          );
+        }
+
+        Widget shareCardWidget() {
+          final badgeText = isAndroidApk ? 'APK READY' : 'PLAY WEBGL';
+          return RepaintBoundary(
+            key: shareCardKey,
+            child: AspectRatio(
+              aspectRatio: 1,
+              child: Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(22),
+                  boxShadow: [
+                    BoxShadow(color: cs.primary.withOpacity(0.22), blurRadius: 26, offset: const Offset(0, 18)),
+                  ],
+                ),
+                child: _NeonFrame(
+                  animation: _neonCtrl,
+                  radius: 22,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(22),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        if (previewImageUrl != null && previewImageUrl!.trim().isNotEmpty)
+                          Image.network(previewImageUrl!, fit: BoxFit.cover)
+                        else
+                          Container(
+                            decoration: BoxDecoration(
+                              gradient: LinearGradient(
+                                colors: [cs.primary.withOpacity(0.95), AppColors.accent.withOpacity(0.85)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                            ),
+                            child: Center(
+                              child: Icon(Icons.sports_esports_rounded, color: Colors.white.withOpacity(0.92), size: 56),
+                            ),
+                          ),
+                        DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Colors.black.withOpacity(0.58),
+                                Colors.transparent,
+                                Colors.black.withOpacity(0.72),
+                              ],
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              stops: const [0.0, 0.55, 1.0],
+                            ),
+                          ),
+                        ),
+                        Positioned.fill(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              gradient: RadialGradient(
+                                colors: [AppColors.accent.withOpacity(0.28), Colors.transparent],
+                                radius: 1.2,
+                                center: const Alignment(0.65, -0.75),
+                              ),
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          top: 14,
+                          left: 14,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(999),
+                              color: Colors.black.withOpacity(0.22),
+                              border: Border.all(color: Colors.white.withOpacity(0.18)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: BoxDecoration(
+                                    shape: BoxShape.circle,
+                                    color: Colors.white.withOpacity(0.92),
+                                    boxShadow: [BoxShadow(color: Colors.white.withOpacity(0.45), blurRadius: 12)],
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Text(
+                                  badgeText,
+                                  style: AppTypography.caption.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w900,
+                                    letterSpacing: 0.3,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        Positioned(
+                          left: 14,
+                          right: 14,
+                          bottom: 14,
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.end,
+                            children: [
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      name,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: AppTypography.h4.copyWith(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w900,
+                                        height: 1.05,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    Text(
+                                      'Built with GameForge',
+                                      style: AppTypography.caption.copyWith(
+                                        color: Colors.white.withOpacity(0.92),
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              if (qrValue.isNotEmpty)
+                                ClipRRect(
+                                  borderRadius: BorderRadius.circular(16),
+                                  child: Container(
+                                    width: 92,
+                                    height: 92,
+                                    padding: const EdgeInsets.all(8),
+                                    color: Colors.white,
+                                    child: Column(
+                                      mainAxisAlignment: MainAxisAlignment.center,
+                                      children: [
+                                        Stack(
+                                          alignment: Alignment.center,
+                                          children: [
+                                            QrImageView(
+                                              data: qrValue,
+                                              version: QrVersions.auto,
+                                              size: 62,
+                                              backgroundColor: Colors.white,
+                                            ),
+                                            Container(
+                                              width: 16,
+                                              height: 16,
+                                              decoration: BoxDecoration(
+                                                color: Colors.white,
+                                                shape: BoxShape.circle,
+                                                border: Border.all(color: Colors.black.withOpacity(0.12)),
+                                              ),
+                                              child: Icon(Icons.gamepad_rounded, size: 11, color: cs.primary),
+                                            ),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'Scan',
+                                          style: AppTypography.caption.copyWith(
+                                            fontWeight: FontWeight.w900,
+                                            color: Colors.black,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          );
+        }
+
+        return SafeArea(
+          top: false,
+          child: Container(
+            constraints: BoxConstraints(maxHeight: maxH),
+            padding: const EdgeInsets.all(AppSpacing.md),
+            child: glass(
+              child: Padding(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: Text('Share build', style: AppTypography.subtitle1.copyWith(fontWeight: FontWeight.w900)),
+                          ),
+                          IconButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            icon: const Icon(Icons.close_rounded),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      shareCardWidget(),
+                      const SizedBox(height: 12),
+                      CustomButton(
+                        text: 'Share Now',
+                        onPressed: shareNow,
+                        type: ButtonType.primary,
+                        icon: const Icon(Icons.ios_share_rounded),
+                        isFullWidth: true,
+                      ),
+                      const SizedBox(height: 12),
+                      CustomButton(
+                        text: 'Save Share Card',
+                        onPressed: saveCard,
+                        type: ButtonType.secondary,
+                        icon: const Icon(Icons.download_rounded),
+                        isFullWidth: true,
+                      ),
+                      const SizedBox(height: 12),
+                      if (qrValue.isNotEmpty)
+                        CustomButton(
+                          text: 'Save QR to Photos',
+                          onPressed: saveQr,
+                          type: ButtonType.secondary,
+                          icon: const Icon(Icons.qr_code_rounded),
+                          isFullWidth: true,
+                        ),
+                      const SizedBox(height: AppSpacing.lg),
+                      if (webglUrl != null && webglUrl!.trim().isNotEmpty) ...[
+                        lineTitle('WebGL'),
+                        const SizedBox(height: 10),
+                        linkRow(label: 'Playable link', url: webglUrl!.trim()),
+                        const SizedBox(height: AppSpacing.lg),
+                      ],
+                      if (downloadUrl != null && downloadUrl!.trim().isNotEmpty) ...[
+                        lineTitle(isAndroidApk ? 'APK' : 'Build'),
+                        const SizedBox(height: 10),
+                        linkRow(label: isAndroidApk ? 'Download APK' : 'Download ZIP', url: downloadUrl!.trim()),
+                        const SizedBox(height: AppSpacing.lg),
+                      ],
+                      if (qrValue.isNotEmpty) ...[
+                        lineTitle('QR code'),
+                        const SizedBox(height: 10),
+                        Center(
+                          child: Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(18),
+                              boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 16, offset: const Offset(0, 10))],
+                            ),
+                            child: QrImageView(
+                              data: qrValue,
+                              version: QrVersions.auto,
+                              size: 190,
+                              backgroundColor: Colors.white,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 10),
+                        Center(
+                          child: actionChip(icon: Icons.copy_rounded, label: 'Copy link for QR', onTap: () => copy(qrValue)),
+                        ),
+                      ],
+                      const SizedBox(height: 6),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   String? _resolveMediaUrl(String? url) {
@@ -76,10 +633,75 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> with SingleTi
     }
   }
 
+  Future<void> _publishToArcade() async {
+    if (_publishingArcade) return;
+
+    final auth = context.read<AuthProvider>();
+    final token = auth.token;
+    if (token == null || token.isEmpty) {
+      AppNotifier.showError('Session expired. Please sign in again.');
+      return;
+    }
+
+    final id = _projectId();
+    if (id == null || id.trim().isEmpty) {
+      AppNotifier.showError('Missing project id');
+      return;
+    }
+
+    final p = _project ?? (widget.data['project'] is Map ? Map<String, dynamic>.from(widget.data['project'] as Map) : <String, dynamic>{});
+    final statusRaw = (p['status'] ?? '').toString().toLowerCase();
+    final buildTarget = (p['buildTarget'] ?? '').toString().toLowerCase();
+    final isAndroidApk = buildTarget == 'android_apk' || buildTarget == 'android';
+    if (isAndroidApk) {
+      AppNotifier.showError('Arcade supports WebGL projects only');
+      return;
+    }
+    if (statusRaw != 'ready') {
+      AppNotifier.showError('Project is not ready yet');
+      return;
+    }
+
+    final title = (p['name'] ?? widget.data['name'] ?? '').toString().trim();
+    final description = (p['description'] ?? widget.data['description'] ?? '').toString().trim();
+
+    setState(() => _publishingArcade = true);
+    try {
+      final res = await GameFeedService.publish(
+        token: token,
+        projectId: id,
+        title: title.isEmpty ? null : title,
+        description: description.isEmpty ? null : description,
+      );
+      if (!mounted) return;
+      if (res['success'] == true) {
+        AppNotifier.showSuccess('Published to Arcade');
+        context.go('/dashboard?tab=arcade');
+        return;
+      }
+      AppNotifier.showError(res['message']?.toString() ?? 'Failed to publish');
+    } catch (e) {
+      AppNotifier.showError(e.toString());
+    } finally {
+      if (!mounted) return;
+      setState(() => _publishingArcade = false);
+    }
+  }
+
   @override
   void dispose() {
     _heroGlow.dispose();
+    _neonCtrl.dispose();
     super.dispose();
+  }
+
+  void _confetti() {
+    if (!mounted) return;
+    final entry = OverlayEntry(
+      builder: (context) => const _MiniConfetti(),
+    );
+    Overlay.of(context, rootOverlay: true).insert(entry);
+    Future.delayed(const Duration(milliseconds: 820), entry.remove);
   }
 
   Future<void> _downloadArtifact({required String label}) async {
@@ -293,7 +915,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> with SingleTi
         } catch (_) {}
 
         if (!mounted) return;
-        context.go('/play-webgl', extra: {'url': url});
+        context.push('/play-webgl', extra: {'url': url});
         return;
       }
       setState(() {
@@ -1543,101 +2165,92 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> with SingleTi
         : <String>[];
     final previewVideoUrl = _resolveMediaUrl(p['previewVideoUrl']?.toString());
 
-    return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      appBar: AppBar(
-        backgroundColor: cs.surface,
-        elevation: 0,
-        title: Text(
-          name,
-          style: AppTypography.subtitle1,
-        ),
-        leading: IconButton(
-          onPressed: () => context.go('/dashboard'),
-          icon: Icon(
-            Icons.arrow_back,
-            color: cs.onSurface,
+    return RefreshIndicator(
+      onRefresh: _loadIfNeeded,
+      child: Scaffold(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        appBar: AppBar(
+          backgroundColor: cs.surface,
+          elevation: 0,
+          title: Text(
+            name,
+            style: AppTypography.subtitle1,
           ),
-        ),
-        actions: [
-          IconButton(
-            onPressed: () {
-              final id = _projectId();
-              final p = _project ?? <String, dynamic>{};
-              final name = (p['name'] ?? widget.data['name'] ?? '').toString();
-              if (id == null || id.isEmpty) {
-                AppNotifier.showError('Missing project id');
-                return;
-              }
-              context.push(
-                '/ai-coach',
-                extra: {
-                  'projectId': id,
-                  'projectName': name,
-                },
-              );
-            },
+          leading: IconButton(
+            onPressed: () => context.go('/dashboard?tab=projects'),
             icon: Icon(
-              Icons.mic_rounded,
+              Icons.arrow_back,
               color: cs.onSurface,
             ),
           ),
-          IconButton(
-            onPressed: () {
-              _openEditProjectDialog();
-            },
-            icon: Icon(
-              Icons.edit,
-              color: cs.onSurface,
-            ),
-          ),
-          IconButton(
-            onPressed: () {
-              // TODO: Share project
-              final id = _projectId();
-              final p = _project ?? <String, dynamic>{};
-              final name = (p['name'] ?? widget.data['name'] ?? 'Project').toString();
-              final description = (p['description'] ?? widget.data['description'] ?? '').toString();
-              final text = [
-                name,
-                if (description.trim().isNotEmpty) description.trim(),
-                if (id != null && id.isNotEmpty) 'Project ID: $id',
-              ].join('\n\n');
-              Share.share(text);
-            },
-            icon: Icon(
-              Icons.share,
-              color: cs.onSurface,
-            ),
-          ),
-        ],
-      ),
-      
-      body: SingleChildScrollView(
-        padding: AppSpacing.paddingLarge,
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (_loading) ...[
-              _buildLoadingSkeleton(context),
-              const SizedBox(height: AppSpacing.lg),
-            ],
-            if (_error != null) ...[
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.all(AppSpacing.md),
-                decoration: BoxDecoration(
-                  color: AppColors.error.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(AppBorderRadius.large),
-                  border: Border.all(color: AppColors.error.withOpacity(0.35)),
-                ),
-                child: Text(
-                  _error!,
-                  style: AppTypography.body2.copyWith(color: cs.onSurface),
-                ),
+          actions: [
+            IconButton(
+              onPressed: () {
+                final id = _projectId();
+                final p = _project ?? <String, dynamic>{};
+                final name = (p['name'] ?? widget.data['name'] ?? '').toString();
+                if (id == null || id.isEmpty) {
+                  AppNotifier.showError('Missing project id');
+                  return;
+                }
+                context.push(
+                  '/ai-coach',
+                  extra: {
+                    'projectId': id,
+                    'projectName': name,
+                  },
+                );
+              },
+              icon: Icon(
+                Icons.mic_rounded,
+                color: cs.onSurface,
               ),
-              const SizedBox(height: AppSpacing.lg),
-            ],
+            ),
+            IconButton(
+              onPressed: () {
+                _openEditProjectDialog();
+              },
+              icon: Icon(
+                Icons.edit,
+                color: cs.onSurface,
+              ),
+            ),
+            IconButton(
+              onPressed: () {
+                _openShareBuildSheet();
+              },
+              icon: Icon(
+                Icons.share,
+                color: cs.onSurface,
+              ),
+            ),
+          ],
+        ),
+        body: SingleChildScrollView(
+          padding: AppSpacing.paddingLarge,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (_loading) ...[
+                _buildLoadingSkeleton(context),
+                const SizedBox(height: AppSpacing.lg),
+              ],
+              if (_error != null) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(AppSpacing.md),
+                  decoration: BoxDecoration(
+                    color: AppColors.error.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(AppBorderRadius.large),
+                    border: Border.all(color: AppColors.error.withOpacity(0.35)),
+                  ),
+                  child: Text(
+                    _error!,
+                    style: AppTypography.body2.copyWith(color: cs.onSurface),
+                  ),
+                ),
+                const SizedBox(height: AppSpacing.lg),
+              ],
             // Hero image/preview
             AnimatedCard(
               delay: const Duration(milliseconds: 40),
@@ -1882,6 +2495,14 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> with SingleTi
                 onPressed: _loadingPreviewUrl ? null : _playWebgl,
               ),
               const SizedBox(height: AppSpacing.md),
+              CustomButton(
+                text: _publishingArcade ? 'Publishing…' : 'Publish to Arcade',
+                onPressed: _publishingArcade ? null : (statusRaw == 'ready' ? _publishToArcade : null),
+                type: ButtonType.secondary,
+                icon: const Icon(Icons.sports_esports_rounded),
+                isFullWidth: true,
+              ),
+              const SizedBox(height: AppSpacing.md),
               TweenAnimationBuilder<double>(
                 tween: Tween(begin: 0.75, end: 1.0),
                 duration: const Duration(milliseconds: 1400),
@@ -2006,12 +2627,12 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> with SingleTi
               style: AppTypography.subtitle1,
             ),
             const SizedBox(height: AppSpacing.lg),
-            if (screenshotUrls.isEmpty)
+            if (screenshotUrls.isEmpty) ...[
               Text(
                 'No screenshots',
                 style: AppTypography.body2.copyWith(color: cs.onSurfaceVariant),
-              )
-            else
+              ),
+            ] else ...[
               SizedBox(
                 height: 200,
                 child: ListView.builder(
@@ -2041,12 +2662,14 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> with SingleTi
                   },
                 ),
               ),
+            ],
 
             const SizedBox(height: AppSpacing.xxl),
           ],
         ),
       ),
-    );
+    ),
+);
   }
 
   Widget _buildInfoCard(
@@ -2236,6 +2859,176 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen> with SingleTi
       ),
     );
   }
+}
+
+class _NeonFrame extends StatelessWidget {
+  final Animation<double> animation;
+  final double radius;
+  final Widget child;
+
+  const _NeonFrame({
+    required this.animation,
+    required this.radius,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return AnimatedBuilder(
+      animation: animation,
+      builder: (context, _) {
+        return CustomPaint(
+          painter: _NeonBorderPainter(
+            t: animation.value,
+            radius: radius,
+            primary: cs.primary,
+            accent: AppColors.accent,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(3),
+            child: child,
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _NeonBorderPainter extends CustomPainter {
+  final double t;
+  final double radius;
+  final Color primary;
+  final Color accent;
+
+  _NeonBorderPainter({
+    required this.t,
+    required this.radius,
+    required this.primary,
+    required this.accent,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final r = RRect.fromRectAndRadius(
+      Rect.fromLTWH(1.5, 1.5, size.width - 3, size.height - 3),
+      Radius.circular(radius),
+    );
+
+    final sweep = SweepGradient(
+      transform: GradientRotation(t * math.pi * 2),
+      colors: [
+        primary.withOpacity(0.0),
+        primary.withOpacity(0.95),
+        accent.withOpacity(0.95),
+        primary.withOpacity(0.0),
+      ],
+      stops: const [0.0, 0.35, 0.72, 1.0],
+    );
+
+    final paintGlow = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 6
+      ..shader = sweep.createShader(Offset.zero & size)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10);
+
+    final paintStroke = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 2.2
+      ..shader = sweep.createShader(Offset.zero & size);
+
+    canvas.drawRRect(r, paintGlow);
+    canvas.drawRRect(r, paintStroke);
+  }
+
+  @override
+  bool shouldRepaint(covariant _NeonBorderPainter oldDelegate) {
+    return oldDelegate.t != t || oldDelegate.radius != radius || oldDelegate.primary != primary || oldDelegate.accent != accent;
+  }
+}
+
+class _MiniConfetti extends StatefulWidget {
+  const _MiniConfetti();
+
+  @override
+  State<_MiniConfetti> createState() => _MiniConfettiState();
+}
+
+class _MiniConfettiState extends State<_MiniConfetti> with SingleTickerProviderStateMixin {
+  late final AnimationController _c;
+
+  @override
+  void initState() {
+    super.initState();
+    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 720))..forward();
+  }
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: AnimatedBuilder(
+        animation: _c,
+        builder: (context, _) {
+          final v = Curves.easeOutCubic.transform(_c.value);
+          final op = (1.0 - v).clamp(0.0, 1.0);
+          return Opacity(
+            opacity: op,
+            child: CustomPaint(
+              painter: _ConfettiPainter(t: v),
+              child: const SizedBox.expand(),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _ConfettiPainter extends CustomPainter {
+  final double t;
+
+  _ConfettiPainter({required this.t});
+
+  double _rand(int i) {
+    final x = math.sin(i * 999.9) * 10000;
+    return x - x.floorToDouble();
+  }
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final n = 18;
+    for (var i = 0; i < n; i++) {
+      final rx = _rand(i * 7 + 3);
+      final ry = _rand(i * 11 + 5);
+      final drift = (_rand(i * 13 + 9) - 0.5) * 140;
+      final x = size.width * rx + drift * t;
+      final y = size.height * (0.30 + ry * 0.55) + t * 220;
+      final s = 4 + _rand(i * 17 + 2) * 7;
+
+      final c = Color.lerp(
+        const Color(0xFFFF3D8D),
+        const Color(0xFF00E5FF),
+        _rand(i * 19 + 1),
+      )!
+          .withOpacity((1.0 - t).clamp(0.0, 1.0));
+
+      final p = Paint()..color = c;
+      canvas.drawRRect(
+        RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(x, y), width: s, height: s * 1.6), const Radius.circular(2)),
+        p,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _ConfettiPainter oldDelegate) => oldDelegate.t != t;
 }
 
 class _ColorDot extends StatelessWidget {

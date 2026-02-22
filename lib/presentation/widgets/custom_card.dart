@@ -141,6 +141,8 @@ class ProjectCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return LayoutBuilder(
       builder: (context, constraints) {
         final compact = constraints.maxWidth < 180;
@@ -157,6 +159,10 @@ class ProjectCard extends StatelessWidget {
         return CustomCard(
           onTap: onTap,
           padding: EdgeInsets.zero,
+          borderRadius: BorderRadius.circular(22),
+          backgroundColor: cs.surface.withOpacity(isDark ? 0.36 : 0.72),
+          border: Border.all(color: cs.outlineVariant.withOpacity(0.26)),
+          elevation: 22,
           child: SizedBox(
             height: constraints.maxHeight,
             child: Column(
@@ -171,7 +177,7 @@ class ProjectCard extends StatelessWidget {
                       Positioned.fill(
                         child: ClipRRect(
                           borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(AppBorderRadius.large),
+                            top: Radius.circular(22),
                           ),
                           child: (thumbnailUrl != null && thumbnailUrl!.trim().isNotEmpty)
                               ? Image.network(
@@ -196,6 +202,21 @@ class ProjectCard extends StatelessWidget {
                                     child: Icon(Icons.games, color: Colors.white70, size: 34),
                                   ),
                                 ),
+                        ),
+                      ),
+                      Positioned.fill(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                Colors.black.withOpacity(0.00),
+                                Colors.black.withOpacity(0.10),
+                                Colors.black.withOpacity(0.55),
+                              ],
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                            ),
+                          ),
                         ),
                       ),
                       Positioned(
@@ -310,20 +331,40 @@ class ProjectCard extends StatelessWidget {
     }
 
     return Container(
-      padding: const EdgeInsets.symmetric(
-        horizontal: AppSpacing.sm,
-        vertical: AppSpacing.xs,
-      ),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(
-        color: chipColor.withOpacity(0.2),
-        borderRadius: AppBorderRadius.allSmall,
+        color: Colors.black.withOpacity(0.32),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withOpacity(0.18)),
       ),
-      child: Text(
-        chipText,
-        style: AppTypography.caption.copyWith(
-          color: chipColor,
-          fontWeight: FontWeight.w500,
-        ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 7,
+            height: 7,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: chipColor,
+              boxShadow: [
+                BoxShadow(
+                  color: chipColor.withOpacity(0.45),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            chipText,
+            style: AppTypography.caption.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w900,
+              fontSize: 10,
+            ),
+          ),
+        ],
       ),
     );
   }

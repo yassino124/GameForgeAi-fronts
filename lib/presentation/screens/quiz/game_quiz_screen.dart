@@ -7,6 +7,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/services/local_notifications_service.dart';
+import '../../../core/utils/app_refresh_bus.dart';
 import '../../../core/themes/app_theme.dart';
 
 class GameQuizScreen extends StatefulWidget {
@@ -664,6 +665,8 @@ class _GameQuizScreenState extends State<GameQuizScreen> {
     await p.setInt(_kPrefTotalPlays, nextPlays);
     await p.setStringList(_kPrefBadges, prevBadges);
     await p.setInt(_kPrefLastXpEarned, earned);
+
+    AppRefreshBus.bump();
 
     if (!mounted) return;
     setState(() {

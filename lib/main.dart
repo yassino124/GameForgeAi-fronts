@@ -7,11 +7,13 @@ import 'package:provider/provider.dart';
 import 'core/router/app_router.dart';
 import 'core/services/billing_service.dart';
 import 'core/services/app_notifier.dart';
+import 'core/services/coach_overlay_controller.dart';
 import 'core/services/local_notifications_service.dart';
 import 'core/themes/app_theme.dart';
 import 'core/providers/auth_provider.dart';
 import 'core/providers/build_monitor_provider.dart';
 import 'core/providers/theme_provider.dart';
+import 'presentation/widgets/coach_global_overlay.dart';
 
 void main() async {
   FlutterError.onError = (details) {
@@ -63,6 +65,7 @@ void main() async {
           ChangeNotifierProvider(create: (_) => authProvider),
           ChangeNotifierProvider(create: (_) => themeProvider),
           ChangeNotifierProvider(create: (_) => BuildMonitorProvider()),
+          ChangeNotifierProvider(create: (_) => CoachOverlayController()),
         ],
         child: const GameForgeAI(),
       ),
@@ -137,6 +140,16 @@ class _GameForgeAppState extends State<_GameForgeApp> {
           darkTheme: AppTheme.darkTheme,
           themeMode: themeProvider.themeMode,
           routerConfig: AppRouter.router,
+          builder: (context, child) {
+            if (child == null) return const SizedBox.shrink();
+            return Stack(
+              fit: StackFit.expand,
+              children: [
+                child,
+                const CoachGlobalOverlay(),
+              ],
+            );
+          },
         );
       },
     );

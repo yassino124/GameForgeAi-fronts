@@ -172,6 +172,46 @@ class LocalNotificationsService {
     await _saveInAppNotifications(items);
   }
 
+  static Future<void> addGenerationFinishedInAppNotification({
+    required String projectId,
+    String? projectName,
+    String? prompt,
+    String? templateName,
+  }) async {
+    final now = DateTime.now();
+    final id = 'local_${now.microsecondsSinceEpoch}';
+
+    final name = (projectName ?? '').trim().isEmpty ? null : projectName!.trim();
+    final tname = (templateName ?? '').trim().isEmpty ? null : templateName!.trim();
+
+    final parts = <String>[];
+    if (name != null) parts.add(name);
+    if (tname != null) parts.add(tname);
+
+    final item = <String, dynamic>{
+      'id': id,
+      'title': 'Generation complete',
+      'message': parts.isEmpty ? 'Your AI game is ready.' : '${parts.join(' • ')} • Ready to play.',
+      'timestamp': now.toUtc().toIso8601String(),
+      'type': 'success',
+      'isRead': false,
+      'data': {
+        'kind': 'generation_finished',
+        'projectId': projectId,
+        'projectName': (projectName ?? '').trim(),
+        'templateName': (templateName ?? '').trim(),
+        'prompt': (prompt ?? '').trim(),
+      },
+    };
+
+    final items = await listInAppNotifications();
+    items.insert(0, item);
+    if (items.length > 80) {
+      items.removeRange(80, items.length);
+    }
+    await _saveInAppNotifications(items);
+  }
+
   static Future<void> markInAppNotificationRead(String id, bool isRead) async {
     final items = await listInAppNotifications();
     var changed = false;

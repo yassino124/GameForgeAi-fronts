@@ -269,6 +269,30 @@ class _TemplateSelectionScreenState extends State<TemplateSelectionScreen> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 CustomButton(
+                  text: 'Create from scratch (AI)',
+                  onPressed: () {
+                    context.go('/ai-create-game');
+                  },
+                  type: ButtonType.secondary,
+                  isFullWidth: true,
+                  icon: const Icon(Icons.auto_awesome_rounded),
+                ),
+
+                const SizedBox(height: AppSpacing.sm),
+
+                CustomButton(
+                  text: 'Instant HTML5 (Phaser)',
+                  onPressed: () {
+                    context.go('/ai-phaser');
+                  },
+                  type: ButtonType.secondary,
+                  isFullWidth: true,
+                  icon: const Icon(Icons.bolt_rounded),
+                ),
+
+                const SizedBox(height: AppSpacing.sm),
+
+                CustomButton(
                   text: 'Next',
                   onPressed: _selectedTemplate != null
                       ? () {

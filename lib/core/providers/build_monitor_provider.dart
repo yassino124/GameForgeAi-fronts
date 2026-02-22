@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 
+import '../utils/app_refresh_bus.dart';
 import '../services/local_notifications_service.dart';
 import '../services/projects_service.dart';
 
@@ -97,6 +98,7 @@ class BuildMonitorProvider extends ChangeNotifier {
 
       if (!_completionNotified && previousStatus != status && (status == 'ready' || status == 'failed')) {
         _completionNotified = true;
+        AppRefreshBus.bump();
         try {
           await LocalNotificationsService.addBuildFinishedInAppNotification(
             projectId: pid,
