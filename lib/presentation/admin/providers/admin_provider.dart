@@ -32,6 +32,9 @@ class AdminProvider extends ChangeNotifier {
   // Projects screen state
   String _projectsSearch = '';
   String _projectsStatusFilter = 'all';
+  List<Map<String, dynamic>> _projects = [];
+  bool _projectsLoading = false;
+  String? _projectsError;
 
   // Marketplace screen state
   String _marketplaceCategoryFilter = 'all';
@@ -55,6 +58,9 @@ class AdminProvider extends ChangeNotifier {
   bool get usersActionLoading => _usersActionLoading;
   String get projectsSearch => _projectsSearch;
   String get projectsStatusFilter => _projectsStatusFilter;
+  bool get projectsLoading => _projectsLoading;
+  String? get projectsError => _projectsError;
+  List<Map<String, dynamic>> get projects => _projects;
   String get marketplaceCategoryFilter => _marketplaceCategoryFilter;
   bool get marketplaceGridView => _marketplaceGridView;
   List<Map<String, dynamic>>? get templates => _templates;
@@ -340,14 +346,14 @@ class AdminProvider extends ChangeNotifier {
 
   // Filtered projects
   List<Map<String, dynamic>> get filteredProjects {
-    var list = List<Map<String, dynamic>>.from(AdminMockData.mockProjects);
+    var list = List<Map<String, dynamic>>.from(_projects);
 
     if (_projectsSearch.isNotEmpty) {
       final q = _projectsSearch.toLowerCase();
       list = list.where((p) {
-        final title = (p['title'] ?? '').toString().toLowerCase();
-        final owner = (p['owner'] ?? '').toString().toLowerCase();
-        return title.contains(q) || owner.contains(q);
+        final name = (p['name'] ?? '').toString().toLowerCase();
+        final ownerDisplay = (p['ownerDisplay'] ?? '').toString().toLowerCase();
+        return name.contains(q) || ownerDisplay.contains(q);
       }).toList();
     }
 
@@ -356,6 +362,34 @@ class AdminProvider extends ChangeNotifier {
     }
 
     return list;
+  }
+
+  Future<void> fetchProjects() async {
+    final token = _tokenGetter?.call();
+    if (token == null || token.isEmpty) {
+      _projectsError = 'Not authenticated';
+      notifyListeners();
+      return;
+    }
+    _projectsLoading = true;
+    _projectsError = null;
+    notifyListeners();
+    try {
+      final res = await AdminService.getAdminProjects(token: token);
+      if (res['success'] == true && res['data'] is List) {
+        _projects = List<Map<String, dynamic>>.from(res['data'] as List);
+        _projectsError = null;
+      } else {
+        _projects = [];
+        _projectsError = res['message']?.toString() ?? 'Failed to load projects';
+      }
+    } catch (e) {
+      _projects = [];
+      _projectsError = e.toString();
+    } finally {
+      _projectsLoading = false;
+      notifyListeners();
+    }
   }
 
   // Filtered templates

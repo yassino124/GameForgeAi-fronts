@@ -5,9 +5,14 @@ import '../../constants/admin_theme.dart';
 import '../../providers/admin_provider.dart';
 import '../../widgets/status_chip.dart';
 
-class ProjectsScreen extends StatelessWidget {
+class ProjectsScreen extends StatefulWidget {
   const ProjectsScreen({super.key});
 
+  @override
+  State<ProjectsScreen> createState() => _ProjectsScreenState();
+}
+
+class _ProjectsScreenState extends State<ProjectsScreen> {
   static const _categoryColors = {
     'Platformer': AdminTheme.accentNeon,
     'Shooter': AdminTheme.accentRed,
@@ -19,6 +24,15 @@ class ProjectsScreen extends StatelessWidget {
   };
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final provider = Provider.of<AdminProvider>(context, listen: false);
+      provider.fetchProjects();
+    });
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Consumer<AdminProvider>(
       builder: (context, provider, _) {
@@ -27,7 +41,7 @@ class ProjectsScreen extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Toolbar
+            // Toolbar always visible
             Wrap(
               spacing: 12,
               runSpacing: 12,
@@ -49,10 +63,10 @@ class ProjectsScreen extends StatelessWidget {
                   dropdownColor: AdminTheme.bgSecondary,
                   items: const [
                     DropdownMenuItem(value: 'all', child: Text('All Status')),
-                    DropdownMenuItem(value: 'draft', child: Text('Draft')),
-                    DropdownMenuItem(value: 'in_progress', child: Text('In Progress')),
-                    DropdownMenuItem(value: 'published', child: Text('Published')),
-                    DropdownMenuItem(value: 'archived', child: Text('Archived')),
+                    DropdownMenuItem(value: 'queued', child: Text('Queued')),
+                    DropdownMenuItem(value: 'pending', child: Text('Pending')),
+                    DropdownMenuItem(value: 'building', child: Text('Building')),
+                    DropdownMenuItem(value: 'ready', child: Text('Ready')),
                     DropdownMenuItem(value: 'failed', child: Text('Failed')),
                   ],
                   onChanged: (v) => provider.setProjectsStatusFilter(v ?? 'all'),
@@ -60,34 +74,77 @@ class ProjectsScreen extends StatelessWidget {
               ],
             ),
             const SizedBox(height: 24),
-            // Grid
-            LayoutBuilder(
-              builder: (context, constraints) {
-                final crossAxisCount = constraints.maxWidth > 1400 ? 4 : (constraints.maxWidth > 1000 ? 3 : (constraints.maxWidth > 600 ? 2 : 1));
-                return GridView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: crossAxisCount,
-                    childAspectRatio: 0.85,
-                    crossAxisSpacing: 20,
-                    mainAxisSpacing: 20,
+            // Content area
+            if (provider.projectsLoading)
+              const Center(
+                child: Padding(
+                  padding: EdgeInsets.all(48),
+                  child: CircularProgressIndicator(
+                    valueColor: AlwaysStoppedAnimation(AdminTheme.accentNeon),
                   ),
-                  itemCount: projects.length,
-                  itemBuilder: (context, i) {
-                    final p = projects[i];
-                    final color = _categoryColors[p['template']] ?? _categoryColors['default']!;
-                    return _ProjectCard(
-                      project: p,
-                      color: color,
-                      onView: () => _showProjectDetail(context, p),
-                      onArchive: () => _showConfirm(context, 'Archive', 'Archive this project?', p),
-                      onDelete: () => _showConfirm(context, 'Delete', 'Delete this project permanently?', p),
-                    );
-                  },
-                );
-              },
-            ),
+                ),
+              )
+            else if (provider.projectsError != null)
+              Padding(
+                padding: const EdgeInsets.all(48),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.error_outline, size: 48, color: AdminTheme.accentRed),
+                      const SizedBox(height: 16),
+                      Text('Error: ${provider.projectsError}',
+                        style: const TextStyle(color: AdminTheme.accentRed)),
+                    ],
+                  ),
+                ),
+              )
+            else if (projects.isEmpty)
+              const Padding(
+                padding: EdgeInsets.all(48),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.folder_off, size: 48, color: AdminTheme.textMuted),
+                      SizedBox(height: 16),
+                      Text('No projects found',
+                        style: TextStyle(color: AdminTheme.textSecondary)),
+                    ],
+                  ),
+                ),
+              )
+            else
+              // Grid - NO Expanded here
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final crossAxisCount = constraints.maxWidth > 1400 ? 4
+                    : (constraints.maxWidth > 1000 ? 3
+                    : (constraints.maxWidth > 600 ? 2 : 1));
+                  return GridView.builder(
+                    shrinkWrap: true,
+                    physics: const NeverScrollableScrollPhysics(),
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: crossAxisCount,
+                      childAspectRatio: 0.85,
+                      crossAxisSpacing: 20,
+                      mainAxisSpacing: 20,
+                    ),
+                    itemCount: projects.length,
+                    itemBuilder: (context, i) {
+                      final p = projects[i];
+                      final color = _categoryColors[p['templateName']] ?? _categoryColors['default']!;
+                      return _ProjectCard(
+                        project: p,
+                        color: color,
+                        onView: () => _showProjectDetail(context, p),
+                        onArchive: () => _showConfirm(context, 'Archive', 'Archive this project?', p),
+                        onDelete: () => _showConfirm(context, 'Delete', 'Delete this project permanently?', p),
+                      );
+                    },
+                  );
+                },
+              ),
           ],
         );
       },
@@ -99,17 +156,16 @@ class ProjectsScreen extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AdminTheme.bgSecondary,
-        title: Text(p['title']?.toString() ?? '', style: const TextStyle(color: AdminTheme.textPrimary)),
+        title: Text(p['name']?.toString() ?? '', style: const TextStyle(color: AdminTheme.textPrimary)),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _DialogRow('Owner', p['owner']?.toString() ?? ''),
-              _DialogRow('Template', p['template']?.toString() ?? ''),
+              _DialogRow('Owner', p['ownerDisplay']?.toString() ?? ''),
+              _DialogRow('Template', p['templateName']?.toString() ?? ''),
               _DialogRow('Status', p['status']?.toString() ?? ''),
-              _DialogRow('Platform', p['platform']?.toString() ?? ''),
-              _DialogRow('Builds', p['buildCount']?.toString() ?? '0'),
+              _DialogRow('Platform', p['buildTarget']?.toString() ?? ''),
               _DialogRow('Created', _formatDate(p['createdAt'])),
             ],
           ),
@@ -213,13 +269,13 @@ class _ProjectCardState extends State<_ProjectCard> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      p['title']?.toString() ?? 'Untitled',
+                      p['name']?.toString() ?? 'Untitled',
                       style: GoogleFonts.orbitron(fontSize: 16, fontWeight: FontWeight.w600, color: AdminTheme.textPrimary),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 8),
-                    Text(p['owner']?.toString() ?? '', style: GoogleFonts.rajdhani(color: AdminTheme.textSecondary, fontSize: 12)),
+                    Text(p['ownerDisplay']?.toString() ?? '', style: GoogleFonts.rajdhani(color: AdminTheme.textSecondary, fontSize: 12)),
                     const SizedBox(height: 8),
                     StatusChip(label: status.replaceAll('_', ' '), status: status, clickable: false, color: AdminTheme.statusColor(status)),
                     const Spacer(),
