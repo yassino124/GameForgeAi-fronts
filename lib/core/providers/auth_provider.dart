@@ -146,9 +146,12 @@ class AuthProvider extends ChangeNotifier {
       _rememberMe = prefs.getBool('remember_me') ?? false;
       _biometricEnabled = prefs.getBool(_biometricEnabledKey) ?? false;
 
+      // ✅ ALWAYS load refresh token for automatic token refresh
+      _refreshToken = prefs.getString('refresh_token');
+
+      // Remember_me controls access_token and user profile
       if (_rememberMe) {
         _token = prefs.getString('auth_token');
-        _refreshToken = prefs.getString('refresh_token');
         final userString = prefs.getString('user_data');
 
         if (userString != null) {
@@ -158,10 +161,8 @@ class AuthProvider extends ChangeNotifier {
         }
       } else {
         _token = null;
-        _refreshToken = null;
         _user = null;
         await prefs.remove('auth_token');
-        await prefs.remove('refresh_token');
         await prefs.remove('user_data');
       }
       
@@ -209,17 +210,19 @@ class AuthProvider extends ChangeNotifier {
     try {
       final prefs = await SharedPreferences.getInstance();
 
+      // ✅ ALWAYS save refresh token for automatic token refresh
+      if (_refreshToken != null) {
+        await prefs.setString('refresh_token', _refreshToken!);
+      } else {
+        await prefs.remove('refresh_token');
+      }
+
+      // Remember_me only controls access_token and user profile persistence
       if (_rememberMe) {
         if (_token != null) {
           await prefs.setString('auth_token', _token!);
         } else {
           await prefs.remove('auth_token');
-        }
-
-        if (_refreshToken != null) {
-          await prefs.setString('refresh_token', _refreshToken!);
-        } else {
-          await prefs.remove('refresh_token');
         }
 
         if (_user != null) {
@@ -231,7 +234,6 @@ class AuthProvider extends ChangeNotifier {
         }
       } else {
         await prefs.remove('auth_token');
-        await prefs.remove('refresh_token');
         await prefs.remove('user_data');
       }
       

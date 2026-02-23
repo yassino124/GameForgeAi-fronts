@@ -622,7 +622,9 @@ class _ProjectDetailsScreenState extends State<ProjectDetailsScreen> {
                           );
                           final data = created['data'];
                           final projectId = (data is Map)
-                              ? (data['_id']?.toString() ?? data['id']?.toString())
+                              ? (data['projectId']?.toString() 
+                                 ?? data['_id']?.toString() 
+                                 ?? data['id']?.toString())
                               : null;
                           if (projectId == null || projectId.isEmpty) {
                             throw Exception('Missing project id');
