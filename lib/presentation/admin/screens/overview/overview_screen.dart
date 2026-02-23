@@ -30,7 +30,11 @@ class _OverviewScreenState extends State<OverviewScreen> {
     final dashboardData = adminProvider.dashboardData?['dashboard'] ?? {};
     final totalUsers = dashboardData['totalUsers'] ?? 1247;
     final totalUsersChange = dashboardData['totalUsersChange'] ?? '+12%';
+    final activeProjects = dashboardData['activeProjects'] ?? 0;
+    final totalTemplates = dashboardData['totalTemplates'] ?? 0;
+    final buildsToday = dashboardData['buildsToday'] ?? 0;
     final newUsersData = dashboardData['newUsersLast30Days'] as List? ?? [];
+    final buildsLast30Days = dashboardData['buildsLast30Days'] as List? ?? [];
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -56,8 +60,8 @@ class _OverviewScreenState extends State<OverviewScreen> {
                     width: (constraints.maxWidth > 1200 ? (constraints.maxWidth - 60) / 4 : constraints.maxWidth > 768 ? (constraints.maxWidth - 40) / 2 : constraints.maxWidth) - 20,
                     child: StatCard(
                       title: 'Active Projects',
-                      value: '389',
-                      change: '+8%',
+                      value: activeProjects.toString(),
+                      change: '',
                       iconColor: AdminTheme.accentPurple,
                       icon: Icons.gamepad,
                     ),
@@ -66,8 +70,8 @@ class _OverviewScreenState extends State<OverviewScreen> {
                     width: (constraints.maxWidth > 1200 ? (constraints.maxWidth - 60) / 4 : constraints.maxWidth > 768 ? (constraints.maxWidth - 40) / 2 : constraints.maxWidth) - 20,
                     child: StatCard(
                       title: 'Templates',
-                      value: '56',
-                      change: '+3',
+                      value: totalTemplates.toString(),
+                      change: '',
                       iconColor: AdminTheme.accentGreen,
                       icon: Icons.store,
                     ),
@@ -76,8 +80,8 @@ class _OverviewScreenState extends State<OverviewScreen> {
                     width: (constraints.maxWidth > 1200 ? (constraints.maxWidth - 60) / 4 : constraints.maxWidth > 768 ? (constraints.maxWidth - 40) / 2 : constraints.maxWidth) - 20,
                     child: StatCard(
                       title: 'Builds Today',
-                      value: '142',
-                      change: '-5%',
+                      value: buildsToday.toString(),
+                      change: '',
                       isPositive: false,
                       iconColor: AdminTheme.accentOrange,
                       icon: Icons.build,
@@ -223,7 +227,7 @@ class _OverviewScreenState extends State<OverviewScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Builds per Day',
+                            'Builds Last 30 Days',
                             style: GoogleFonts.orbitron(
                               color: AdminTheme.textPrimary,
                               fontSize: 18,
@@ -233,19 +237,104 @@ class _OverviewScreenState extends State<OverviewScreen> {
                           const SizedBox(height: 20),
                           Container(
                             height: 200,
-                            decoration: BoxDecoration(
-                              color: AdminTheme.bgTertiary,
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: const Center(
-                              child: Text(
-                                'Chart Component\n(To be implemented)',
-                                textAlign: TextAlign.center,
-                                style: TextStyle(
-                                  color: AdminTheme.textSecondary,
-                                ),
-                              ),
-                            ),
+                            child: buildsLast30Days.isEmpty
+                                ? const Center(
+                                    child: Text(
+                                      'No data available',
+                                      style: TextStyle(color: AdminTheme.textSecondary),
+                                    ),
+                                  )
+                                : LineChart(
+                                    LineChartData(
+                                      gridData: FlGridData(
+                                        show: true,
+                                        getDrawingHorizontalLine: (value) => FlLine(
+                                          color: AdminTheme.borderGlow.withOpacity(0.3),
+                                          strokeWidth: 1,
+                                        ),
+                                        getDrawingVerticalLine: (value) => FlLine(
+                                          color: AdminTheme.borderGlow.withOpacity(0.3),
+                                          strokeWidth: 1,
+                                        ),
+                                      ),
+                                      titlesData: FlTitlesData(
+                                        rightTitles: const AxisTitles(
+                                          sideTitles: SideTitles(showTitles: false),
+                                        ),
+                                        topTitles: const AxisTitles(
+                                          sideTitles: SideTitles(showTitles: false),
+                                        ),
+                                        bottomTitles: AxisTitles(
+                                          sideTitles: SideTitles(
+                                            showTitles: true,
+                                            reservedSize: 22,
+                                            interval: 7,
+                                            getTitlesWidget: (value, meta) {
+                                              final index = value.toInt();
+                                              if (index < 0 || index >= buildsLast30Days.length) {
+                                                return const Text('');
+                                              }
+                                              final date = buildsLast30Days[index]['_id'] as String;
+                                              return Text(
+                                                date.substring(5),
+                                                style: const TextStyle(
+                                                  color: AdminTheme.textSecondary,
+                                                  fontSize: 10,
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                        leftTitles: AxisTitles(
+                                          sideTitles: SideTitles(
+                                            showTitles: true,
+                                            interval: 1,
+                                            getTitlesWidget: (value, meta) {
+                                              return Text(
+                                                value.toInt().toString(),
+                                                style: const TextStyle(
+                                                  color: AdminTheme.textSecondary,
+                                                  fontSize: 10,
+                                                ),
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                      ),
+                                      borderData: FlBorderData(
+                                        show: true,
+                                        border: Border.all(
+                                          color: AdminTheme.borderGlow.withOpacity(0.3),
+                                        ),
+                                      ),
+                                      lineBarsData: [
+                                        LineChartBarData(
+                                          spots: buildsLast30Days.asMap().entries.map((entry) {
+                                            return FlSpot(
+                                              entry.key.toDouble(),
+                                              (entry.value['count'] as num).toDouble(),
+                                            );
+                                          }).toList(),
+                                          isCurved: true,
+                                          color: AdminTheme.accentOrange,
+                                          barWidth: 3,
+                                          isStrokeCapRound: true,
+                                          dotData: FlDotData(
+                                            show: true,
+                                            getDotPainter: (spot, percent, barData, index) {
+                                              return FlDotCirclePainter(
+                                                radius: 4,
+                                                color: AdminTheme.accentOrange,
+                                                strokeColor: AdminTheme.bgPrimary,
+                                                strokeWidth: 2,
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                      ],
+                                      minY: 0,
+                                    ),
+                                  ),
                           ),
                         ],
                       ),

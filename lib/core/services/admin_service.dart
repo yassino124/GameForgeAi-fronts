@@ -21,6 +21,10 @@ class AdminService {
     return ApiService.get('/admin/projects', token: token);
   }
 
+  static Future<Map<String, dynamic>> getAdminBuilds({required String token}) {
+    return ApiService.get('/admin/builds', token: token);
+  }
+
   /// Upload a new template to the backend
   /// POST /templates/upload with multipart/form-data
   /// Uses Uint8List for web compatibility (no file paths on web)

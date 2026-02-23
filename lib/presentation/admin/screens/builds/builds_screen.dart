@@ -6,19 +6,35 @@ import '../../providers/admin_provider.dart';
 import '../../data/mock_data.dart';
 import '../../widgets/status_chip.dart';
 
-class BuildsScreen extends StatelessWidget {
+class BuildsScreen extends StatefulWidget {
   const BuildsScreen({super.key});
+
+  @override
+  State<BuildsScreen> createState() => _BuildsScreenState();
+}
+
+class _BuildsScreenState extends State<BuildsScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AdminProvider>().fetchBuilds();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
     return Consumer<AdminProvider>(
       builder: (context, provider, _) {
         final builds = provider.filteredBuilds;
-        final total = builds.length;
-        final success = builds.where((b) => b['status'] == 'success').length;
-        final failed = builds.where((b) => b['status'] == 'failed').length;
-        final running = builds.where((b) => b['status'] == 'running').length;
-        final queued = builds.where((b) => b['status'] == 'queued').length;
+        final summary = provider.buildsSummary;
+        final total = summary['total'] ?? 0;
+        final success = summary['success'] ?? 0;
+        final failed = summary['failed'] ?? 0;
+        final running = summary['running'] ?? 0;
+        final queued = summary['queued'] ?? 0;
+        final loading = provider.buildsLoading;
+        final error = provider.buildsError;
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -28,11 +44,11 @@ class BuildsScreen extends StatelessWidget {
               spacing: 24,
               runSpacing: 12,
               children: [
-                _StatItem('Total', total.toString(), AdminTheme.textSecondary),
-                _StatItem('Success', success.toString(), AdminTheme.accentGreen),
-                _StatItem('Failed', failed.toString(), AdminTheme.accentRed),
-                _StatItem('Running', running.toString(), AdminTheme.accentNeon),
-                _StatItem('Queued', queued.toString(), AdminTheme.accentOrange),
+                _StatItem('Total', (total is int ? total : 0).toString(), AdminTheme.textSecondary),
+                _StatItem('Success', (success is int ? success : 0).toString(), AdminTheme.accentGreen),
+                _StatItem('Failed', (failed is int ? failed : 0).toString(), AdminTheme.accentRed),
+                _StatItem('Running', (running is int ? running : 0).toString(), AdminTheme.accentNeon),
+                _StatItem('Queued', (queued is int ? queued : 0).toString(), AdminTheme.accentOrange),
               ],
             ),
             const SizedBox(height: 24),
@@ -47,15 +63,42 @@ class BuildsScreen extends StatelessWidget {
                     DropdownMenuItem(value: 'all', child: Text('All Status')),
                     DropdownMenuItem(value: 'queued', child: Text('Queued')),
                     DropdownMenuItem(value: 'running', child: Text('Running')),
-                    DropdownMenuItem(value: 'success', child: Text('Success')),
+                    DropdownMenuItem(value: 'ready', child: Text('Ready')),
                     DropdownMenuItem(value: 'failed', child: Text('Failed')),
-                    DropdownMenuItem(value: 'cancelled', child: Text('Cancelled')),
                   ],
                   onChanged: (v) => provider.setBuildsStatusFilter(v ?? 'all'),
                 ),
               ],
             ),
             const SizedBox(height: 24),
+            // Loading/Error/Empty states
+            if (loading)
+              Padding(
+                padding: const EdgeInsets.all(48),
+                child: Center(child: CircularProgressIndicator()),
+              )
+            else if (error != null)
+              Padding(
+                padding: const EdgeInsets.all(48),
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.error_outline, size: 48, color: AdminTheme.accentRed),
+                      const SizedBox(height: 16),
+                      Text(error, style: GoogleFonts.rajdhani(color: AdminTheme.textSecondary)),
+                    ],
+                  ),
+                ),
+              )
+            else if (builds.isEmpty)
+              Padding(
+                padding: const EdgeInsets.all(48),
+                child: Center(
+                  child: Text('No builds found', style: GoogleFonts.rajdhani(color: AdminTheme.textSecondary)),
+                ),
+              )
+            else
             // Table
             Container(
               decoration: BoxDecoration(
@@ -88,14 +131,14 @@ class BuildsScreen extends StatelessWidget {
                     return DataRow(
                       cells: [
                         DataCell(Text('${e.key + 1}', style: GoogleFonts.jetBrainsMono(color: AdminTheme.textSecondary))),
-                        DataCell(Text(b['projectName']?.toString() ?? '', style: GoogleFonts.rajdhani(color: AdminTheme.textPrimary))),
-                        DataCell(Text(b['owner']?.toString() ?? '', style: GoogleFonts.rajdhani(color: AdminTheme.textSecondary))),
-                        DataCell(Text(b['platform']?.toString() ?? '', style: GoogleFonts.jetBrainsMono(color: AdminTheme.textSecondary, fontSize: 12))),
+                        DataCell(Text(b['name']?.toString() ?? '', style: GoogleFonts.rajdhani(color: AdminTheme.textPrimary))),
+                        DataCell(Text(b['ownerDisplay']?.toString() ?? '', style: GoogleFonts.rajdhani(color: AdminTheme.textSecondary))),
+                        DataCell(Text(b['buildTarget']?.toString() ?? '', style: GoogleFonts.jetBrainsMono(color: AdminTheme.textSecondary, fontSize: 12))),
                         DataCell(isRunning
                             ? const SizedBox(width: 80, height: 24, child: LinearProgressIndicator(backgroundColor: AdminTheme.bgTertiary, color: AdminTheme.accentNeon))
                             : StatusChip(label: status.toUpperCase(), status: status, clickable: false)),
-                        DataCell(Text(_formatDuration(b['duration']), style: GoogleFonts.jetBrainsMono(color: AdminTheme.textSecondary, fontSize: 12))),
-                        DataCell(Text(_formatDate(b['startedAt']), style: GoogleFonts.jetBrainsMono(color: AdminTheme.textSecondary, fontSize: 12))),
+                        DataCell(Text(_formatDuration(b['buildTimings']?['durationMs']), style: GoogleFonts.jetBrainsMono(color: AdminTheme.textSecondary, fontSize: 12))),
+                        DataCell(Text(_formatDate(b['buildTimings']?['startedAt']), style: GoogleFonts.jetBrainsMono(color: AdminTheme.textSecondary, fontSize: 12))),
                         DataCell(Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [

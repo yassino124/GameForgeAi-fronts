@@ -46,6 +46,11 @@ class AdminProvider extends ChangeNotifier {
 
   // Builds screen state
   String _buildsStatusFilter = 'all';
+  String _buildsSearch = '';
+  List<Map<String, dynamic>> _builds = [];
+  Map<String, dynamic> _buildsSummary = {};
+  bool _buildsLoading = false;
+  String? _buildsError;
 
   // Getters
   String get usersSearch => _usersSearch;
@@ -68,6 +73,11 @@ class AdminProvider extends ChangeNotifier {
   String? get templatesError => _templatesError;
   bool get uploadingTemplate => _uploadingTemplate;
   String get buildsStatusFilter => _buildsStatusFilter;
+  String get buildsSearch => _buildsSearch;
+  List<Map<String, dynamic>> get builds => _builds;
+  Map<String, dynamic> get buildsSummary => _buildsSummary;
+  bool get buildsLoading => _buildsLoading;
+  String? get buildsError => _buildsError;
   
   // Dashboard getters
   bool get dashboardLoading => _dashboardLoading;
@@ -405,7 +415,16 @@ class AdminProvider extends ChangeNotifier {
 
   // Filtered builds
   List<Map<String, dynamic>> get filteredBuilds {
-    var list = List<Map<String, dynamic>>.from(AdminMockData.mockBuilds);
+    var list = List<Map<String, dynamic>>.from(_builds);
+
+    if (_buildsSearch.isNotEmpty) {
+      final q = _buildsSearch.toLowerCase();
+      list = list.where((b) {
+        final name = (b['name'] ?? '').toString().toLowerCase();
+        final ownerDisplay = (b['ownerDisplay'] ?? '').toString().toLowerCase();
+        return name.contains(q) || ownerDisplay.contains(q);
+      }).toList();
+    }
 
     if (_buildsStatusFilter != 'all') {
       list = list.where((b) => (b['status'] ?? '').toString() == _buildsStatusFilter).toList();
@@ -489,5 +508,46 @@ class AdminProvider extends ChangeNotifier {
   void setBuildsStatusFilter(String value) {
     _buildsStatusFilter = value;
     notifyListeners();
+  }
+
+  void setBuildsSearch(String value) {
+    _buildsSearch = value;
+    notifyListeners();
+  }
+
+  Future<void> fetchBuilds() async {
+    final token = _tokenGetter?.call();
+    if (token == null || token.isEmpty) {
+      _buildsError = 'Not authenticated';
+      notifyListeners();
+      return;
+    }
+    _buildsLoading = true;
+    _buildsError = null;
+    notifyListeners();
+    try {
+      final res = await AdminService.getAdminBuilds(token: token);
+      if (res['success'] == true && res['data'] is Map) {
+        final data = res['data'] as Map;
+        if (data['builds'] is List) {
+          _builds = List<Map<String, dynamic>>.from(data['builds'] as List);
+        }
+        if (data['summary'] is Map) {
+          _buildsSummary = Map<String, dynamic>.from(data['summary'] as Map);
+        }
+        _buildsError = null;
+      } else {
+        _builds = [];
+        _buildsSummary = {};
+        _buildsError = res['message']?.toString() ?? 'Failed to load builds';
+      }
+    } catch (e) {
+      _builds = [];
+      _buildsSummary = {};
+      _buildsError = e.toString();
+    } finally {
+      _buildsLoading = false;
+      notifyListeners();
+    }
   }
 }
