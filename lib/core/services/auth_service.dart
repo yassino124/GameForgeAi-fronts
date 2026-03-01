@@ -95,6 +95,22 @@ class AuthService {
     );
   }
 
+  static Future<Map<String, dynamic>> uploadAvatarWeb({
+    required String token,
+    required String fileName,
+    required List<int> bytes,
+  }) async {
+    // For web, use multipart with bytes
+    return await ApiService.multipartBytes(
+      '/auth/profile/avatar',
+      method: 'PATCH',
+      token: token,
+      fileName: fileName,
+      bytes: bytes,
+      fileField: 'avatar',
+    );
+  }
+
   // Logout (if backend supports it)
   static Future<Map<String, dynamic>> logout(String token) async {
     return await ApiService.post(

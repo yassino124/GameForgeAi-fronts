@@ -7,6 +7,7 @@ import '../../constants/admin_theme.dart';
 import '../../providers/admin_provider.dart';
 import '../../widgets/status_chip.dart';
 import '../../widgets/admin_button.dart';
+import '../../widgets/user_avatar.dart';
 
 class UsersScreen extends StatefulWidget {
   const UsersScreen({super.key});
@@ -36,7 +37,7 @@ class _UsersScreenState extends State<UsersScreen> {
     if (context.mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(ok ? 'CSV exported' : 'Export failed'),
+          content: Text(ok ? 'PDF exported successfully!' : 'Export failed'),
           backgroundColor: ok ? AdminTheme.accentGreen : AdminTheme.accentRed,
         ),
       );
@@ -118,7 +119,7 @@ class _UsersScreenState extends State<UsersScreen> {
                   ],
                   onChanged: (v) => provider.setUsersStatusFilter(v ?? 'all'),
                 ),
-                AdminButton(label: 'Export CSV', icon: Icons.download, outlined: true, onPressed: provider.usersLoading ? null : () => _exportCsv(context)),
+                AdminButton(label: 'Export PDF', icon: Icons.picture_as_pdf, outlined: true, onPressed: provider.usersLoading ? null : () => _exportCsv(context)),
               ],
             ),
             const SizedBox(height: 24),
@@ -153,13 +154,12 @@ class _UsersScreenState extends State<UsersScreen> {
                     final isActive = status == 'active';
                     return DataRow(
                       cells: [
-                        DataCell(CircleAvatar(
+                        DataCell(UserAvatar(
+                          avatarUrl: u['avatar']?.toString(),
+                          username: u['username']?.toString() ?? '?',
                           radius: 18,
-                          backgroundColor: AdminTheme.accentPurple.withOpacity(0.3),
-                          child: Text(
-                            (u['username'] ?? '?')[0].toUpperCase(),
-                            style: GoogleFonts.rajdhani(color: AdminTheme.accentPurple, fontWeight: FontWeight.bold),
-                          ),
+                          backgroundColor: AdminTheme.accentPurple,
+                          textColor: AdminTheme.accentPurple,
                         )),
                         DataCell(Text(u['username']?.toString() ?? '', style: GoogleFonts.rajdhani(color: AdminTheme.textPrimary))),
                         DataCell(Text(u['email']?.toString() ?? '', style: GoogleFonts.rajdhani(color: AdminTheme.textSecondary))),

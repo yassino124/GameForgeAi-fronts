@@ -5,8 +5,8 @@ import 'package:provider/provider.dart';
 import '../../../../core/providers/auth_provider.dart';
 import '../../../../core/services/admin_users_service.dart';
 import '../../constants/admin_theme.dart';
-import '../../data/mock_data.dart';
 import '../../widgets/admin_button.dart';
+import '../../widgets/user_avatar.dart';
 
 class UserDetailScreen extends StatefulWidget {
   final String userId;
@@ -19,6 +19,8 @@ class UserDetailScreen extends StatefulWidget {
 
 class _UserDetailScreenState extends State<UserDetailScreen> {
   Map<String, dynamic>? _user;
+  List<dynamic> _projects = [];
+  List<dynamic> _activity = [];
   bool _loading = true;
   String? _error;
 
@@ -42,12 +44,23 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
       _loading = true;
       _error = null;
       _user = null;
+      _projects = [];
+      _activity = [];
     });
-    final res = await AdminUsersService.getUser(widget.userId, token);
+
+    // Fetch user details
+    final userRes = await AdminUsersService.getUser(widget.userId, token);
     if (!mounted) return;
-    if (res['success'] == true && res['data'] != null) {
+
+    // Fetch projects and activity in parallel
+    final projectsRes = await AdminUsersService.getUserProjects(widget.userId, token);
+    final activityRes = await AdminUsersService.getUserActivity(widget.userId, token);
+
+    if (userRes['success'] == true && userRes['data'] != null) {
       setState(() {
-        _user = Map<String, dynamic>.from(res['data'] is Map ? res['data'] as Map : {});
+        _user = Map<String, dynamic>.from(userRes['data'] is Map ? userRes['data'] as Map : {});
+        _projects = (projectsRes['success'] == true && projectsRes['data'] is List) ? projectsRes['data'] as List : [];
+        _activity = (activityRes['success'] == true && activityRes['data'] is List) ? activityRes['data'] as List : [];
         _loading = false;
         _error = null;
       });
@@ -55,7 +68,7 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
       setState(() {
         _user = null;
         _loading = false;
-        _error = res['message']?.toString() ?? 'User not found';
+        _error = userRes['message']?.toString() ?? 'User not found';
       });
     }
   }
@@ -110,13 +123,12 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
                       border: Border.all(color: AdminTheme.accentNeon, width: 3),
                       boxShadow: [BoxShadow(color: AdminTheme.accentNeon.withOpacity(0.3), blurRadius: 20)],
                     ),
-                    child: CircleAvatar(
-                      radius: 60,
-                      backgroundColor: AdminTheme.accentPurple.withOpacity(0.3),
-                      child: Text(
-                        (user['username'] ?? '?')[0].toUpperCase(),
-                        style: GoogleFonts.orbitron(fontSize: 48, fontWeight: FontWeight.bold, color: AdminTheme.accentPurple),
-                      ),
+                    child: UserAvatar(
+                      avatarUrl: user['avatar']?.toString(),
+                      username: user['username']?.toString() ?? '?',
+                      radius: 58,
+                      backgroundColor: AdminTheme.accentPurple,
+                      textColor: AdminTheme.accentPurple,
                     ),
                   ),
                 ),
@@ -177,22 +189,34 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
                   children: [
                     Text('Projects', style: GoogleFonts.orbitron(fontSize: 16, fontWeight: FontWeight.w600, color: AdminTheme.textPrimary)),
                     const SizedBox(height: 16),
-                    ...AdminMockData.mockProjects.where((p) => p['owner'] == user['username']).take(5).map((p) => Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Row(
-                        children: [
-                          Expanded(child: Text(p['title']?.toString() ?? '', style: GoogleFonts.rajdhani(color: AdminTheme.textPrimary))),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: AdminTheme.statusColor(p['status']?.toString() ?? '').withOpacity(0.2),
-                              borderRadius: BorderRadius.circular(4),
+                    if (_projects.isEmpty)
+                      Text('No projects', style: GoogleFonts.rajdhani(color: AdminTheme.textMuted))
+                    else
+                      ..._projects.take(5).map((p) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(p['title']?.toString() ?? 'Untitled', style: GoogleFonts.rajdhani(color: AdminTheme.textPrimary)),
+                                  if ((p['description'] ?? '').toString().isNotEmpty)
+                                    Text(p['description']?.toString() ?? '', style: GoogleFonts.rajdhani(color: AdminTheme.textSecondary, fontSize: 12)),
+                                ],
+                              ),
                             ),
-                            child: Text((p['status'] ?? '').toString(), style: GoogleFonts.rajdhani(color: AdminTheme.statusColor(p['status']?.toString() ?? ''), fontSize: 12)),
-                          ),
-                        ],
-                      ),
-                    )),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: AdminTheme.statusColor(p['status']?.toString() ?? 'unknown').withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text((p['status'] ?? 'unknown').toString().toUpperCase(), style: GoogleFonts.rajdhani(color: AdminTheme.statusColor(p['status']?.toString() ?? 'unknown'), fontSize: 12)),
+                            ),
+                          ],
+                        ),
+                      )),
                   ],
                 ),
               ),
@@ -209,15 +233,57 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
                   children: [
                     Text('Recent Activity', style: GoogleFonts.orbitron(fontSize: 16, fontWeight: FontWeight.w600, color: AdminTheme.textPrimary)),
                     const SizedBox(height: 16),
-                    ...AdminMockData.recentActivity.where((a) => a['user'] == user['username']).take(3).map((a) => Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: Text(
-                        '${a['detail']} - ${_formatDate(a['timestamp'])}',
-                        style: GoogleFonts.rajdhani(color: AdminTheme.textSecondary, fontSize: 14),
-                      ),
-                    )),
-                    if (AdminMockData.recentActivity.where((a) => a['user'] == user['username']).isEmpty)
-                      Text('No recent activity', style: GoogleFonts.rajdhani(color: AdminTheme.textMuted)),
+                    if (_activity.isEmpty)
+                      Text('No recent activity', style: GoogleFonts.rajdhani(color: AdminTheme.textMuted))
+                    else
+                      ..._activity.take(3).map((a) => Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 8,
+                              height: 8,
+                              decoration: BoxDecoration(
+                                color: a['type'] == 'login' ? AdminTheme.accentGreen : AdminTheme.accentNeon,
+                                shape: BoxShape.circle,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: Text(a['title']?.toString() ?? 'Activity', style: GoogleFonts.rajdhani(color: AdminTheme.textPrimary, fontSize: 13)),
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: a['type'] == 'login' ? AdminTheme.accentGreen.withOpacity(0.2) : AdminTheme.accentPurple.withOpacity(0.2),
+                                          borderRadius: BorderRadius.circular(3),
+                                        ),
+                                        child: Text(
+                                          a['type'] == 'login' ? 'LOGIN' : 'PROJECT',
+                                          style: GoogleFonts.rajdhani(
+                                            color: a['type'] == 'login' ? AdminTheme.accentGreen : AdminTheme.accentPurple,
+                                            fontSize: 9,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  if ((a['description'] ?? '').toString().isNotEmpty)
+                                    Text(a['description']?.toString() ?? '', style: GoogleFonts.rajdhani(color: AdminTheme.textSecondary, fontSize: 11)),
+                                  Text(_formatActivityTime(a['timestamp'] ?? a['createdAt']), style: GoogleFonts.rajdhani(color: AdminTheme.textMuted, fontSize: 11)),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      )),
                   ],
                 ),
               ),
@@ -316,6 +382,22 @@ class _UserDetailScreenState extends State<UserDetailScreen> {
     if (d == null) return '-';
     try {
       final dt = DateTime.parse(d.toString());
+      return '${dt.day}/${dt.month}/${dt.year}';
+    } catch (_) {
+      return d.toString();
+    }
+  }
+
+  String _formatActivityTime(dynamic d) {
+    if (d == null) return '-';
+    try {
+      final dt = DateTime.parse(d.toString());
+      final now = DateTime.now();
+      final diff = now.difference(dt);
+      if (diff.inSeconds < 60) return 'just now';
+      if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+      if (diff.inHours < 24) return '${diff.inHours}h ago';
+      if (diff.inDays < 7) return '${diff.inDays}d ago';
       return '${dt.day}/${dt.month}/${dt.year}';
     } catch (_) {
       return d.toString();

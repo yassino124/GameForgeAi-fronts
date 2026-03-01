@@ -2,10 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/app_constants.dart';
-import '../../../core/themes/app_theme.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/local_notifications_service.dart';
 import '../../../core/services/notifications_service.dart';
+import '../../../core/services/notifications_socket_service.dart';
 import '../../../core/services/templates_service.dart';
 import '../../widgets/widgets.dart';
 
@@ -22,11 +22,112 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   String? _error;
 
   final Set<String> _approvingNotificationIds = {};
+  
+  // Socket listener callback
+  void Function(Map<String, dynamic>)? _socketListener;
 
   @override
   void initState() {
     super.initState();
+    _initializeRealtimeNotifications();
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+  
+  @override
+  void dispose() {
+    // Remove socket listener when screen is disposed
+    if (_socketListener != null) {
+      NotificationsSocketService().removeListener(_socketListener!);
+    }
+    super.dispose();
+  }
+  
+  void _initializeRealtimeNotifications() {
+    final token = _getToken();
+    if (token == null || token.isEmpty) return;
+    
+    // Create listener callback
+    _socketListener = (notification) {
+      print('[NotificationsScreen] 📨 Received real-time notification: ${notification['title']}');
+      _handleRealtimeNotification(notification);
+    };
+    
+    // Connect to Socket.io if not already connected
+    if (!NotificationsSocketService().isConnected) {
+      print('[NotificationsScreen] 🔌 Connecting to Socket.io...');
+      NotificationsSocketService().connect(
+        baseUrl: 'http://localhost:3000',
+        token: token,
+      ).then((_) {
+        print('[NotificationsScreen] ✅ Socket.io connected');
+        // Add listener after connection
+        NotificationsSocketService().addListener(_socketListener!);
+      }).catchError((error) {
+        print('[NotificationsScreen] ❌ Failed to connect: $error');
+      });
+    } else {
+      // Already connected, just add listener
+      NotificationsSocketService().addListener(_socketListener!);
+    }
+  }
+  
+  void _handleRealtimeNotification(Map<String, dynamic> notification) {
+    if (!mounted) return;
+    
+    // Create notification item from socket data
+    final id = notification['id']?.toString() ?? DateTime.now().millisecondsSinceEpoch.toString();
+    final title = notification['title']?.toString() ?? 'Notification';
+    final message = notification['message']?.toString() ?? '';
+    final typeStr = notification['type']?.toString() ?? 'info';
+    final type = _mapType(typeStr);
+    
+    DateTime timestamp;
+    try {
+      final ts = notification['timestamp']?.toString() ?? '';
+      timestamp = DateTime.parse(ts).toLocal();
+    } catch (_) {
+      timestamp = DateTime.now();
+    }
+    
+    final newNotification = NotificationItem(
+      id: id,
+      title: title,
+      message: message,
+      timestamp: timestamp,
+      type: type,
+      isRead: false,
+      icon: _mapIcon(type),
+      data: notification['data'],
+    );
+    
+    setState(() {
+      // Add to the top of the list
+      _notifications.insert(0, newNotification);
+    });
+    
+    // Show a snackbar
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('$title: $message'),
+        duration: const Duration(seconds: 3),
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: _getTypeColor(type),
+      ),
+    );
+  }
+  
+  Color _getTypeColor(NotificationType type) {
+    switch (type) {
+      case NotificationType.success:
+        return Colors.green;
+      case NotificationType.warning:
+        return Colors.orange;
+      case NotificationType.error:
+        return Colors.red;
+      case NotificationType.info:
+      default:
+        return Colors.blue;
+    }
   }
 
   Future<void> _markAsRead(String notificationId) async {

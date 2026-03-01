@@ -362,7 +362,7 @@ class _TemplateUploadScreenState extends State<TemplateUploadScreen> {
         category: category.isEmpty ? null : category,
         tagsCsv: tags.isEmpty ? null : tags,
         price: double.tryParse(_priceController.text.trim()),
-      );
+      ).timeout(const Duration(minutes: 2));
 
       if (res['success'] == true) {
         if (!mounted) return;
@@ -373,6 +373,10 @@ class _TemplateUploadScreenState extends State<TemplateUploadScreen> {
 
       setState(() {
         _error = res['message']?.toString() ?? 'Upload failed';
+      });
+    } on TimeoutException {
+      setState(() {
+        _error = 'Upload timed out. Please try again or use a smaller ZIP.';
       });
     } catch (e) {
       setState(() {

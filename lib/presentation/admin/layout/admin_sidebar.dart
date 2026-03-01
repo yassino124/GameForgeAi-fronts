@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
 import '../constants/admin_theme.dart';
 import '../../../../core/providers/auth_provider.dart';
+import '../widgets/user_avatar.dart';
 
 class AdminSidebar extends StatelessWidget {
   const AdminSidebar({super.key});
@@ -78,8 +79,8 @@ class AdminSidebar extends StatelessWidget {
               // Nav items
               _NavItem(icon: Icons.dashboard, label: 'Overview', path: '/admin/overview', isActive: location == '/admin/overview'),
               _NavItem(icon: Icons.people, label: 'Users', path: '/admin/users', isActive: location.startsWith('/admin/users')),
-              _NavItem(icon: Icons.folder_special, label: 'Projects', path: '/admin/projects', isActive: location == '/admin/projects'),
-              _NavItem(icon: Icons.store, label: 'Marketplace', path: '/admin/marketplace', isActive: location == '/admin/marketplace'),
+              _NavItem(icon: Icons.folder_special, label: 'Games', path: '/admin/projects', isActive: location == '/admin/projects'),
+              _NavItem(icon: Icons.store, label: 'Templates', path: '/admin/marketplace', isActive: location == '/admin/marketplace'),
               _NavItem(icon: Icons.build, label: 'Builds', path: '/admin/builds', isActive: location == '/admin/builds'),
               _NavItem(icon: Icons.notifications, label: 'Notifications', path: '/admin/notifications', isActive: location == '/admin/notifications'),
               _NavItem(icon: Icons.settings, label: 'Settings', path: '/admin/settings', isActive: location == '/admin/settings'),
@@ -92,17 +93,12 @@ class AdminSidebar extends StatelessWidget {
                   children: [
                     Row(
                       children: [
-                        CircleAvatar(
+                        UserAvatar(
+                          avatarUrl: authProvider.user?['avatar']?.toString(),
+                          username: authProvider.user?['username']?.toString() ?? 'A',
                           radius: 20,
-                          backgroundColor: AdminTheme.accentPurple.withOpacity(0.3),
-                          child: Text(
-                            (authProvider.user?['username'] ?? 'A')[0].toUpperCase(),
-                            style: GoogleFonts.rajdhani(
-                              color: AdminTheme.accentPurple,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 18,
-                            ),
-                          ),
+                          backgroundColor: AdminTheme.accentPurple,
+                          textColor: AdminTheme.accentPurple,
                         ),
                         const SizedBox(width: 12),
                         Expanded(

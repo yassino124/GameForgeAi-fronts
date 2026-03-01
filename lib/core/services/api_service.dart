@@ -7,7 +7,12 @@ import 'package:http_parser/http_parser.dart';
 import 'package:mime/mime.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
+/// Callback invoked when user is force logged out (banned/suspended)
+typedef OnForceLogoutCallback = void Function();
+
 class ApiService {
+  /// Set this to handle force logouts due to banned/suspended status
+  static OnForceLogoutCallback? onForceLogout;
   static const String _configuredBaseUrl = String.fromEnvironment(
     'API_BASE_URL',
     defaultValue: 'http://127.0.0.1:3000/api',
@@ -100,7 +105,7 @@ class ApiService {
 
       final streamed = await request.send().timeout(_resolveTimeout(timeout));
       final response = await http.Response.fromStream(streamed);
-      return _handleResponse(response);
+      return await _handleResponse(response);
     } on SocketException catch (e) {
       return _errorResponse('Connection failed: ${e.message}\nURL: $baseUrl$endpoint');
     } on HttpException {
@@ -140,7 +145,7 @@ class ApiService {
         }
       }
 
-      return _handleResponse(response);
+      return await _handleResponse(response);
     } on SocketException catch (e) {
       return _errorResponse('Connection failed: ${e.message}\nURL: $baseUrl$endpoint');
     } on HttpException {
@@ -185,6 +190,26 @@ class ApiService {
     }
 
     return newAccessToken;
+  }
+
+  /// Clear all stored auth tokens and data
+  static Future<void> _clearAuthSession() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.remove('auth_token');
+    await prefs.remove('refresh_token');
+    await prefs.remove('user_data');
+    await prefs.remove('remember_me');
+    
+    // Invoke callback to notify app to redirect to login
+    onForceLogout?.call();
+  }
+
+  /// Check if error message indicates banned/suspended account
+  static bool _isBanOrSuspendError(String message) {
+    final lowerMessage = message.toLowerCase();
+    return lowerMessage.contains('banned') ||
+        lowerMessage.contains('suspended') ||
+        lowerMessage.contains('cannot be restored');
   }
 
   static Future<Map<String, dynamic>> multipart(
@@ -243,7 +268,67 @@ class ApiService {
 
       final streamed = await request.send().timeout(_timeout);
       final response = await http.Response.fromStream(streamed);
-      return _handleResponse(response);
+      return await _handleResponse(response);
+    } on SocketException catch (e) {
+      return _errorResponse('Connection failed: ${e.message}\nURL: $baseUrl$endpoint');
+    } on HttpException {
+      return _errorResponse('HTTP error occurred');
+    } catch (e) {
+      return _errorResponse('Network error: ${e.toString()}');
+    }
+  }
+
+  /// Multipart request with bytes (for web and other platforms)
+  static Future<Map<String, dynamic>> multipartBytes(
+    String endpoint, {
+    required String method,
+    required String fileName,
+    required List<int> bytes,
+    required String fileField,
+    String? token,
+    Map<String, String>? fields,
+    Map<String, String>? headers,
+    Duration? timeout,
+  }) async {
+    try {
+      final request = http.MultipartRequest(
+        method,
+        Uri.parse('$baseUrl$endpoint'),
+      );
+
+      if (token != null) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
+      request.headers['Accept'] = 'application/json';
+
+      if (headers != null) {
+        request.headers.addAll(headers);
+      }
+
+      if (fields != null) {
+        request.fields.addAll(fields);
+      }
+
+      // Detect MIME type from bytes and filename
+      final detectedMime = lookupMimeType(fileName) ?? 'application/octet-stream';
+      MediaType? mediaType;
+      final parts = detectedMime.split('/');
+      if (parts.length == 2) {
+        mediaType = MediaType(parts[0], parts[1]);
+      }
+
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          fileField,
+          bytes,
+          filename: fileName,
+          contentType: mediaType,
+        ),
+      );
+
+      final streamed = await request.send().timeout(_timeout);
+      final response = await http.Response.fromStream(streamed);
+      return await _handleResponse(response);
     } on SocketException catch (e) {
       return _errorResponse('Connection failed: ${e.message}\nURL: $baseUrl$endpoint');
     } on HttpException {
@@ -328,7 +413,7 @@ class ApiService {
         }
       }
 
-      return _handleResponse(response);
+      return await _handleResponse(response);
     } on SocketException catch (e) {
       return _errorResponse('Connection failed: ${e.message}\nURL: $baseUrl$endpoint');
     } on HttpException {
@@ -368,7 +453,7 @@ class ApiService {
         }
       }
 
-      return _handleResponse(response);
+      return await _handleResponse(response);
     } on SocketException catch (e) {
       return _errorResponse('Connection failed: ${e.message}\nURL: $baseUrl$endpoint');
     } on HttpException {
@@ -408,7 +493,7 @@ class ApiService {
         }
       }
 
-      return _handleResponse(response);
+      return await _handleResponse(response);
     } on SocketException catch (e) {
       return _errorResponse('Connection failed: ${e.message}\nURL: $baseUrl$endpoint');
     } on HttpException {
@@ -445,7 +530,7 @@ class ApiService {
         }
       }
 
-      return _handleResponse(response);
+      return await _handleResponse(response);
     } on SocketException catch (e) {
       return _errorResponse('Connection failed: ${e.message}\nURL: $baseUrl$endpoint');
     } on HttpException {
@@ -477,7 +562,7 @@ class ApiService {
   }
 
   // Handle HTTP response
-  static Map<String, dynamic> _handleResponse(http.Response response) {
+  static Future<Map<String, dynamic>> _handleResponse(http.Response response) async {
     try {
       final responseData = jsonDecode(response.body);
       
@@ -493,6 +578,12 @@ class ApiService {
           fallback: responseData['error'],
           statusCode: response.statusCode,
         );
+
+        // If user is banned/suspended, force logout
+        if (response.statusCode == 401 && _isBanOrSuspendError(message)) {
+          await _clearAuthSession();
+        }
+
         return {
           'success': false,
           'message': message,

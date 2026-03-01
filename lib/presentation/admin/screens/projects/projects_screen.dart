@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../../constants/admin_theme.dart';
 import '../../providers/admin_provider.dart';
 import '../../widgets/status_chip.dart';
+import 'archived_projects_screen.dart';
 
 class ProjectsScreen extends StatefulWidget {
   const ProjectsScreen({super.key});
@@ -36,7 +37,10 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
   Widget build(BuildContext context) {
     return Consumer<AdminProvider>(
       builder: (context, provider, _) {
-        final projects = provider.filteredProjects;
+        final filteredProjects = provider.filteredProjects;
+        final projects = provider.paginatedProjects;
+        final currentPage = provider.projectsCurrentPage;
+        final totalPages = provider.projectsTotalPages;
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -99,7 +103,7 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                   ),
                 ),
               )
-            else if (projects.isEmpty)
+            else if (filteredProjects.isEmpty)
               const Padding(
                 padding: EdgeInsets.all(48),
                 child: Center(
@@ -115,35 +119,69 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                 ),
               )
             else
-              // Grid - NO Expanded here
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final crossAxisCount = constraints.maxWidth > 1400 ? 4
-                    : (constraints.maxWidth > 1000 ? 3
-                    : (constraints.maxWidth > 600 ? 2 : 1));
-                  return GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: crossAxisCount,
-                      childAspectRatio: 0.85,
-                      crossAxisSpacing: 20,
-                      mainAxisSpacing: 20,
-                    ),
-                    itemCount: projects.length,
-                    itemBuilder: (context, i) {
-                      final p = projects[i];
-                      final color = _categoryColors[p['templateName']] ?? _categoryColors['default']!;
-                      return _ProjectCard(
-                        project: p,
-                        color: color,
-                        onView: () => _showProjectDetail(context, p),
-                        onArchive: () => _showConfirm(context, 'Archive', 'Archive this project?', p),
-                        onDelete: () => _showConfirm(context, 'Delete', 'Delete this project permanently?', p),
+              // Grid with pagination
+              Column(
+                children: [
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final crossAxisCount = constraints.maxWidth > 1400 ? 4
+                        : (constraints.maxWidth > 1000 ? 3
+                        : (constraints.maxWidth > 600 ? 2 : 1));
+                      return GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: crossAxisCount,
+                          childAspectRatio: 0.85,
+                          crossAxisSpacing: 20,
+                          mainAxisSpacing: 20,
+                        ),
+                        itemCount: projects.length,
+                        itemBuilder: (context, i) {
+                          final p = projects[i];
+                          final color = _categoryColors[p['templateName']] ?? _categoryColors['default']!;
+                          return _ProjectCard(
+                            project: p,
+                            color: color,
+                            onView: () => _showProjectDetail(context, p),
+                            onDelete: () => _showConfirm(context, 'Delete', 'Delete this project permanently?', p),
+                          );
+                        },
                       );
                     },
-                  );
-                },
+                  ),
+                  // Pagination controls
+                  if (totalPages > 1) ...[
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.chevron_left, color: AdminTheme.textSecondary),
+                          onPressed: provider.projectsHasPrevPage ? provider.prevProjectsPage : null,
+                          tooltip: 'Previous page',
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: AdminTheme.bgSecondary,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: AdminTheme.borderGlow),
+                          ),
+                          child: Text(
+                            'Page $currentPage of $totalPages',
+                            style: GoogleFonts.rajdhani(color: AdminTheme.textPrimary),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.chevron_right, color: AdminTheme.textSecondary),
+                          onPressed: provider.projectsHasNextPage ? provider.nextProjectsPage : null,
+                          tooltip: 'Next page',
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
               ),
           ],
         );
@@ -187,9 +225,27 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
-            onPressed: () {
+            onPressed: () async {
               Navigator.pop(ctx);
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$action requested for ${p['title']}'), backgroundColor: AdminTheme.accentGreen));
+              final provider = context.read<AdminProvider>();
+              final projectId = p['_id'].toString();
+              
+              bool success = false;
+              if (action == 'Archive') {
+                success = await provider.archiveProject(projectId);
+              } else if (action == 'Delete') {
+                success = await provider.hideProject(projectId);
+              }
+              
+              if (success) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('$action successful'), backgroundColor: AdminTheme.accentGreen),
+                );
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('$action failed'), backgroundColor: AdminTheme.accentRed),
+                );
+              }
             },
             style: ElevatedButton.styleFrom(
               backgroundColor: action == 'Delete' ? AdminTheme.accentRed : AdminTheme.accentNeon,
@@ -217,10 +273,9 @@ class _ProjectCard extends StatefulWidget {
   final Map<String, dynamic> project;
   final Color color;
   final VoidCallback onView;
-  final VoidCallback onArchive;
   final VoidCallback onDelete;
 
-  const _ProjectCard({required this.project, required this.color, required this.onView, required this.onArchive, required this.onDelete});
+  const _ProjectCard({required this.project, required this.color, required this.onView, required this.onDelete});
 
   @override
   State<_ProjectCard> createState() => _ProjectCardState();
@@ -233,7 +288,6 @@ class _ProjectCardState extends State<_ProjectCard> {
   Widget build(BuildContext context) {
     final p = widget.project;
     final status = (p['status'] ?? '').toString();
-    final isArchived = status == 'archived';
 
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
@@ -283,11 +337,6 @@ class _ProjectCardState extends State<_ProjectCard> {
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         IconButton(icon: const Icon(Icons.visibility, size: 18, color: AdminTheme.accentNeon), onPressed: widget.onView, tooltip: 'View'),
-                        IconButton(
-                          icon: Icon(isArchived ? Icons.restore : Icons.archive, size: 18, color: AdminTheme.accentPurple),
-                          onPressed: widget.onArchive,
-                          tooltip: isArchived ? 'Restore' : 'Archive',
-                        ),
                         IconButton(icon: const Icon(Icons.delete, size: 18, color: AdminTheme.accentRed), onPressed: widget.onDelete, tooltip: 'Delete'),
                       ],
                     ),

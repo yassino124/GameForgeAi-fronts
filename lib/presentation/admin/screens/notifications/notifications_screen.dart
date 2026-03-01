@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import '../../constants/admin_theme.dart';
-import '../../data/mock_data.dart';
+import '../../providers/admin_provider.dart';
+import '../../widgets/toast_system.dart';
 
 class NotificationsScreen extends StatefulWidget {
   const NotificationsScreen({super.key});
@@ -14,12 +16,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   final _titleController = TextEditingController();
   final _messageController = TextEditingController();
   String _target = 'All Users';
+  bool _sending = false;
 
   @override
   void initState() {
     super.initState();
     _titleController.addListener(() => setState(() {}));
     _messageController.addListener(() => setState(() {}));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<AdminProvider>().fetchNotificationsHistory();
+    });
   }
 
   @override
@@ -29,14 +35,46 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     super.dispose();
   }
 
-  void _sendNotification(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: const Text('Notification sent successfully'),
-        backgroundColor: AdminTheme.accentGreen,
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
+  Future<void> _sendNotification(BuildContext context) async {
+    print('DEBUG: Send button pressed');
+    if (_titleController.text.trim().isEmpty || _messageController.text.trim().isEmpty) {
+      context.showError('Title and message are required');
+      return;
+    }
+
+    setState(() => _sending = true);
+
+    try {
+      final provider = context.read<AdminProvider>();
+      final success = await provider.sendRealtimeNotification(
+        title: _titleController.text.trim(),
+        message: _messageController.text.trim(),
+        target: _target,
+      );
+
+      print('DEBUG: sendRealtimeNotification returned: $success');
+
+      if (!mounted) return;
+
+      if (success) {
+        context.showSuccess('Notification sent successfully to all users!');
+        _titleController.clear();
+        _messageController.clear();
+        // Refresh notifications history
+        provider.fetchNotificationsHistory();
+      } else {
+        context.showError('Failed to send notification');
+      }
+    } catch (e) {
+      print('DEBUG: Exception caught in _sendNotification: $e');
+      if (mounted) {
+        context.showError('Error: $e');
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _sending = false);
+      }
+    }
   }
 
   @override
@@ -88,11 +126,13 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     ),
                     const SizedBox(height: 24),
                     ElevatedButton(
-                      onPressed: () => _sendNotification(context),
+                      onPressed: _sending ? null : () => _sendNotification(context),
                       style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.accentNeon, foregroundColor: AdminTheme.bgPrimary),
                       child: Padding(
                         padding: const EdgeInsets.symmetric(vertical: 12),
-                        child: Text('Send', style: GoogleFonts.rajdhani(fontSize: 16, fontWeight: FontWeight.w600)),
+                        child: _sending
+                            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)))
+                            : Text('Send', style: GoogleFonts.rajdhani(fontSize: 16, fontWeight: FontWeight.w600)),
                       ),
                     ),
                   ],
@@ -144,31 +184,55 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: AdminTheme.borderGlow),
                 ),
-                child: Column(
-                  children: AdminMockData.mockNotifications.take(20).map((n) => Padding(
-                    padding: const EdgeInsets.only(bottom: 16),
-                    child: Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(n['title']?.toString() ?? '', style: GoogleFonts.orbitron(fontSize: 14, color: AdminTheme.textPrimary)),
-                              Text(n['target']?.toString() ?? '', style: GoogleFonts.rajdhani(color: AdminTheme.textSecondary, fontSize: 12)),
-                              const SizedBox(height: 4),
-                              LinearProgressIndicator(
-                                value: (n['readRate'] ?? 0).toDouble(),
-                                backgroundColor: AdminTheme.bgTertiary,
-                                color: AdminTheme.accentGreen,
-                              ),
-                            ],
-                          ),
+                child: Consumer<AdminProvider>(
+                  builder: (context, provider, _) {
+                    final notifications = provider.notificationsHistory;
+                    final loading = provider.notificationsHistoryLoading;
+
+                    if (loading) {
+                      return const Padding(
+                        padding: EdgeInsets.all(24),
+                        child: CircularProgressIndicator(),
+                      );
+                    }
+
+                    if (notifications.isEmpty) {
+                      return Padding(
+                        padding: const EdgeInsets.all(24),
+                        child: Text(
+                          'No notifications sent',
+                          style: TextStyle(color: AdminTheme.textSecondary),
                         ),
-                        Text(_formatDate(n['sentAt']), style: GoogleFonts.jetBrainsMono(color: AdminTheme.textMuted, fontSize: 12)),
-                      ],
-                    ),
-                  )).toList(),
+                      );
+                    }
+
+                    return Column(
+                      children: notifications.take(20).map((n) => Padding(
+                        padding: const EdgeInsets.only(bottom: 16),
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(n['title']?.toString() ?? '', style: GoogleFonts.orbitron(fontSize: 14, color: AdminTheme.textPrimary)),
+                                  Text(n['target']?.toString() ?? '', style: GoogleFonts.rajdhani(color: AdminTheme.textSecondary, fontSize: 12)),
+                                  const SizedBox(height: 4),
+                                  LinearProgressIndicator(
+                                    value: (n['readRate'] ?? 0).toDouble(),
+                                    backgroundColor: AdminTheme.bgTertiary,
+                                    color: AdminTheme.accentGreen,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Text(_formatDate(n['sentAt']), style: GoogleFonts.jetBrainsMono(color: AdminTheme.textMuted, fontSize: 12)),
+                          ],
+                        ),
+                      )).toList(),
+                    );
+                  },
                 ),
               ),
             ],

@@ -2,8 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:provider/provider.dart';
+import 'package:image_picker/image_picker.dart';
 import '../../constants/admin_theme.dart';
 import '../../../../core/providers/auth_provider.dart';
+import '../../widgets/user_avatar.dart';
+
+// Conditional import for dart:io (not available on web)
+import 'dart:io' as io show File;
 
 class AdminProfileScreen extends StatefulWidget {
   const AdminProfileScreen({super.key});
@@ -22,7 +27,9 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
   
   bool _isLoading = false;
   bool _showPasswordFields = false;
+  bool _isUploadingAvatar = false;
   String? _errorMessage;
+  XFile? _selectedAvatarFile;
 
   @override
   void initState() {
@@ -45,6 +52,68 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
     _currentPasswordController.dispose();
     _confirmPasswordController.dispose();
     super.dispose();
+  }
+
+  Future<void> _pickAndUploadAvatar() async {
+    try {
+      final imagePicker = ImagePicker();
+      final pickedFile = await imagePicker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 80,
+      );
+
+      if (pickedFile == null) return;
+
+      setState(() {
+        _selectedAvatarFile = pickedFile;
+        _isUploadingAvatar = true;
+        _errorMessage = null;
+      });
+
+      final authProvider = context.read<AuthProvider>();
+      
+      // Check if running on web
+      const isWeb = bool.fromEnvironment('dart.library.html', defaultValue: false);
+      
+      bool success;
+      if (isWeb) {
+        // For web, use uploadAvatarWeb with bytes
+        success = await authProvider.uploadAvatarWeb(
+          fileName: _selectedAvatarFile!.name,
+          bytes: await _selectedAvatarFile!.readAsBytes(),
+        );
+      } else {
+        // For native platforms, use updateAvatar with File
+        success = await authProvider.updateAvatar(
+          io.File(_selectedAvatarFile!.path),
+        );
+      }
+
+      if (!mounted) return;
+
+      if (success) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Avatar uploaded successfully'),
+            backgroundColor: AdminTheme.accentGreen,
+          ),
+        );
+      } else {
+        setState(() {
+          _errorMessage = authProvider.errorMessage ?? 'Failed to upload avatar';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Error uploading avatar: ${e.toString()}';
+      });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isUploadingAvatar = false;
+        });
+      }
+    }
   }
 
   Future<void> _updateProfile() async {
@@ -126,17 +195,53 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
               ),
               child: Row(
                 children: [
-                  CircleAvatar(
-                    radius: 40,
-                    backgroundColor: AdminTheme.accentPurple.withOpacity(0.3),
-                    child: Text(
-                      (user?['username'] ?? 'A')[0].toUpperCase(),
-                      style: GoogleFonts.rajdhani(
-                        color: AdminTheme.accentPurple,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 24,
+                  Stack(
+                    children: [
+                      UserAvatar(
+                        avatarUrl: user?['avatar']?.toString(),
+                        username: user?['username']?.toString() ?? 'A',
+                        radius: 40,
+                        backgroundColor: AdminTheme.accentPurple,
+                        textColor: AdminTheme.accentPurple,
                       ),
-                    ),
+                      if (!_isUploadingAvatar)
+                        Positioned(
+                          bottom: 0,
+                          right: 0,
+                          child: GestureDetector(
+                            onTap: _pickAndUploadAvatar,
+                            child: Container(
+                              width: 32,
+                              height: 32,
+                              decoration: BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: AdminTheme.accentNeon,
+                                border: Border.all(color: AdminTheme.bgSecondary, width: 2),
+                              ),
+                              child: const Icon(Icons.camera_alt, size: 16, color: AdminTheme.bgPrimary),
+                            ),
+                          ),
+                        )
+                      else
+                        Positioned(
+                          bottom: 0,
+                          right: 0,
+                          child: Container(
+                            width: 32,
+                            height: 32,
+                            decoration: BoxDecoration(
+                              shape: BoxShape.circle,
+                              color: AdminTheme.accentGreen,
+                              border: Border.all(color: AdminTheme.bgSecondary, width: 2),
+                            ),
+                            child: const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation(AdminTheme.bgPrimary)),
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                   const SizedBox(width: 20),
                   Expanded(
@@ -296,7 +401,7 @@ class _AdminProfileScreenState extends State<AdminProfileScreen> {
                             }
                           });
                         },
-                        activeColor: AdminTheme.accentNeon,
+                        activeThumbColor: AdminTheme.accentNeon,
                       ),
                     ],
                   ),

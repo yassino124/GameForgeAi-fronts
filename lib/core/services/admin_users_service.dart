@@ -45,6 +45,14 @@ class AdminUsersService {
     return ApiService.get('/admin/users/$id', token: token);
   }
 
+  static Future<Map<String, dynamic>> getUserProjects(String userId, String token) {
+    return ApiService.get('/admin/users/$userId/projects', token: token);
+  }
+
+  static Future<Map<String, dynamic>> getUserActivity(String userId, String token) {
+    return ApiService.get('/admin/users/$userId/activity', token: token);
+  }
+
   static Future<Map<String, dynamic>> updateUserStatus({
     required String id,
     required String status,

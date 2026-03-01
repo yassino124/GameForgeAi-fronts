@@ -3,6 +3,8 @@ import 'admin_sidebar.dart';
 import 'admin_header.dart';
 import '../constants/admin_theme.dart';
 import '../widgets/toast_system.dart';
+import '../widgets/floating_mic_button.dart';
+import '../widgets/ai_search_overlay.dart';
 
 class AdminShell extends StatelessWidget {
   final String title;
@@ -42,7 +44,16 @@ class AdminShell extends StatelessWidget {
               ),
             ],
           ),
-          const ToastSystem(key: ValueKey('toast_system')),
+          ToastSystem(key: ToastSystem.globalKey),
+          FloatingMicButton(
+            onTap: () {
+              showDialog(
+                context: context,
+                barrierColor: Colors.black54,
+                builder: (ctx) => const AiSearchOverlay(),
+              );
+            },
+          ),
         ],
       ),
     );

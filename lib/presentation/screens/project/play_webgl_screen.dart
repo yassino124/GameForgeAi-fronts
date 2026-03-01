@@ -130,7 +130,7 @@ class _PlayWebglScreenState extends State<PlayWebglScreen> {
     final res = await ProjectsService.getProjectRuntimeConfig(token: token, projectId: pid);
     final data = res['data'];
     if (res['success'] == true && data is Map) {
-      return Map<String, dynamic>.from(data as Map);
+      return Map<String, dynamic>.from(data);
     }
     return null;
   }
@@ -404,7 +404,7 @@ class _PlayWebglScreenState extends State<PlayWebglScreen> {
 
     bool fogEnabled = (cfg?['fogEnabled'] is bool) ? (cfg!['fogEnabled'] as bool) : false;
     double fogDensity = (cfg?['fogDensity'] is num) ? (cfg!['fogDensity'] as num).toDouble() : 0.0;
-    double cameraZoom = (cfg?['cameraZoom'] is num) ? (cfg!['cameraZoom'] as num).toDouble() : 0.0;
+    double cameraZoom = (cfg?['cameraZoom'] is num) ? (cfg!['cameraZoom'] as num).toDouble() : 1.0;
     double gravityY = (cfg?['gravityY'] is num) ? (cfg!['gravityY'] as num).toDouble() : 0.0;
     double jumpForce = (cfg?['jumpForce'] is num) ? (cfg!['jumpForce'] as num).toDouble() : 0.0;
 
@@ -1773,7 +1773,6 @@ class _PlayWebglScreenState extends State<PlayWebglScreen> {
                     children: [
                       _TouchKey(
                         label: 'Left',
-                        child: const Icon(Icons.chevron_left_rounded, size: 28),
                         size: 62,
                         haptic: true,
                         onDown: () async {
@@ -1785,11 +1784,11 @@ class _PlayWebglScreenState extends State<PlayWebglScreen> {
                           await _sendKey(key: 'ArrowLeft', code: 'ArrowLeft', down: false);
                           await _sendKey(key: 'a', code: 'KeyA', down: false);
                         },
+                        child: const Icon(Icons.chevron_left_rounded, size: 28),
                       ),
                       const SizedBox(width: 10),
                       _TouchKey(
                         label: 'Jump',
-                        child: const Icon(Icons.keyboard_arrow_up_rounded, size: 28),
                         size: 62,
                         haptic: true,
                         onDown: () async {
@@ -1803,11 +1802,11 @@ class _PlayWebglScreenState extends State<PlayWebglScreen> {
                           await _sendKey(key: 'w', code: 'KeyW', down: false);
                           await _sendKey(key: 'ArrowUp', code: 'ArrowUp', down: false);
                         },
+                        child: const Icon(Icons.keyboard_arrow_up_rounded, size: 28),
                       ),
                       const SizedBox(width: 10),
                       _TouchKey(
                         label: 'Right',
-                        child: const Icon(Icons.chevron_right_rounded, size: 28),
                         size: 62,
                         haptic: true,
                         onDown: () async {
@@ -1819,6 +1818,7 @@ class _PlayWebglScreenState extends State<PlayWebglScreen> {
                           await _sendKey(key: 'ArrowRight', code: 'ArrowRight', down: false);
                           await _sendKey(key: 'd', code: 'KeyD', down: false);
                         },
+                        child: const Icon(Icons.chevron_right_rounded, size: 28),
                       ),
                     ],
                   ),
@@ -1862,7 +1862,6 @@ class _TouchKey extends StatefulWidget {
   final bool haptic;
 
   const _TouchKey({
-    super.key,
     required this.label,
     this.child,
     required this.onDown,

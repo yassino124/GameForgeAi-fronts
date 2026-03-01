@@ -124,7 +124,7 @@ class _ColorHexRow extends StatelessWidget {
             height: 28,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: (color ?? cs.surfaceVariant),
+              color: (color ?? cs.surfaceContainerHighest),
               border: Border.all(color: cs.outlineVariant.withOpacity(0.7)),
               boxShadow: AppShadows.boxShadowSmall,
             ),
@@ -174,7 +174,7 @@ class _AIConfigurationScreenState extends State<AIConfigurationScreen> with Sing
   double _speed = 7.0;
   bool _fogEnabled = false;
   double _fogDensity = 0.0;
-  double _cameraZoom = 0.0;
+  double _cameraZoom = 1.0;
   double _gravityY = 0.0;
   double _jumpForce = 0.0;
 
@@ -233,7 +233,7 @@ class _AIConfigurationScreenState extends State<AIConfigurationScreen> with Sing
         patch = null;
       }
     }
-    if (patch is Map) return Map<String, dynamic>.from(patch as Map);
+    if (patch is Map) return Map<String, dynamic>.from(patch);
     return null;
   }
 
@@ -292,7 +292,7 @@ class _AIConfigurationScreenState extends State<AIConfigurationScreen> with Sing
       accent = '#F59E0B';
     }
 
-    double cameraZoom = 0.0;
+    double cameraZoom = 1.0;
     if (s.contains('close camera') || s.contains('zoom in')) cameraZoom = 18.0;
     if (s.contains('far camera') || s.contains('zoom out')) cameraZoom = 10.0;
 
@@ -373,7 +373,7 @@ class _AIConfigurationScreenState extends State<AIConfigurationScreen> with Sing
             try {
               final decoded = jsonDecode(s);
               if (decoded is Map) {
-                patch = Map<String, dynamic>.from(decoded as Map);
+                patch = Map<String, dynamic>.from(decoded);
                 break;
               }
             } catch (_) {}
@@ -463,7 +463,7 @@ class _AIConfigurationScreenState extends State<AIConfigurationScreen> with Sing
               height: 18,
               decoration: BoxDecoration(
                 shape: BoxShape.circle,
-                color: c ?? cs.surfaceVariant,
+                color: c ?? cs.surfaceContainerHighest,
                 border: Border.all(color: cs.outlineVariant.withOpacity(0.7)),
               ),
             );
@@ -497,7 +497,7 @@ class _AIConfigurationScreenState extends State<AIConfigurationScreen> with Sing
                                   height: 34,
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
-                                    color: _parseHexToColor(hex) ?? cs.surfaceVariant,
+                                    color: _parseHexToColor(hex) ?? cs.surfaceContainerHighest,
                                     border: Border.all(color: cs.outlineVariant.withOpacity(0.7)),
                                   ),
                                 ),
@@ -931,7 +931,7 @@ class _AIConfigurationScreenState extends State<AIConfigurationScreen> with Sing
                 ),
                 const SizedBox(height: AppSpacing.sm),
                 DropdownButtonFormField<String>(
-                  value: _buildTarget,
+                  initialValue: _buildTarget,
                   decoration: const InputDecoration(),
                   items: const [
                     DropdownMenuItem(value: 'webgl', child: Text('Web (WebGL)')),
@@ -1790,7 +1790,7 @@ class _AIConfigurationScreenState extends State<AIConfigurationScreen> with Sing
           Switch(
             value: value,
             onChanged: onChanged,
-            activeColor: cs.primary,
+            activeThumbColor: cs.primary,
           ),
         ],
       ),

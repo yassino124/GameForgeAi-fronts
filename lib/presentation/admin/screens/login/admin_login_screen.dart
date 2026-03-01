@@ -17,6 +17,7 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isLoading = false;
+  bool _passwordVisible = false;
   String? _errorMessage;
 
   @override
@@ -179,10 +180,17 @@ class _AdminLoginScreenState extends State<AdminLoginScreen> {
                         const SizedBox(height: 16),
                         TextFormField(
                           controller: _passwordController,
-                          obscureText: true,
-                          decoration: const InputDecoration(
+                          obscureText: !_passwordVisible,
+                          decoration: InputDecoration(
                             labelText: 'Password',
-                            prefixIcon: Icon(Icons.lock_outline, color: AdminTheme.textSecondary),
+                            prefixIcon: const Icon(Icons.lock_outline, color: AdminTheme.textSecondary),
+                            suffixIcon: IconButton(
+                              icon: Icon(
+                                _passwordVisible ? Icons.visibility : Icons.visibility_off,
+                                color: AdminTheme.textSecondary,
+                              ),
+                              onPressed: () => setState(() => _passwordVisible = !_passwordVisible),
+                            ),
                           ),
                           validator: (v) => v == null || v.isEmpty ? 'Required' : null,
                           style: const TextStyle(color: AdminTheme.textPrimary),

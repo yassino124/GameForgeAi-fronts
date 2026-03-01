@@ -6,6 +6,8 @@ import '../constants/admin_theme.dart';
 enum ToastType { success, error, warning, info }
 
 class ToastSystem extends StatefulWidget {
+  static final GlobalKey<_ToastSystemState> globalKey = GlobalKey<_ToastSystemState>();
+
   const ToastSystem({super.key});
 
   @override
@@ -14,7 +16,6 @@ class ToastSystem extends StatefulWidget {
 
 class _ToastSystemState extends State<ToastSystem> {
   static final List<ToastData> _toasts = [];
-  static final GlobalKey<_ToastSystemState> _key = GlobalKey();
 
   static void show(String message, {ToastType type = ToastType.info, Duration? duration}) {
     final toast = ToastData(
@@ -24,12 +25,12 @@ class _ToastSystemState extends State<ToastSystem> {
     );
     
     _toasts.add(toast);
-    _key.currentState?._addToast(toast);
+    ToastSystem.globalKey.currentState?._addToast(toast);
     
     // Auto remove after duration
     Future.delayed(toast.duration, () {
       _toasts.remove(toast);
-      _key.currentState?._removeToast(toast);
+      ToastSystem.globalKey.currentState?._removeToast(toast);
     });
   }
 

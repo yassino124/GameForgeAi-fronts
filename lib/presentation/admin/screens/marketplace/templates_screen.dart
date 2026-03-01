@@ -44,10 +44,13 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
   Widget build(BuildContext context) {
     return Consumer<AdminProvider>(
       builder: (context, provider, _) {
-        final templates = provider.filteredTemplates;
+        final filteredTemplates = provider.filteredTemplates;
+        final templates = provider.paginatedTemplates;
         final isGrid = provider.marketplaceGridView;
         final isLoading = provider.templatesLoading;
         final error = provider.templatesError;
+        final currentPage = provider.templatesCurrentPage;
+        final totalPages = provider.templatesTotalPages;
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -102,7 +105,7 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
                   ),
                 ),
               )
-            else if (templates.isEmpty)
+            else if (filteredTemplates.isEmpty)
               const Center(
                 child: Padding(
                   padding: EdgeInsets.all(40.0),
@@ -113,33 +116,104 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
                 ),
               )
             else if (isGrid)
-              LayoutBuilder(
-                builder: (context, constraints) {
-                  final crossAxisCount = constraints.maxWidth > 1200 ? 4 : (constraints.maxWidth > 800 ? 3 : 2);
-                  return GridView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: crossAxisCount,
-                      childAspectRatio: 0.65,
-                      crossAxisSpacing: 20,
-                      mainAxisSpacing: 20,
+              Column(
+                children: [
+                  LayoutBuilder(
+                    builder: (context, constraints) {
+                      final crossAxisCount = constraints.maxWidth > 1200 ? 4 : (constraints.maxWidth > 800 ? 3 : 2);
+                      return GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: crossAxisCount,
+                          childAspectRatio: 0.65,
+                          crossAxisSpacing: 20,
+                          mainAxisSpacing: 20,
+                        ),
+                        itemCount: templates.length,
+                        itemBuilder: (context, i) => _TemplateCard(
+                          template: templates[i],
+                          color: _categoryColors[templates[i]['category']] ?? _categoryColors['default']!,
+                          onEdit: () => _showTemplateModal(context, templates[i]),
+                          onToggle: () => _showToggleConfirm(context, templates[i]),
+                        ),
+                      );
+                    }
+                  ),
+                  // Pagination controls
+                  if (totalPages > 1) ...[
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.chevron_left, color: AdminTheme.textSecondary),
+                          onPressed: provider.templatesHasPrevPage ? provider.prevTemplatesPage : null,
+                          tooltip: 'Previous page',
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: AdminTheme.bgSecondary,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: AdminTheme.borderGlow),
+                          ),
+                          child: Text(
+                            'Page $currentPage of $totalPages',
+                            style: GoogleFonts.rajdhani(color: AdminTheme.textPrimary),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.chevron_right, color: AdminTheme.textSecondary),
+                          onPressed: provider.templatesHasNextPage ? provider.nextTemplatesPage : null,
+                          tooltip: 'Next page',
+                        ),
+                      ],
                     ),
-                    itemCount: templates.length,
-                    itemBuilder: (context, i) => _TemplateCard(
-                      template: templates[i],
-                      color: _categoryColors[templates[i]['category']] ?? _categoryColors['default']!,
-                      onEdit: () => _showTemplateModal(context, templates[i]),
-                    ),
-                  );
-              }
+                  ],
+                ],
               )
             else
-              ...templates.map((t) => _TemplateListTile(
-                template: t,
-                color: _categoryColors[t['category']] ?? _categoryColors['default']!,
-                onEdit: () => _showTemplateModal(context, t),
-              )),
+              Column(
+                children: [
+                  ...templates.map((t) => _TemplateListTile(
+                    template: t,
+                    color: _categoryColors[t['category']] ?? _categoryColors['default']!,
+                    onEdit: () => _showTemplateModal(context, t),
+                  )),
+                  // Pagination controls for list view
+                  if (totalPages > 1) ...[
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.chevron_left, color: AdminTheme.textSecondary),
+                          onPressed: provider.templatesHasPrevPage ? provider.prevTemplatesPage : null,
+                          tooltip: 'Previous page',
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: AdminTheme.bgSecondary,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: AdminTheme.borderGlow),
+                          ),
+                          child: Text(
+                            'Page $currentPage of $totalPages',
+                            style: GoogleFonts.rajdhani(color: AdminTheme.textPrimary),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.chevron_right, color: AdminTheme.textSecondary),
+                          onPressed: provider.templatesHasNextPage ? provider.nextTemplatesPage : null,
+                          tooltip: 'Next page',
+                        ),
+                      ],
+                    ),
+                  ],
+                ],
+              ),
           ],
         );
       },
@@ -153,6 +227,48 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
       builder: (ctx) => template != null
           ? _EditTemplateDialog(template: template)
           : _AddTemplateDialog(),
+    );
+  }
+
+  void _showToggleConfirm(BuildContext context, Map<String, dynamic> template) {
+    final isActive = template['isActive'] != false;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AdminTheme.bgSecondary,
+        title: Text(isActive ? 'Deactivate Template' : 'Activate Template', 
+          style: const TextStyle(color: AdminTheme.textPrimary)),
+        content: Text(
+          isActive 
+            ? 'This template will no longer appear to users'
+            : 'This template will be visible to users again',
+          style: const TextStyle(color: AdminTheme.textSecondary),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final provider = context.read<AdminProvider>();
+              final success = await provider.toggleTemplate(template['_id'].toString());
+              if (success) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text('Template ${isActive ? 'deactivated' : 'activated'}'), backgroundColor: AdminTheme.accentGreen),
+                );
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: const Text('Failed to toggle template'), backgroundColor: AdminTheme.accentRed),
+                );
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AdminTheme.accentOrange,
+              foregroundColor: AdminTheme.bgPrimary,
+            ),
+            child: Text(isActive ? 'Deactivate' : 'Activate'),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -175,6 +291,7 @@ class _AddTemplateDialogState extends State<_AddTemplateDialog> {
   Uint8List? _previewImageBytes;
   String? _zipFileName;
   String? _previewImageName;
+  bool _generatingDescription = false;
   
   final List<String> _categories = ['Platformer', 'FPS', 'RPG', 'Puzzle', 'General'];
 
@@ -215,6 +332,49 @@ class _AddTemplateDialogState extends State<_AddTemplateDialog> {
         _previewImageBytes = file.bytes;
         _previewImageName = file.name;
       });
+    }
+  }
+
+  Future<void> _generateDescription() async {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a template name first'),
+          backgroundColor: AdminTheme.accentRed,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _generatingDescription = true);
+    
+    final provider = context.read<AdminProvider>();
+    final description = await provider.generateAiDescription(
+      name: name,
+      category: _selectedCategory,
+      tags: _tagsController.text.trim(),
+    );
+    
+    if (mounted) {
+      setState(() => _generatingDescription = false);
+      
+      if (description != null && description.isNotEmpty) {
+        _descriptionController.text = description;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Description generated successfully!'),
+            backgroundColor: AdminTheme.accentGreen,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to generate description'),
+            backgroundColor: AdminTheme.accentRed,
+          ),
+        );
+      }
     }
   }
 
@@ -342,7 +502,7 @@ class _AddTemplateDialogState extends State<_AddTemplateDialog> {
 
                 // Category dropdown
                 DropdownButtonFormField<String>(
-                  value: _selectedCategory,
+                  initialValue: _selectedCategory,
                   decoration: const InputDecoration(
                     labelText: 'Category',
                     labelStyle: TextStyle(color: AdminTheme.textSecondary),
@@ -361,15 +521,41 @@ class _AddTemplateDialogState extends State<_AddTemplateDialog> {
                 ),
                 const SizedBox(height: 16),
 
-                // Description field
+                // Description field with AI button
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Description (optional)',
+                      style: TextStyle(
+                        color: AdminTheme.textSecondary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    TextButton.icon(
+                      onPressed: (isUploading || _generatingDescription) ? null : _generateDescription,
+                      icon: _generatingDescription
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: AdminTheme.accentPurple),
+                            )
+                          : const Icon(Icons.auto_awesome, size: 16, color: AdminTheme.accentPurple),
+                      label: const Text('Generate with AI', style: TextStyle(color: AdminTheme.accentPurple, fontSize: 12)),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
                 TextFormField(
                   controller: _descriptionController,
                   enabled: !isUploading,
                   maxLines: 3,
                   decoration: const InputDecoration(
-                    labelText: 'Description (optional)',
-                    labelStyle: TextStyle(color: AdminTheme.textSecondary),
-                    hintText: 'Auto-filled by AI if empty',
+                    hintText: 'Enter description or generate with AI',
                     hintStyle: TextStyle(color: AdminTheme.textMuted, fontSize: 12),
                   ),
                   style: const TextStyle(color: AdminTheme.textPrimary),
@@ -514,6 +700,7 @@ class _EditTemplateDialogState extends State<_EditTemplateDialog> {
   Uint8List? _previewImageBytes;
   String? _zipFileName;
   String? _previewImageName;
+  bool _generatingDescription = false;
   
   final List<String> _categories = ['Platformer', 'FPS', 'RPG', 'Puzzle', 'General'];
 
@@ -554,6 +741,49 @@ class _EditTemplateDialogState extends State<_EditTemplateDialog> {
         _previewImageBytes = file.bytes;
         _previewImageName = file.name;
       });
+    }
+  }
+
+  Future<void> _generateDescription() async {
+    final name = _nameController.text.trim();
+    if (name.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a template name first'),
+          backgroundColor: AdminTheme.accentRed,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _generatingDescription = true);
+    
+    final provider = context.read<AdminProvider>();
+    final description = await provider.generateAiDescription(
+      name: name,
+      category: _selectedCategory,
+      tags: _tagsController.text.trim(),
+    );
+    
+    if (mounted) {
+      setState(() => _generatingDescription = false);
+      
+      if (description != null && description.isNotEmpty) {
+        _descriptionController.text = description;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Description generated successfully!'),
+            backgroundColor: AdminTheme.accentGreen,
+          ),
+        );
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Failed to generate description'),
+            backgroundColor: AdminTheme.accentRed,
+          ),
+        );
+      }
     }
   }
 
@@ -671,7 +901,7 @@ class _EditTemplateDialogState extends State<_EditTemplateDialog> {
 
                 // Category dropdown
                 DropdownButtonFormField<String>(
-                  value: _selectedCategory,
+                  initialValue: _selectedCategory,
                   decoration: const InputDecoration(
                     labelText: 'Category',
                     labelStyle: TextStyle(color: AdminTheme.textSecondary),
@@ -690,14 +920,42 @@ class _EditTemplateDialogState extends State<_EditTemplateDialog> {
                 ),
                 const SizedBox(height: 16),
 
-                // Description field
+                // Description field with AI button
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Description',
+                      style: TextStyle(
+                        color: AdminTheme.textSecondary,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    TextButton.icon(
+                      onPressed: (isUpdating || _generatingDescription) ? null : _generateDescription,
+                      icon: _generatingDescription
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2, color: AdminTheme.accentPurple),
+                            )
+                          : const Icon(Icons.auto_awesome, size: 16, color: AdminTheme.accentPurple),
+                      label: const Text('Generate with AI', style: TextStyle(color: AdminTheme.accentPurple, fontSize: 12)),
+                      style: TextButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
                 TextFormField(
                   controller: _descriptionController,
                   enabled: !isUpdating,
                   maxLines: 3,
                   decoration: const InputDecoration(
-                    labelText: 'Description',
-                    labelStyle: TextStyle(color: AdminTheme.textSecondary),
+                    hintText: 'Enter description or generate with AI',
+                    hintStyle: TextStyle(color: AdminTheme.textMuted, fontSize: 12),
                   ),
                   style: const TextStyle(color: AdminTheme.textPrimary),
                 ),
@@ -819,8 +1077,9 @@ class _TemplateCard extends StatelessWidget {
   final Map<String, dynamic> template;
   final Color color;
   final VoidCallback onEdit;
+  final VoidCallback onToggle;
 
-  const _TemplateCard({required this.template, required this.color, required this.onEdit});
+  const _TemplateCard({required this.template, required this.color, required this.onEdit, required this.onToggle});
 
   @override
   Widget build(BuildContext context) {
@@ -884,7 +1143,7 @@ class _TemplateCard extends StatelessWidget {
                       Row(
                         children: [
                           IconButton(icon: const Icon(Icons.edit, size: 18, color: AdminTheme.accentPurple), onPressed: onEdit, tooltip: 'Edit'),
-                          IconButton(icon: Icon((template['status'] == 'active' ? Icons.toggle_on : Icons.toggle_off), size: 24, color: AdminTheme.accentGreen), onPressed: () {}, tooltip: 'Toggle'),
+                          IconButton(icon: Icon((template['isActive'] != false ? Icons.toggle_on : Icons.toggle_off), size: 24, color: template['isActive'] != false ? AdminTheme.accentGreen : AdminTheme.accentRed), onPressed: onToggle, tooltip: template['isActive'] != false ? 'Deactivate' : 'Activate'),
                         ],
                       ),
                     ],

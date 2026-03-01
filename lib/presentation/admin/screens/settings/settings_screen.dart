@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import '../../constants/admin_theme.dart';
+import '../../providers/admin_provider.dart';
 import '../../widgets/admin_button.dart';
 
 class SettingsScreen extends StatefulWidget {
@@ -152,15 +154,23 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     builder: (ctx) => AlertDialog(
                       backgroundColor: AdminTheme.bgSecondary,
                       title: const Text('Revoke All Sessions', style: TextStyle(color: AdminTheme.textPrimary)),
-                      content: const Text('This will log out all users. Continue?', style: TextStyle(color: AdminTheme.textSecondary)),
+                      content: const Text('This will log out all users except you. Continue?', style: TextStyle(color: AdminTheme.textSecondary)),
                       actions: [
                         TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
                         ElevatedButton(
-                          onPressed: () {
+                          onPressed: () async {
                             Navigator.pop(ctx);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('All sessions revoked'), backgroundColor: AdminTheme.accentGreen, behavior: SnackBarBehavior.floating),
-                            );
+                            final provider = context.read<AdminProvider>();
+                            final result = await provider.revokeAllSessions();
+                            if (result != null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('All sessions revoked'), backgroundColor: AdminTheme.accentGreen, behavior: SnackBarBehavior.floating),
+                              );
+                            } else {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Failed to revoke sessions'), backgroundColor: AdminTheme.accentRed, behavior: SnackBarBehavior.floating),
+                              );
+                            }
                           },
                           style: ElevatedButton.styleFrom(backgroundColor: AdminTheme.accentRed),
                           child: const Text('Revoke'),

@@ -2,10 +2,11 @@ import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
+import 'package:printing/printing.dart';
 
 import '../../../core/services/admin_users_service.dart';
 import '../../../core/services/admin_service.dart';
-import '../data/mock_data.dart';
+import '../../../core/services/pdf_export_helper.dart';
 
 class AdminProvider extends ChangeNotifier {
   // Users screen state (API-backed)
@@ -35,6 +36,8 @@ class AdminProvider extends ChangeNotifier {
   List<Map<String, dynamic>> _projects = [];
   bool _projectsLoading = false;
   String? _projectsError;
+  int _projectsPage = 0;
+  static const int projectsPerPage = 12;
 
   // Marketplace screen state
   String _marketplaceCategoryFilter = 'all';
@@ -42,6 +45,8 @@ class AdminProvider extends ChangeNotifier {
   List<Map<String, dynamic>>? _templates;
   bool _templatesLoading = false;
   String? _templatesError;
+  int _templatesPage = 0;
+  static const int templatesPerPage = 16;
   bool _uploadingTemplate = false;
 
   // Builds screen state
@@ -51,6 +56,28 @@ class AdminProvider extends ChangeNotifier {
   Map<String, dynamic> _buildsSummary = {};
   bool _buildsLoading = false;
   String? _buildsError;
+  int _buildsPage = 0;
+  static const int buildsPerPage = 20;
+
+  // Recent activity state
+  List<Map<String, dynamic>> _recentActivity = [];
+  bool _activityLoading = false;
+  String? _activityError;
+
+  // System status state
+  List<Map<String, dynamic>> _systemStatus = [];
+  bool _systemStatusLoading = false;
+  String? _systemStatusError;
+
+  // Notifications history state
+  List<Map<String, dynamic>> _notificationsHistory = [];
+  bool _notificationsHistoryLoading = false;
+  String? _notificationsHistoryError;
+
+  // AI Insights state
+  String _aiInsightsSummary = '';
+  bool _aiInsightsLoading = false;
+  String? _aiInsightsError;
 
   // Getters
   String get usersSearch => _usersSearch;
@@ -79,6 +106,22 @@ class AdminProvider extends ChangeNotifier {
   bool get buildsLoading => _buildsLoading;
   String? get buildsError => _buildsError;
   
+  List<Map<String, dynamic>> get recentActivity => _recentActivity;
+  bool get activityLoading => _activityLoading;
+  String? get activityError => _activityError;
+
+  List<Map<String, dynamic>> get systemStatus => _systemStatus;
+  bool get systemStatusLoading => _systemStatusLoading;
+  String? get systemStatusError => _systemStatusError;
+
+  List<Map<String, dynamic>> get notificationsHistory => _notificationsHistory;
+  bool get notificationsHistoryLoading => _notificationsHistoryLoading;
+  String? get notificationsHistoryError => _notificationsHistoryError;
+
+  String get aiInsightsSummary => _aiInsightsSummary;
+  bool get aiInsightsLoading => _aiInsightsLoading;
+  String? get aiInsightsError => _aiInsightsError;
+
   // Dashboard getters
   bool get dashboardLoading => _dashboardLoading;
   String? get dashboardError => _dashboardError;
@@ -338,13 +381,28 @@ class AdminProvider extends ChangeNotifier {
   Future<bool> exportUsersCsv() async {
     final token = _tokenGetter?.call();
     if (token == null || token.isEmpty) return false;
-    return AdminUsersService.downloadCsv(
-      token: token,
-      search: _usersSearch.trim().isEmpty ? null : _usersSearch.trim(),
-      status: _usersStatusFilter == 'all' ? null : _usersStatusFilter,
-      role: _usersRoleFilter == 'all' ? null : _usersRoleFilter,
-      subscription: _usersPlanFilter == 'all' ? null : _usersPlanFilter,
-    );
+    
+    try {
+      // Generate PDF with current users data
+      final pdfBytes = await PdfExportHelper.generateUsersPdf(
+        users: paginatedUsers,
+        search: _usersSearch.trim().isEmpty ? null : _usersSearch.trim(),
+        status: _usersStatusFilter == 'all' ? null : _usersStatusFilter,
+        role: _usersRoleFilter == 'all' ? null : _usersRoleFilter,
+        subscription: _usersPlanFilter == 'all' ? null : _usersPlanFilter,
+      );
+      
+      // Download the PDF
+      await Printing.sharePdf(
+        bytes: pdfBytes,
+        filename: 'gameforge_users_${DateTime.now().millisecondsSinceEpoch}.pdf',
+      );
+      
+      return true;
+    } catch (e) {
+      print('PDF export error: $e');
+      return false;
+    }
   }
 
   void _debouncedFetchUsers() {
@@ -354,9 +412,12 @@ class AdminProvider extends ChangeNotifier {
     });
   }
 
-  // Filtered projects
+  // Filtered projects (excludes archived)
   List<Map<String, dynamic>> get filteredProjects {
     var list = List<Map<String, dynamic>>.from(_projects);
+    
+    // Always exclude archived projects from the main list
+    list = list.where((p) => (p['status'] ?? '').toString() != 'archived').toList();
 
     if (_projectsSearch.isNotEmpty) {
       final q = _projectsSearch.toLowerCase();
@@ -372,6 +433,38 @@ class AdminProvider extends ChangeNotifier {
     }
 
     return list;
+  }
+
+  // Paginated projects
+  List<Map<String, dynamic>> get paginatedProjects {
+    final all = filteredProjects;
+    final start = _projectsPage * projectsPerPage;
+    final end = (start + projectsPerPage).clamp(0, all.length);
+    return all.sublist(start, end);
+  }
+
+  int get projectsTotalPages => (filteredProjects.length / projectsPerPage).ceil().clamp(1, double.infinity).toInt();
+  int get projectsCurrentPage => _projectsPage + 1;
+  bool get projectsHasNextPage => _projectsPage < projectsTotalPages - 1;
+  bool get projectsHasPrevPage => _projectsPage > 0;
+
+  void setProjectsPage(int page) {
+    _projectsPage = page.clamp(0, projectsTotalPages - 1);
+    notifyListeners();
+  }
+
+  void nextProjectsPage() {
+    if (projectsHasNextPage) {
+      _projectsPage++;
+      notifyListeners();
+    }
+  }
+
+  void prevProjectsPage() {
+    if (projectsHasPrevPage) {
+      _projectsPage--;
+      notifyListeners();
+    }
   }
 
   Future<void> fetchProjects() async {
@@ -413,9 +506,44 @@ class AdminProvider extends ChangeNotifier {
     return list;
   }
 
+  // Paginated templates
+  List<Map<String, dynamic>> get paginatedTemplates {
+    final all = filteredTemplates;
+    final start = _templatesPage * templatesPerPage;
+    final end = (start + templatesPerPage).clamp(0, all.length);
+    return all.sublist(start, end);
+  }
+
+  int get templatesTotalPages => (filteredTemplates.length / templatesPerPage).ceil().clamp(1, double.infinity).toInt();
+  int get templatesCurrentPage => _templatesPage + 1;
+  bool get templatesHasNextPage => _templatesPage < templatesTotalPages - 1;
+  bool get templatesHasPrevPage => _templatesPage > 0;
+
+  void setTemplatesPage(int page) {
+    _templatesPage = page.clamp(0, templatesTotalPages - 1);
+    notifyListeners();
+  }
+
+  void nextTemplatesPage() {
+    if (templatesHasNextPage) {
+      _templatesPage++;
+      notifyListeners();
+    }
+  }
+
+  void prevTemplatesPage() {
+    if (templatesHasPrevPage) {
+      _templatesPage--;
+      notifyListeners();
+    }
+  }
+
   // Filtered builds
   List<Map<String, dynamic>> get filteredBuilds {
     var list = List<Map<String, dynamic>>.from(_builds);
+
+    // Always exclude archived builds from the list
+    list = list.where((b) => (b['status'] ?? '').toString() != 'archived').toList();
 
     if (_buildsSearch.isNotEmpty) {
       final q = _buildsSearch.toLowerCase();
@@ -431,6 +559,38 @@ class AdminProvider extends ChangeNotifier {
     }
 
     return list;
+  }
+
+  // Paginated builds
+  List<Map<String, dynamic>> get paginatedBuilds {
+    final all = filteredBuilds;
+    final start = _buildsPage * buildsPerPage;
+    final end = (start + buildsPerPage).clamp(0, all.length);
+    return all.sublist(start, end);
+  }
+
+  int get buildsTotalPages => (filteredBuilds.length / buildsPerPage).ceil().clamp(1, double.infinity).toInt();
+  int get buildsCurrentPage => _buildsPage + 1;
+  bool get buildsHasNextPage => _buildsPage < buildsTotalPages - 1;
+  bool get buildsHasPrevPage => _buildsPage > 0;
+
+  void setBuildsPage(int page) {
+    _buildsPage = page.clamp(0, buildsTotalPages - 1);
+    notifyListeners();
+  }
+
+  void nextBuildsPage() {
+    if (buildsHasNextPage) {
+      _buildsPage++;
+      notifyListeners();
+    }
+  }
+
+  void prevBuildsPage() {
+    if (buildsHasPrevPage) {
+      _buildsPage--;
+      notifyListeners();
+    }
   }
 
   // Setters
@@ -487,16 +647,19 @@ class AdminProvider extends ChangeNotifier {
 
   void setProjectsSearch(String value) {
     _projectsSearch = value;
+    _projectsPage = 0;
     notifyListeners();
   }
 
   void setProjectsStatusFilter(String value) {
     _projectsStatusFilter = value;
+    _projectsPage = 0;
     notifyListeners();
   }
 
   void setMarketplaceCategoryFilter(String value) {
     _marketplaceCategoryFilter = value;
+    _templatesPage = 0;
     notifyListeners();
   }
 
@@ -507,11 +670,13 @@ class AdminProvider extends ChangeNotifier {
 
   void setBuildsStatusFilter(String value) {
     _buildsStatusFilter = value;
+    _buildsPage = 0;
     notifyListeners();
   }
 
   void setBuildsSearch(String value) {
     _buildsSearch = value;
+    _buildsPage = 0;
     notifyListeners();
   }
 
@@ -548,6 +713,367 @@ class AdminProvider extends ChangeNotifier {
     } finally {
       _buildsLoading = false;
       notifyListeners();
+    }
+  }
+
+  Future<void> fetchRecentActivity() async {
+    final token = _tokenGetter?.call();
+    if (token == null || token.isEmpty) {
+      _activityError = 'Not authenticated';
+      notifyListeners();
+      return;
+    }
+    _activityLoading = true;
+    _activityError = null;
+    notifyListeners();
+    try {
+      final res = await AdminService.getAdminActivity(token: token);
+      if (res['success'] == true && res['data'] is List) {
+        _recentActivity = List<Map<String, dynamic>>.from(res['data'] as List);
+        _activityError = null;
+      } else {
+        _recentActivity = [];
+        _activityError = res['message']?.toString() ?? 'Failed to load activity';
+      }
+    } catch (e) {
+      _recentActivity = [];
+      _activityError = e.toString();
+    } finally {
+      _activityLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> fetchSystemStatus() async {
+    final token = _tokenGetter?.call();
+    if (token == null || token.isEmpty) {
+      _systemStatusError = 'Not authenticated';
+      notifyListeners();
+      return;
+    }
+    _systemStatusLoading = true;
+    _systemStatusError = null;
+    notifyListeners();
+    try {
+      final res = await AdminService.getSystemStatus(token: token);
+      if (res['success'] == true && res['data'] is List) {
+        _systemStatus = List<Map<String, dynamic>>.from(res['data'] as List);
+        _systemStatusError = null;
+      } else {
+        _systemStatus = [];
+        _systemStatusError = res['message']?.toString() ?? 'Failed to load system status';
+      }
+    } catch (e) {
+      _systemStatus = [];
+      _systemStatusError = e.toString();
+    } finally {
+      _systemStatusLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> fetchNotificationsHistory() async {
+    final token = _tokenGetter?.call();
+    if (token == null || token.isEmpty) {
+      _notificationsHistoryError = 'Not authenticated';
+      notifyListeners();
+      return;
+    }
+    _notificationsHistoryLoading = true;
+    _notificationsHistoryError = null;
+    notifyListeners();
+    try {
+      final res = await AdminService.getNotificationsHistory(token: token);
+      if (res['success'] == true && res['data'] is List) {
+        _notificationsHistory = List<Map<String, dynamic>>.from(res['data'] as List);
+        _notificationsHistoryError = null;
+      } else {
+        _notificationsHistory = [];
+        _notificationsHistoryError = res['message']?.toString() ?? 'Failed to load notifications';
+      }
+    } catch (e) {
+      _notificationsHistory = [];
+      _notificationsHistoryError = e.toString();
+    } finally {
+      _notificationsHistoryLoading = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> generateAiInsights() async {
+    final token = _tokenGetter?.call();
+    if (token == null || token.isEmpty) {
+      _aiInsightsError = 'Not authenticated';
+      notifyListeners();
+      return;
+    }
+    _aiInsightsLoading = true;
+    _aiInsightsError = null;
+    notifyListeners();
+    try {
+      final res = await AdminService.generateAiInsights(token: token);
+      if (res['success'] == true && res['data'] != null) {
+        final data = res['data'] as Map;
+        _aiInsightsSummary = data['summary']?.toString() ?? 'Unable to generate insights';
+        _aiInsightsError = null;
+      } else {
+        _aiInsightsSummary = '';
+        _aiInsightsError = res['message']?.toString() ?? 'Failed to generate insights';
+      }
+    } catch (e) {
+      _aiInsightsSummary = '';
+      _aiInsightsError = e.toString();
+    } finally {
+      _aiInsightsLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Generate AI description for a template
+  Future<String?> generateAiDescription({
+    required String name,
+    required String category,
+    String? tags,
+  }) async {
+    final token = _tokenGetter?.call();
+    if (token == null || token.isEmpty) return null;
+
+    try {
+      final res = await AdminService.generateAiDescription(
+        token: token,
+        name: name,
+        category: category,
+        tags: tags,
+      );
+      
+      if (res['success'] == true && res['data'] != null) {
+        final data = res['data'] as Map;
+        return data['description']?.toString();
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Analyze a build error with AI
+  Future<Map<String, dynamic>?> analyzeAiBuildError({
+    required String errorMessage,
+    String? buildTarget,
+    String? projectName,
+  }) async {
+    final token = _tokenGetter?.call();
+    if (token == null || token.isEmpty) return null;
+
+    try {
+      final res = await AdminService.analyzeAiBuildError(
+        token: token,
+        errorMessage: errorMessage,
+        buildTarget: buildTarget,
+        projectName: projectName,
+      );
+      
+      if (res['success'] == true && res['data'] != null) {
+        return res['data'] as Map<String, dynamic>;
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  /// Send real-time notification to users
+  Future<bool> sendRealtimeNotification({
+    required String title,
+    required String message,
+    required String target,
+  }) async {
+    final token = _tokenGetter?.call();
+    if (token == null || token.isEmpty) return false;
+
+    try {
+      final res = await AdminService.sendRealtimeNotification(
+        token: token,
+        title: title,
+        message: message,
+        target: target,
+      );
+
+      if (res['success'] == true) {
+        // Refresh notifications history after sending
+        await fetchNotificationsHistory();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // FIX 1: Hide project from dashboard
+  Future<bool> hideProject(String projectId) async {
+    final token = _tokenGetter?.call();
+    if (token == null || token.isEmpty) return false;
+
+    try {
+      final res = await AdminService.hideProject(token: token, projectId: projectId);
+      if (res['success'] == true) {
+        // Remove from local list
+        _projects.removeWhere((p) => p['_id'].toString() == projectId);
+        notifyListeners();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // FIX 2: Archive project
+  Future<bool> archiveProject(String projectId) async {
+    final token = _tokenGetter?.call();
+    if (token == null || token.isEmpty) return false;
+
+    try {
+      final res = await AdminService.archiveProject(token: token, projectId: projectId);
+      if (res['success'] == true) {
+        // Update status in local list
+        final index = _projects.indexWhere((p) => p['_id'].toString() == projectId);
+        if (index != -1) {
+          _projects[index]['status'] = 'archived';
+          notifyListeners();
+        }
+        return true;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // Unarchive project (restore from archive)
+  Future<bool> unarchiveProject(String projectId) async {
+    final token = _tokenGetter?.call();
+    if (token == null || token.isEmpty) return false;
+
+    try {
+      // Call the unarchive endpoint to restore previous status
+      final res = await AdminService.unarchiveProject(token: token, projectId: projectId);
+      if (res['success'] == true) {
+        // Update status in local list with the restored status
+        final index = _projects.indexWhere((p) => p['_id'].toString() == projectId);
+        if (index != -1) {
+          // Use the status returned by backend or default to 'ready'
+          final restoredStatus = res['status']?.toString() ?? 'ready';
+          _projects[index]['status'] = restoredStatus;
+          notifyListeners();
+        }
+        return true;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // FIX 3: Toggle template
+  Future<bool> toggleTemplate(String templateId) async {
+    final token = _tokenGetter?.call();
+    if (token == null || token.isEmpty) return false;
+
+    try {
+      final res = await AdminService.toggleTemplate(token: token, templateId: templateId);
+      if (res['success'] == true) {
+        // Update local template immediately with the new isActive status
+        if (_templates != null) {
+          final index = _templates!.indexWhere((t) => t['_id'].toString() == templateId);
+          if (index != -1 && res['isActive'] != null) {
+            _templates![index]['isActive'] = res['isActive'];
+            notifyListeners();
+          }
+        }
+        // Refresh templates list to ensure consistency
+        await fetchTemplates();
+        return true;
+      }
+      return false;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // FIX 4: Get build logs
+  Future<String?> getBuildLogs(String buildId) async {
+    final token = _tokenGetter?.call();
+    if (token == null || token.isEmpty) return null;
+
+    try {
+      final res = await AdminService.getBuildLogs(token: token, buildId: buildId);
+      if (res['success'] == true && res['data'] != null) {
+        return res['data']['logs'] as String?;
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // FIX 6: Revoke all sessions
+  Future<Map<String, dynamic>?> revokeAllSessions() async {
+    final token = _tokenGetter?.call();
+    if (token == null || token.isEmpty) return null;
+
+    try {
+      final res = await AdminService.revokeAllSessions(token: token);
+      if (res['success'] == true) {
+        return res;
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // FIX 7: Health metrics state
+  Map<String, dynamic>? _healthMetrics;
+  bool _healthLoading = false;
+  
+  Map<String, dynamic>? get healthMetrics => _healthMetrics;
+  bool get healthLoading => _healthLoading;
+
+  Future<void> fetchHealthMetrics() async {
+    final token = _tokenGetter?.call();
+    if (token == null || token.isEmpty) return;
+
+    _healthLoading = true;
+    notifyListeners();
+
+    try {
+      final res = await AdminService.getHealthMetrics(token: token);
+      if (res['success'] == true && res['data'] != null) {
+        _healthMetrics = res['data'] as Map<String, dynamic>;
+      }
+    } catch (e) {
+      _healthMetrics = null;
+    }
+
+    _healthLoading = false;
+    notifyListeners();
+  }
+
+  // FIX 8: AI Search
+  Future<Map<String, dynamic>?> aiSearch(String query) async {
+    final token = _tokenGetter?.call();
+    if (token == null || token.isEmpty) return null;
+
+    try {
+      final res = await AdminService.aiSearch(token: token, query: query);
+      if (res['success'] == true && res['data'] != null) {
+        return res['data'] as Map<String, dynamic>;
+      }
+      return null;
+    } catch (e) {
+      return null;
     }
   }
 }

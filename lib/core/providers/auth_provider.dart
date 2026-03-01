@@ -7,6 +7,7 @@ import 'package:local_auth/local_auth.dart';
 import 'package:flutter/services.dart';
 import 'dart:convert';
 import '../services/auth_service.dart';
+import '../services/api_service.dart';
 
 class AuthProvider extends ChangeNotifier {
   String? _token;
@@ -135,7 +136,20 @@ class AuthProvider extends ChangeNotifier {
 
   // Initialize auth state from storage
   Future<void> init() async {
+    // Set up the callback for force logout due to ban/suspend
+    ApiService.onForceLogout = _handleForceLogout;
     await _loadAuthFromStorage();
+  }
+
+  /// Called by ApiService when user is banned/suspended
+  void _handleForceLogout() {
+    _token = null;
+    _refreshToken = null;
+    _user = null;
+    _rememberMe = false;
+    _biometricEnabled = false;
+    _errorMessage = 'Your account has been suspended or banned. Please contact support.';
+    notifyListeners();
   }
 
   // Load auth data from secure storage
@@ -632,6 +646,45 @@ class AuthProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> uploadAvatarWeb({
+    required String fileName,
+    required List<int> bytes,
+  }) async {
+    if (_token == null) return false;
+
+    _setLoading(true);
+    _clearError();
+
+    try {
+      final result = await AuthService.uploadAvatarWeb(
+        token: _token!,
+        fileName: fileName,
+        bytes: bytes,
+      );
+
+      if (result['success']) {
+        final data = result['data'];
+        if (data['user'] is Map<String, dynamic>) {
+          _user = _normalizeUser(Map<String, dynamic>.from(data['user']));
+        } else {
+          _user = _normalizeUser(<String, dynamic>{});
+        }
+
+        await _saveAuthToStorage();
+        _setLoading(false);
+        return true;
+      } else {
+        _setError(result['message'] ?? 'Avatar update failed');
+        _setLoading(false);
+        return false;
+      }
+    } catch (e) {
+      _setError('Avatar update failed: ${e.toString()}');
+      _setLoading(false);
+      return false;
+    }
+  }
+
   // Logout method
   Future<void> logout({BuildContext? context}) async {
     try {
@@ -644,9 +697,11 @@ class AuthProvider extends ChangeNotifier {
       _token = null;
       _refreshToken = null;
       _user = null;
+      _biometricEnabled = false;
       // Ne PAS supprimer _rememberMe pour le garder sauvegardé
       await _saveAuthToStorage();
       await _deleteBiometricToken();
+      _clearError(); // Clear any error messages
       notifyListeners();
     }
   }
