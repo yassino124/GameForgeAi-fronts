@@ -88,6 +88,7 @@ dependencies:
   # Charts & Fonts (Admin Dashboard)
   fl_chart: ^0.68.0
   google_fonts: ^6.1.0
+  js: ^0.6.7
   flutter_animate: ^4.3.0
   pdf: ^3.11.1
   printing: ^5.13.2

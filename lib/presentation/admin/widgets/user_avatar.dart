@@ -21,27 +21,25 @@ class UserAvatar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final initials = (username.isNotEmpty ? username[0] : '?').toUpperCase();
+    final initialsWidget = Text(
+      initials,
+      style: GoogleFonts.orbitron(
+        fontSize: radius * 0.8,
+        fontWeight: FontWeight.bold,
+        color: textColor,
+      ),
+    );
 
-    // If avatar URL exists and is not empty, display the image
+    // If avatar URL exists and is not empty, display the image with initials fallback
     if (avatarUrl != null && avatarUrl!.isNotEmpty) {
       return CircleAvatar(
         radius: radius,
         backgroundColor: backgroundColor.withOpacity(0.3),
         backgroundImage: NetworkImage(avatarUrl!),
         onBackgroundImageError: (exception, stackTrace) {
-          // Fallback to initials if image fails to load
           debugPrint('Failed to load avatar: $exception');
         },
-        child: avatarUrl == null || avatarUrl!.isEmpty
-            ? Text(
-                initials,
-                style: GoogleFonts.orbitron(
-                  fontSize: radius * 0.8,
-                  fontWeight: FontWeight.bold,
-                  color: textColor,
-                ),
-              )
-            : null,
+        child: initialsWidget,
       );
     }
 
@@ -49,14 +47,7 @@ class UserAvatar extends StatelessWidget {
     return CircleAvatar(
       radius: radius,
       backgroundColor: backgroundColor.withOpacity(0.3),
-      child: Text(
-        initials,
-        style: GoogleFonts.orbitron(
-          fontSize: radius * 0.8,
-          fontWeight: FontWeight.bold,
-          color: textColor,
-        ),
-      ),
+      child: initialsWidget,
     );
   }
 }

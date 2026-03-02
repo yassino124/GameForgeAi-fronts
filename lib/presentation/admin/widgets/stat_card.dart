@@ -46,7 +46,9 @@ class _StatCardState extends State<StatCard> {
           ),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: _hovered ? widget.color.withOpacity(0.5) : AdminTheme.borderGlow,
+            color: _hovered
+                ? widget.color.withOpacity(0.5)
+                : AdminTheme.borderGlow,
             width: 1,
           ),
           boxShadow: _hovered
@@ -86,7 +88,9 @@ class _StatCardState extends State<StatCard> {
                       Icon(
                         isPositive ? Icons.trending_up : Icons.trending_down,
                         size: 16,
-                        color: isPositive ? AdminTheme.accentGreen : AdminTheme.accentRed,
+                        color: isPositive
+                            ? AdminTheme.accentGreen
+                            : AdminTheme.accentRed,
                       ),
                       const SizedBox(width: 4),
                       Text(
@@ -94,7 +98,9 @@ class _StatCardState extends State<StatCard> {
                         style: GoogleFonts.jetBrainsMono(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: isPositive ? AdminTheme.accentGreen : AdminTheme.accentRed,
+                          color: isPositive
+                              ? AdminTheme.accentGreen
+                              : AdminTheme.accentRed,
                         ),
                       ),
                     ],
@@ -109,6 +115,8 @@ class _StatCardState extends State<StatCard> {
                 color: AdminTheme.textSecondary,
                 fontWeight: FontWeight.w500,
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
             const SizedBox(height: 4),
             Text(
@@ -118,6 +126,8 @@ class _StatCardState extends State<StatCard> {
                 fontWeight: FontWeight.bold,
                 color: AdminTheme.textPrimary,
               ),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
           ],
         ),

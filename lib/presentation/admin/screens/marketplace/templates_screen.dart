@@ -38,7 +38,15 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
     'default': AdminTheme.textSecondary,
   };
 
-  static const _categories = ['all', 'Platformer', 'Shooter', 'RPG', 'Puzzle', 'Racing', 'Adventure'];
+  static const _categories = [
+    'all',
+    'Platformer',
+    'Shooter',
+    'RPG',
+    'Puzzle',
+    'Racing',
+    'Adventure',
+  ];
 
   @override
   Widget build(BuildContext context) {
@@ -60,20 +68,41 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
               spacing: 12,
               runSpacing: 12,
               children: [
-                ..._categories.map((c) => FilterChip(
-                  label: Text(c == 'all' ? 'All' : c),
-                  selected: provider.marketplaceCategoryFilter.toLowerCase() == c.toLowerCase(),
-                  onSelected: (_) => provider.setMarketplaceCategoryFilter(c),
-                  selectedColor: AdminTheme.accentNeon.withOpacity(0.3),
-                  checkmarkColor: AdminTheme.accentNeon,
-                )),
-                const Spacer(),
-                IconButton(
-                  icon: Icon(provider.marketplaceGridView ? Icons.grid_view : Icons.list, color: AdminTheme.textSecondary),
-                  onPressed: () => provider.setMarketplaceGridView(!provider.marketplaceGridView),
-                  tooltip: provider.marketplaceGridView ? 'List view' : 'Grid view',
+                ..._categories.map(
+                  (c) => FilterChip(
+                    label: Text(c == 'all' ? 'All' : c),
+                    selected:
+                        provider.marketplaceCategoryFilter.toLowerCase() ==
+                        c.toLowerCase(),
+                    onSelected: (_) => provider.setMarketplaceCategoryFilter(c),
+                    selectedColor: AdminTheme.accentNeon.withOpacity(0.3),
+                    checkmarkColor: AdminTheme.accentNeon,
+                  ),
                 ),
-                AdminButton(label: 'Add New Template', icon: Icons.add, onPressed: () => _showTemplateModal(context)),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    IconButton(
+                      icon: Icon(
+                        provider.marketplaceGridView
+                            ? Icons.grid_view
+                            : Icons.list,
+                        color: AdminTheme.textSecondary,
+                      ),
+                      onPressed: () => provider.setMarketplaceGridView(
+                        !provider.marketplaceGridView,
+                      ),
+                      tooltip: provider.marketplaceGridView
+                          ? 'List view'
+                          : 'Grid view',
+                    ),
+                    AdminButton(
+                      label: 'Add New Template',
+                      icon: Icons.add,
+                      onPressed: () => _showTemplateModal(context),
+                    ),
+                  ],
+                ),
               ],
             ),
             const SizedBox(height: 24),
@@ -82,7 +111,9 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
               const Center(
                 child: Padding(
                   padding: EdgeInsets.all(40.0),
-                  child: CircularProgressIndicator(color: AdminTheme.accentNeon),
+                  child: CircularProgressIndicator(
+                    color: AdminTheme.accentNeon,
+                  ),
                 ),
               )
             else if (error != null)
@@ -92,9 +123,16 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.error_outline, color: AdminTheme.accentRed, size: 48),
+                      const Icon(
+                        Icons.error_outline,
+                        color: AdminTheme.accentRed,
+                        size: 48,
+                      ),
                       const SizedBox(height: 16),
-                      Text(error, style: const TextStyle(color: AdminTheme.textSecondary)),
+                      Text(
+                        error,
+                        style: const TextStyle(color: AdminTheme.textSecondary),
+                      ),
                       const SizedBox(height: 16),
                       AdminButton(
                         label: 'Retry',
@@ -111,7 +149,10 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
                   padding: EdgeInsets.all(40.0),
                   child: Text(
                     'No templates found',
-                    style: TextStyle(color: AdminTheme.textSecondary, fontSize: 16),
+                    style: TextStyle(
+                      color: AdminTheme.textSecondary,
+                      fontSize: 16,
+                    ),
                   ),
                 ),
               )
@@ -120,7 +161,9 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
                 children: [
                   LayoutBuilder(
                     builder: (context, constraints) {
-                      final crossAxisCount = constraints.maxWidth > 1200 ? 4 : (constraints.maxWidth > 800 ? 3 : 2);
+                      final crossAxisCount = constraints.maxWidth > 1200
+                          ? 4
+                          : (constraints.maxWidth > 800 ? 3 : 2);
                       return GridView.builder(
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
@@ -133,12 +176,16 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
                         itemCount: templates.length,
                         itemBuilder: (context, i) => _TemplateCard(
                           template: templates[i],
-                          color: _categoryColors[templates[i]['category']] ?? _categoryColors['default']!,
-                          onEdit: () => _showTemplateModal(context, templates[i]),
-                          onToggle: () => _showToggleConfirm(context, templates[i]),
+                          color:
+                              _categoryColors[templates[i]['category']] ??
+                              _categoryColors['default']!,
+                          onEdit: () =>
+                              _showTemplateModal(context, templates[i]),
+                          onToggle: () =>
+                              _showToggleConfirm(context, templates[i]),
                         ),
                       );
-                    }
+                    },
                   ),
                   // Pagination controls
                   if (totalPages > 1) ...[
@@ -147,12 +194,20 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         IconButton(
-                          icon: const Icon(Icons.chevron_left, color: AdminTheme.textSecondary),
-                          onPressed: provider.templatesHasPrevPage ? provider.prevTemplatesPage : null,
+                          icon: const Icon(
+                            Icons.chevron_left,
+                            color: AdminTheme.textSecondary,
+                          ),
+                          onPressed: provider.templatesHasPrevPage
+                              ? provider.prevTemplatesPage
+                              : null,
                           tooltip: 'Previous page',
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
                           decoration: BoxDecoration(
                             color: AdminTheme.bgSecondary,
                             borderRadius: BorderRadius.circular(6),
@@ -160,12 +215,19 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
                           ),
                           child: Text(
                             'Page $currentPage of $totalPages',
-                            style: GoogleFonts.rajdhani(color: AdminTheme.textPrimary),
+                            style: GoogleFonts.rajdhani(
+                              color: AdminTheme.textPrimary,
+                            ),
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.chevron_right, color: AdminTheme.textSecondary),
-                          onPressed: provider.templatesHasNextPage ? provider.nextTemplatesPage : null,
+                          icon: const Icon(
+                            Icons.chevron_right,
+                            color: AdminTheme.textSecondary,
+                          ),
+                          onPressed: provider.templatesHasNextPage
+                              ? provider.nextTemplatesPage
+                              : null,
                           tooltip: 'Next page',
                         ),
                       ],
@@ -176,11 +238,15 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
             else
               Column(
                 children: [
-                  ...templates.map((t) => _TemplateListTile(
-                    template: t,
-                    color: _categoryColors[t['category']] ?? _categoryColors['default']!,
-                    onEdit: () => _showTemplateModal(context, t),
-                  )),
+                  ...templates.map(
+                    (t) => _TemplateListTile(
+                      template: t,
+                      color:
+                          _categoryColors[t['category']] ??
+                          _categoryColors['default']!,
+                      onEdit: () => _showTemplateModal(context, t),
+                    ),
+                  ),
                   // Pagination controls for list view
                   if (totalPages > 1) ...[
                     const SizedBox(height: 24),
@@ -188,12 +254,20 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         IconButton(
-                          icon: const Icon(Icons.chevron_left, color: AdminTheme.textSecondary),
-                          onPressed: provider.templatesHasPrevPage ? provider.prevTemplatesPage : null,
+                          icon: const Icon(
+                            Icons.chevron_left,
+                            color: AdminTheme.textSecondary,
+                          ),
+                          onPressed: provider.templatesHasPrevPage
+                              ? provider.prevTemplatesPage
+                              : null,
                           tooltip: 'Previous page',
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
                           decoration: BoxDecoration(
                             color: AdminTheme.bgSecondary,
                             borderRadius: BorderRadius.circular(6),
@@ -201,12 +275,19 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
                           ),
                           child: Text(
                             'Page $currentPage of $totalPages',
-                            style: GoogleFonts.rajdhani(color: AdminTheme.textPrimary),
+                            style: GoogleFonts.rajdhani(
+                              color: AdminTheme.textPrimary,
+                            ),
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.chevron_right, color: AdminTheme.textSecondary),
-                          onPressed: provider.templatesHasNextPage ? provider.nextTemplatesPage : null,
+                          icon: const Icon(
+                            Icons.chevron_right,
+                            color: AdminTheme.textSecondary,
+                          ),
+                          onPressed: provider.templatesHasNextPage
+                              ? provider.nextTemplatesPage
+                              : null,
                           tooltip: 'Next page',
                         ),
                       ],
@@ -220,7 +301,10 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
     );
   }
 
-  void _showTemplateModal(BuildContext context, [Map<String, dynamic>? template]) {
+  void _showTemplateModal(
+    BuildContext context, [
+    Map<String, dynamic>? template,
+  ]) {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -236,28 +320,43 @@ class _TemplatesScreenState extends State<TemplatesScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AdminTheme.bgSecondary,
-        title: Text(isActive ? 'Deactivate Template' : 'Activate Template', 
-          style: const TextStyle(color: AdminTheme.textPrimary)),
+        title: Text(
+          isActive ? 'Deactivate Template' : 'Activate Template',
+          style: const TextStyle(color: AdminTheme.textPrimary),
+        ),
         content: Text(
-          isActive 
-            ? 'This template will no longer appear to users'
-            : 'This template will be visible to users again',
+          isActive
+              ? 'This template will no longer appear to users'
+              : 'This template will be visible to users again',
           style: const TextStyle(color: AdminTheme.textSecondary),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(ctx);
               final provider = context.read<AdminProvider>();
-              final success = await provider.toggleTemplate(template['_id'].toString());
+              final success = await provider.toggleTemplate(
+                template['_id'].toString(),
+              );
               if (success) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Template ${isActive ? 'deactivated' : 'activated'}'), backgroundColor: AdminTheme.accentGreen),
+                  SnackBar(
+                    content: Text(
+                      'Template ${isActive ? 'deactivated' : 'activated'}',
+                    ),
+                    backgroundColor: AdminTheme.accentGreen,
+                  ),
                 );
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: const Text('Failed to toggle template'), backgroundColor: AdminTheme.accentRed),
+                  SnackBar(
+                    content: const Text('Failed to toggle template'),
+                    backgroundColor: AdminTheme.accentRed,
+                  ),
                 );
               }
             },
@@ -285,15 +384,21 @@ class _AddTemplateDialogState extends State<_AddTemplateDialog> {
   final _descriptionController = TextEditingController();
   final _tagsController = TextEditingController();
   final _priceController = TextEditingController(text: '0');
-  
+
   String _selectedCategory = 'Platformer';
   Uint8List? _zipFileBytes;
   Uint8List? _previewImageBytes;
   String? _zipFileName;
   String? _previewImageName;
   bool _generatingDescription = false;
-  
-  final List<String> _categories = ['Platformer', 'FPS', 'RPG', 'Puzzle', 'General'];
+
+  final List<String> _categories = [
+    'Platformer',
+    'FPS',
+    'RPG',
+    'Puzzle',
+    'General',
+  ];
 
   @override
   void dispose() {
@@ -308,7 +413,7 @@ class _AddTemplateDialogState extends State<_AddTemplateDialog> {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: ['zip'],
-      withData: true,  // Critical for Flutter Web
+      withData: true, // Critical for Flutter Web
     );
 
     if (result != null && result.files.isNotEmpty) {
@@ -323,7 +428,7 @@ class _AddTemplateDialogState extends State<_AddTemplateDialog> {
   Future<void> _pickPreviewImage() async {
     final result = await FilePicker.platform.pickFiles(
       type: FileType.image,
-      withData: true,  // Critical for Flutter Web
+      withData: true, // Critical for Flutter Web
     );
 
     if (result != null && result.files.isNotEmpty) {
@@ -348,17 +453,17 @@ class _AddTemplateDialogState extends State<_AddTemplateDialog> {
     }
 
     setState(() => _generatingDescription = true);
-    
+
     final provider = context.read<AdminProvider>();
     final description = await provider.generateAiDescription(
       name: name,
       category: _selectedCategory,
       tags: _tagsController.text.trim(),
     );
-    
+
     if (mounted) {
       setState(() => _generatingDescription = false);
-      
+
       if (description != null && description.isNotEmpty) {
         _descriptionController.text = description;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -394,10 +499,16 @@ class _AddTemplateDialogState extends State<_AddTemplateDialog> {
     final success = await provider.uploadTemplate(
       zipFileBytes: _zipFileBytes!,
       zipFileName: _zipFileName!,
-      name: _nameController.text.trim().isNotEmpty ? _nameController.text.trim() : null,
-      description: _descriptionController.text.trim().isNotEmpty ? _descriptionController.text.trim() : null,
+      name: _nameController.text.trim().isNotEmpty
+          ? _nameController.text.trim()
+          : null,
+      description: _descriptionController.text.trim().isNotEmpty
+          ? _descriptionController.text.trim()
+          : null,
       category: _selectedCategory,
-      tags: _tagsController.text.trim().isNotEmpty ? _tagsController.text.trim() : null,
+      tags: _tagsController.text.trim().isNotEmpty
+          ? _tagsController.text.trim()
+          : null,
       price: _priceController.text.trim(),
       previewImageBytes: _previewImageBytes,
       previewImageFileName: _previewImageName,
@@ -461,21 +572,29 @@ class _AddTemplateDialogState extends State<_AddTemplateDialog> {
                       color: AdminTheme.bgTertiary,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                        color: _zipFileBytes != null ? AdminTheme.accentNeon : AdminTheme.borderGlow,
+                        color: _zipFileBytes != null
+                            ? AdminTheme.accentNeon
+                            : AdminTheme.borderGlow,
                       ),
                     ),
                     child: Row(
                       children: [
                         Icon(
-                          _zipFileBytes != null ? Icons.check_circle : Icons.file_upload,
-                          color: _zipFileBytes != null ? AdminTheme.accentNeon : AdminTheme.textSecondary,
+                          _zipFileBytes != null
+                              ? Icons.check_circle
+                              : Icons.file_upload,
+                          color: _zipFileBytes != null
+                              ? AdminTheme.accentNeon
+                              : AdminTheme.textSecondary,
                         ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
                             _zipFileName ?? 'Click to select .zip file',
                             style: TextStyle(
-                              color: _zipFileBytes != null ? AdminTheme.textPrimary : AdminTheme.textSecondary,
+                              color: _zipFileBytes != null
+                                  ? AdminTheme.textPrimary
+                                  : AdminTheme.textSecondary,
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -494,7 +613,10 @@ class _AddTemplateDialogState extends State<_AddTemplateDialog> {
                     labelText: 'Name (optional)',
                     labelStyle: TextStyle(color: AdminTheme.textSecondary),
                     hintText: 'Auto-filled from zip if empty',
-                    hintStyle: TextStyle(color: AdminTheme.textMuted, fontSize: 12),
+                    hintStyle: TextStyle(
+                      color: AdminTheme.textMuted,
+                      fontSize: 12,
+                    ),
                   ),
                   style: const TextStyle(color: AdminTheme.textPrimary),
                 ),
@@ -509,15 +631,16 @@ class _AddTemplateDialogState extends State<_AddTemplateDialog> {
                   ),
                   dropdownColor: AdminTheme.bgSecondary,
                   style: const TextStyle(color: AdminTheme.textPrimary),
-                  items: _categories.map((c) => DropdownMenuItem(
-                    value: c,
-                    child: Text(c),
-                  )).toList(),
-                  onChanged: isUploading ? null : (value) {
-                    if (value != null) {
-                      setState(() => _selectedCategory = value);
-                    }
-                  },
+                  items: _categories
+                      .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                      .toList(),
+                  onChanged: isUploading
+                      ? null
+                      : (value) {
+                          if (value != null) {
+                            setState(() => _selectedCategory = value);
+                          }
+                        },
                 ),
                 const SizedBox(height: 16),
 
@@ -534,17 +657,35 @@ class _AddTemplateDialogState extends State<_AddTemplateDialog> {
                       ),
                     ),
                     TextButton.icon(
-                      onPressed: (isUploading || _generatingDescription) ? null : _generateDescription,
+                      onPressed: (isUploading || _generatingDescription)
+                          ? null
+                          : _generateDescription,
                       icon: _generatingDescription
                           ? const SizedBox(
                               width: 14,
                               height: 14,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: AdminTheme.accentPurple),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AdminTheme.accentPurple,
+                              ),
                             )
-                          : const Icon(Icons.auto_awesome, size: 16, color: AdminTheme.accentPurple),
-                      label: const Text('Generate with AI', style: TextStyle(color: AdminTheme.accentPurple, fontSize: 12)),
+                          : const Icon(
+                              Icons.auto_awesome,
+                              size: 16,
+                              color: AdminTheme.accentPurple,
+                            ),
+                      label: const Text(
+                        'Generate with AI',
+                        style: TextStyle(
+                          color: AdminTheme.accentPurple,
+                          fontSize: 12,
+                        ),
+                      ),
                       style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                       ),
                     ),
                   ],
@@ -556,7 +697,10 @@ class _AddTemplateDialogState extends State<_AddTemplateDialog> {
                   maxLines: 3,
                   decoration: const InputDecoration(
                     hintText: 'Enter description or generate with AI',
-                    hintStyle: TextStyle(color: AdminTheme.textMuted, fontSize: 12),
+                    hintStyle: TextStyle(
+                      color: AdminTheme.textMuted,
+                      fontSize: 12,
+                    ),
                   ),
                   style: const TextStyle(color: AdminTheme.textPrimary),
                 ),
@@ -570,7 +714,10 @@ class _AddTemplateDialogState extends State<_AddTemplateDialog> {
                     labelText: 'Tags (optional)',
                     labelStyle: TextStyle(color: AdminTheme.textSecondary),
                     hintText: 'Comma-separated: 3D, multiplayer, FPS',
-                    hintStyle: TextStyle(color: AdminTheme.textMuted, fontSize: 12),
+                    hintStyle: TextStyle(
+                      color: AdminTheme.textMuted,
+                      fontSize: 12,
+                    ),
                   ),
                   style: const TextStyle(color: AdminTheme.textPrimary),
                 ),
@@ -585,7 +732,10 @@ class _AddTemplateDialogState extends State<_AddTemplateDialog> {
                     labelText: 'Price',
                     labelStyle: TextStyle(color: AdminTheme.textSecondary),
                     hintText: '0 for free',
-                    hintStyle: TextStyle(color: AdminTheme.textMuted, fontSize: 12),
+                    hintStyle: TextStyle(
+                      color: AdminTheme.textMuted,
+                      fontSize: 12,
+                    ),
                   ),
                   style: const TextStyle(color: AdminTheme.textPrimary),
                   validator: (value) {
@@ -618,21 +768,29 @@ class _AddTemplateDialogState extends State<_AddTemplateDialog> {
                       color: AdminTheme.bgTertiary,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                        color: _previewImageBytes != null ? AdminTheme.accentPurple : AdminTheme.borderGlow,
+                        color: _previewImageBytes != null
+                            ? AdminTheme.accentPurple
+                            : AdminTheme.borderGlow,
                       ),
                     ),
                     child: Row(
                       children: [
                         Icon(
-                          _previewImageBytes != null ? Icons.image : Icons.add_photo_alternate,
-                          color: _previewImageBytes != null ? AdminTheme.accentPurple : AdminTheme.textSecondary,
+                          _previewImageBytes != null
+                              ? Icons.image
+                              : Icons.add_photo_alternate,
+                          color: _previewImageBytes != null
+                              ? AdminTheme.accentPurple
+                              : AdminTheme.textSecondary,
                         ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
                             _previewImageName ?? 'Click to select image',
                             style: TextStyle(
-                              color: _previewImageBytes != null ? AdminTheme.textPrimary : AdminTheme.textSecondary,
+                              color: _previewImageBytes != null
+                                  ? AdminTheme.textPrimary
+                                  : AdminTheme.textSecondary,
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -649,7 +807,10 @@ class _AddTemplateDialogState extends State<_AddTemplateDialog> {
       actions: [
         TextButton(
           onPressed: isUploading ? null : () => Navigator.pop(context),
-          child: const Text('Cancel', style: TextStyle(color: AdminTheme.textSecondary)),
+          child: const Text(
+            'Cancel',
+            style: TextStyle(color: AdminTheme.textSecondary),
+          ),
         ),
         ElevatedButton(
           onPressed: isUploading ? null : _submitUpload,
@@ -664,7 +825,9 @@ class _AddTemplateDialogState extends State<_AddTemplateDialog> {
                   height: 16,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(AdminTheme.bgPrimary),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      AdminTheme.bgPrimary,
+                    ),
                   ),
                 )
               : const Text('Upload'),
@@ -686,23 +849,36 @@ class _EditTemplateDialog extends StatefulWidget {
 
 class _EditTemplateDialogState extends State<_EditTemplateDialog> {
   late final _formKey = GlobalKey<FormState>();
-  late final _nameController = TextEditingController(text: widget.template['name']?.toString() ?? '');
-  late final _descriptionController = TextEditingController(text: widget.template['description']?.toString() ?? '');
+  late final _nameController = TextEditingController(
+    text: widget.template['name']?.toString() ?? '',
+  );
+  late final _descriptionController = TextEditingController(
+    text: widget.template['description']?.toString() ?? '',
+  );
   late final _tagsController = TextEditingController(
     text: (widget.template['tags'] is List)
         ? (widget.template['tags'] as List).join(', ')
         : widget.template['tags']?.toString() ?? '',
   );
-  late final _priceController = TextEditingController(text: widget.template['price']?.toString() ?? '0');
-  
-  late String _selectedCategory = widget.template['category']?.toString() ?? 'Platformer';
+  late final _priceController = TextEditingController(
+    text: widget.template['price']?.toString() ?? '0',
+  );
+
+  late String _selectedCategory =
+      widget.template['category']?.toString() ?? 'Platformer';
   Uint8List? _zipFileBytes;
   Uint8List? _previewImageBytes;
   String? _zipFileName;
   String? _previewImageName;
   bool _generatingDescription = false;
-  
-  final List<String> _categories = ['Platformer', 'FPS', 'RPG', 'Puzzle', 'General'];
+
+  final List<String> _categories = [
+    'Platformer',
+    'FPS',
+    'RPG',
+    'Puzzle',
+    'General',
+  ];
 
   @override
   void dispose() {
@@ -757,17 +933,17 @@ class _EditTemplateDialogState extends State<_EditTemplateDialog> {
     }
 
     setState(() => _generatingDescription = true);
-    
+
     final provider = context.read<AdminProvider>();
     final description = await provider.generateAiDescription(
       name: name,
       category: _selectedCategory,
       tags: _tagsController.text.trim(),
     );
-    
+
     if (mounted) {
       setState(() => _generatingDescription = false);
-      
+
       if (description != null && description.isNotEmpty) {
         _descriptionController.text = description;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -795,10 +971,16 @@ class _EditTemplateDialogState extends State<_EditTemplateDialog> {
       templateId: widget.template['_id'].toString(),
       zipFileBytes: _zipFileBytes,
       zipFileName: _zipFileName,
-      name: _nameController.text.trim().isNotEmpty ? _nameController.text.trim() : null,
-      description: _descriptionController.text.trim().isNotEmpty ? _descriptionController.text.trim() : null,
+      name: _nameController.text.trim().isNotEmpty
+          ? _nameController.text.trim()
+          : null,
+      description: _descriptionController.text.trim().isNotEmpty
+          ? _descriptionController.text.trim()
+          : null,
       category: _selectedCategory,
-      tags: _tagsController.text.trim().isNotEmpty ? _tagsController.text.trim() : null,
+      tags: _tagsController.text.trim().isNotEmpty
+          ? _tagsController.text.trim()
+          : null,
       price: _priceController.text.trim(),
       previewImageBytes: _previewImageBytes,
       previewImageFileName: _previewImageName,
@@ -862,21 +1044,30 @@ class _EditTemplateDialogState extends State<_EditTemplateDialog> {
                       color: AdminTheme.bgTertiary,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                        color: _zipFileBytes != null ? AdminTheme.accentNeon : AdminTheme.borderGlow,
+                        color: _zipFileBytes != null
+                            ? AdminTheme.accentNeon
+                            : AdminTheme.borderGlow,
                       ),
                     ),
                     child: Row(
                       children: [
                         Icon(
-                          _zipFileBytes != null ? Icons.check_circle : Icons.file_upload,
-                          color: _zipFileBytes != null ? AdminTheme.accentNeon : AdminTheme.textSecondary,
+                          _zipFileBytes != null
+                              ? Icons.check_circle
+                              : Icons.file_upload,
+                          color: _zipFileBytes != null
+                              ? AdminTheme.accentNeon
+                              : AdminTheme.textSecondary,
                         ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            _zipFileName ?? 'Click to select new .zip file (optional)',
+                            _zipFileName ??
+                                'Click to select new .zip file (optional)',
                             style: TextStyle(
-                              color: _zipFileBytes != null ? AdminTheme.textPrimary : AdminTheme.textSecondary,
+                              color: _zipFileBytes != null
+                                  ? AdminTheme.textPrimary
+                                  : AdminTheme.textSecondary,
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -908,15 +1099,16 @@ class _EditTemplateDialogState extends State<_EditTemplateDialog> {
                   ),
                   dropdownColor: AdminTheme.bgSecondary,
                   style: const TextStyle(color: AdminTheme.textPrimary),
-                  items: _categories.map((c) => DropdownMenuItem(
-                    value: c,
-                    child: Text(c),
-                  )).toList(),
-                  onChanged: isUpdating ? null : (value) {
-                    if (value != null) {
-                      setState(() => _selectedCategory = value);
-                    }
-                  },
+                  items: _categories
+                      .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                      .toList(),
+                  onChanged: isUpdating
+                      ? null
+                      : (value) {
+                          if (value != null) {
+                            setState(() => _selectedCategory = value);
+                          }
+                        },
                 ),
                 const SizedBox(height: 16),
 
@@ -933,17 +1125,35 @@ class _EditTemplateDialogState extends State<_EditTemplateDialog> {
                       ),
                     ),
                     TextButton.icon(
-                      onPressed: (isUpdating || _generatingDescription) ? null : _generateDescription,
+                      onPressed: (isUpdating || _generatingDescription)
+                          ? null
+                          : _generateDescription,
                       icon: _generatingDescription
                           ? const SizedBox(
                               width: 14,
                               height: 14,
-                              child: CircularProgressIndicator(strokeWidth: 2, color: AdminTheme.accentPurple),
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: AdminTheme.accentPurple,
+                              ),
                             )
-                          : const Icon(Icons.auto_awesome, size: 16, color: AdminTheme.accentPurple),
-                      label: const Text('Generate with AI', style: TextStyle(color: AdminTheme.accentPurple, fontSize: 12)),
+                          : const Icon(
+                              Icons.auto_awesome,
+                              size: 16,
+                              color: AdminTheme.accentPurple,
+                            ),
+                      label: const Text(
+                        'Generate with AI',
+                        style: TextStyle(
+                          color: AdminTheme.accentPurple,
+                          fontSize: 12,
+                        ),
+                      ),
                       style: TextButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                       ),
                     ),
                   ],
@@ -955,7 +1165,10 @@ class _EditTemplateDialogState extends State<_EditTemplateDialog> {
                   maxLines: 3,
                   decoration: const InputDecoration(
                     hintText: 'Enter description or generate with AI',
-                    hintStyle: TextStyle(color: AdminTheme.textMuted, fontSize: 12),
+                    hintStyle: TextStyle(
+                      color: AdminTheme.textMuted,
+                      fontSize: 12,
+                    ),
                   ),
                   style: const TextStyle(color: AdminTheme.textPrimary),
                 ),
@@ -969,7 +1182,10 @@ class _EditTemplateDialogState extends State<_EditTemplateDialog> {
                     labelText: 'Tags',
                     labelStyle: TextStyle(color: AdminTheme.textSecondary),
                     hintText: 'Comma-separated: 3D, multiplayer, FPS',
-                    hintStyle: TextStyle(color: AdminTheme.textMuted, fontSize: 12),
+                    hintStyle: TextStyle(
+                      color: AdminTheme.textMuted,
+                      fontSize: 12,
+                    ),
                   ),
                   style: const TextStyle(color: AdminTheme.textPrimary),
                 ),
@@ -984,7 +1200,10 @@ class _EditTemplateDialogState extends State<_EditTemplateDialog> {
                     labelText: 'Price',
                     labelStyle: TextStyle(color: AdminTheme.textSecondary),
                     hintText: '0 for free',
-                    hintStyle: TextStyle(color: AdminTheme.textMuted, fontSize: 12),
+                    hintStyle: TextStyle(
+                      color: AdminTheme.textMuted,
+                      fontSize: 12,
+                    ),
                   ),
                   style: const TextStyle(color: AdminTheme.textPrimary),
                   validator: (value) {
@@ -1017,21 +1236,30 @@ class _EditTemplateDialogState extends State<_EditTemplateDialog> {
                       color: AdminTheme.bgTertiary,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
-                        color: _previewImageBytes != null ? AdminTheme.accentPurple : AdminTheme.borderGlow,
+                        color: _previewImageBytes != null
+                            ? AdminTheme.accentPurple
+                            : AdminTheme.borderGlow,
                       ),
                     ),
                     child: Row(
                       children: [
                         Icon(
-                          _previewImageBytes != null ? Icons.image : Icons.add_photo_alternate,
-                          color: _previewImageBytes != null ? AdminTheme.accentPurple : AdminTheme.textSecondary,
+                          _previewImageBytes != null
+                              ? Icons.image
+                              : Icons.add_photo_alternate,
+                          color: _previewImageBytes != null
+                              ? AdminTheme.accentPurple
+                              : AdminTheme.textSecondary,
                         ),
                         const SizedBox(width: 12),
                         Expanded(
                           child: Text(
-                            _previewImageName ?? 'Click to select image (optional)',
+                            _previewImageName ??
+                                'Click to select image (optional)',
                             style: TextStyle(
-                              color: _previewImageBytes != null ? AdminTheme.textPrimary : AdminTheme.textSecondary,
+                              color: _previewImageBytes != null
+                                  ? AdminTheme.textPrimary
+                                  : AdminTheme.textSecondary,
                             ),
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -1048,7 +1276,10 @@ class _EditTemplateDialogState extends State<_EditTemplateDialog> {
       actions: [
         TextButton(
           onPressed: isUpdating ? null : () => Navigator.pop(context),
-          child: const Text('Cancel', style: TextStyle(color: AdminTheme.textSecondary)),
+          child: const Text(
+            'Cancel',
+            style: TextStyle(color: AdminTheme.textSecondary),
+          ),
         ),
         ElevatedButton(
           onPressed: isUpdating ? null : _submitUpdate,
@@ -1063,7 +1294,9 @@ class _EditTemplateDialogState extends State<_EditTemplateDialog> {
                   height: 16,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    valueColor: AlwaysStoppedAnimation<Color>(AdminTheme.bgPrimary),
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      AdminTheme.bgPrimary,
+                    ),
                   ),
                 )
               : const Text('Save Changes'),
@@ -1079,13 +1312,20 @@ class _TemplateCard extends StatelessWidget {
   final VoidCallback onEdit;
   final VoidCallback onToggle;
 
-  const _TemplateCard({required this.template, required this.color, required this.onEdit, required this.onToggle});
+  const _TemplateCard({
+    required this.template,
+    required this.color,
+    required this.onEdit,
+    required this.onToggle,
+  });
 
   @override
   Widget build(BuildContext context) {
     final platforms = (template['platforms'] as List?)?.cast<String>() ?? [];
     final price = template['price'];
-    final priceStr = (price == 0 || price == 0.0) ? 'FREE' : '\$${price.toStringAsFixed(2)}';
+    final priceStr = (price == 0 || price == 0.0)
+        ? 'FREE'
+        : '\$${price.toStringAsFixed(2)}';
 
     return Container(
       decoration: BoxDecoration(
@@ -1099,8 +1339,14 @@ class _TemplateCard extends StatelessWidget {
           Container(
             height: 120,
             decoration: BoxDecoration(
-              gradient: LinearGradient(colors: [color.withOpacity(0.5), color.withOpacity(0.1)], begin: Alignment.topLeft, end: Alignment.bottomRight),
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+              gradient: LinearGradient(
+                colors: [color.withOpacity(0.5), color.withOpacity(0.1)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: const BorderRadius.vertical(
+                top: Radius.circular(12),
+              ),
             ),
           ),
           Expanded(
@@ -1111,39 +1357,101 @@ class _TemplateCard extends StatelessWidget {
                 children: [
                   Text(
                     template['name']?.toString() ?? '',
-                    style: GoogleFonts.orbitron(fontSize: 16, fontWeight: FontWeight.w600, color: AdminTheme.textPrimary),
+                    style: GoogleFonts.orbitron(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: AdminTheme.textPrimary,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                   const SizedBox(height: 4),
                   Text(
                     '${template['category']} ★ ${template['rating'] ?? 0}',
-                    style: GoogleFonts.rajdhani(color: AdminTheme.textSecondary, fontSize: 12),
+                    style: GoogleFonts.rajdhani(
+                      color: AdminTheme.textSecondary,
+                      fontSize: 12,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     '${(template['downloads'] ?? 0).toString().replaceAllMapped(RegExp(r'(\d{1,3})(?=(\d{3})+(?!\d))'), (m) => '${m[1]},')} downloads',
-                    style: GoogleFonts.jetBrainsMono(color: AdminTheme.textMuted, fontSize: 11),
+                    style: GoogleFonts.jetBrainsMono(
+                      color: AdminTheme.textMuted,
+                      fontSize: 11,
+                    ),
                   ),
-                  Text(template['unityVersion']?.toString() ?? '', style: GoogleFonts.jetBrainsMono(color: AdminTheme.textMuted, fontSize: 11)),
+                  Text(
+                    template['unityVersion']?.toString() ?? '',
+                    style: GoogleFonts.jetBrainsMono(
+                      color: AdminTheme.textMuted,
+                      fontSize: 11,
+                    ),
+                  ),
                   const SizedBox(height: 8),
                   Wrap(
                     spacing: 4,
-                    children: platforms.take(4).map((p) => Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(color: AdminTheme.bgTertiary, borderRadius: BorderRadius.circular(4)),
-                      child: Text(p, style: GoogleFonts.rajdhani(color: AdminTheme.textSecondary, fontSize: 10)),
-                    )).toList(),
+                    children: platforms
+                        .take(4)
+                        .map(
+                          (p) => Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 2,
+                            ),
+                            decoration: BoxDecoration(
+                              color: AdminTheme.bgTertiary,
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text(
+                              p,
+                              style: GoogleFonts.rajdhani(
+                                color: AdminTheme.textSecondary,
+                                fontSize: 10,
+                              ),
+                            ),
+                          ),
+                        )
+                        .toList(),
                   ),
                   const Spacer(),
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(priceStr, style: GoogleFonts.orbitron(fontSize: 14, fontWeight: FontWeight.bold, color: AdminTheme.accentNeon)),
+                      Text(
+                        priceStr,
+                        style: GoogleFonts.orbitron(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                          color: AdminTheme.accentNeon,
+                        ),
+                      ),
                       Row(
                         children: [
-                          IconButton(icon: const Icon(Icons.edit, size: 18, color: AdminTheme.accentPurple), onPressed: onEdit, tooltip: 'Edit'),
-                          IconButton(icon: Icon((template['isActive'] != false ? Icons.toggle_on : Icons.toggle_off), size: 24, color: template['isActive'] != false ? AdminTheme.accentGreen : AdminTheme.accentRed), onPressed: onToggle, tooltip: template['isActive'] != false ? 'Deactivate' : 'Activate'),
+                          IconButton(
+                            icon: const Icon(
+                              Icons.edit,
+                              size: 18,
+                              color: AdminTheme.accentPurple,
+                            ),
+                            onPressed: onEdit,
+                            tooltip: 'Edit',
+                          ),
+                          IconButton(
+                            icon: Icon(
+                              (template['isActive'] != false
+                                  ? Icons.toggle_on
+                                  : Icons.toggle_off),
+                              size: 24,
+                              color: template['isActive'] != false
+                                  ? AdminTheme.accentGreen
+                                  : AdminTheme.accentRed,
+                            ),
+                            onPressed: onToggle,
+                            tooltip: template['isActive'] != false
+                                ? 'Deactivate'
+                                : 'Activate',
+                          ),
                         ],
                       ),
                     ],
@@ -1163,12 +1471,18 @@ class _TemplateListTile extends StatelessWidget {
   final Color color;
   final VoidCallback onEdit;
 
-  const _TemplateListTile({required this.template, required this.color, required this.onEdit});
+  const _TemplateListTile({
+    required this.template,
+    required this.color,
+    required this.onEdit,
+  });
 
   @override
   Widget build(BuildContext context) {
     final price = template['price'];
-    final priceStr = (price == 0 || price == 0.0) ? 'FREE' : '\$${price.toStringAsFixed(2)}';
+    final priceStr = (price == 0 || price == 0.0)
+        ? 'FREE'
+        : '\$${price.toStringAsFixed(2)}';
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -1193,14 +1507,37 @@ class _TemplateListTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(template['name']?.toString() ?? '', style: GoogleFonts.orbitron(fontSize: 16, color: AdminTheme.textPrimary)),
-                Text('${template['category']} • ★ ${template['rating']} • ${template['downloads']} downloads', style: GoogleFonts.rajdhani(color: AdminTheme.textSecondary, fontSize: 12)),
+                Text(
+                  template['name']?.toString() ?? '',
+                  style: GoogleFonts.orbitron(
+                    fontSize: 16,
+                    color: AdminTheme.textPrimary,
+                  ),
+                ),
+                Text(
+                  '${template['category']} • ★ ${template['rating']} • ${template['downloads']} downloads',
+                  style: GoogleFonts.rajdhani(
+                    color: AdminTheme.textSecondary,
+                    fontSize: 12,
+                  ),
+                ),
               ],
             ),
           ),
-          Text(priceStr, style: GoogleFonts.orbitron(fontSize: 14, fontWeight: FontWeight.bold, color: AdminTheme.accentNeon)),
+          Text(
+            priceStr,
+            style: GoogleFonts.orbitron(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: AdminTheme.accentNeon,
+            ),
+          ),
           const SizedBox(width: 16),
-          IconButton(icon: const Icon(Icons.edit, color: AdminTheme.accentPurple), onPressed: onEdit, tooltip: 'Edit'),
+          IconButton(
+            icon: const Icon(Icons.edit, color: AdminTheme.accentPurple),
+            onPressed: onEdit,
+            tooltip: 'Edit',
+          ),
         ],
       ),
     );

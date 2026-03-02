@@ -44,11 +44,31 @@ class _BuildsScreenState extends State<BuildsScreen> {
               spacing: 24,
               runSpacing: 12,
               children: [
-                _StatItem('Total', (total is int ? total : 0).toString(), AdminTheme.textSecondary),
-                _StatItem('Success', (success is int ? success : 0).toString(), AdminTheme.accentGreen),
-                _StatItem('Failed', (failed is int ? failed : 0).toString(), AdminTheme.accentRed),
-                _StatItem('Running', (running is int ? running : 0).toString(), AdminTheme.accentNeon),
-                _StatItem('Queued', (queued is int ? queued : 0).toString(), AdminTheme.accentOrange),
+                _StatItem(
+                  'Total',
+                  (total is int ? total : 0).toString(),
+                  AdminTheme.textSecondary,
+                ),
+                _StatItem(
+                  'Success',
+                  (success is int ? success : 0).toString(),
+                  AdminTheme.accentGreen,
+                ),
+                _StatItem(
+                  'Failed',
+                  (failed is int ? failed : 0).toString(),
+                  AdminTheme.accentRed,
+                ),
+                _StatItem(
+                  'Running',
+                  (running is int ? running : 0).toString(),
+                  AdminTheme.accentNeon,
+                ),
+                _StatItem(
+                  'Queued',
+                  (queued is int ? queued : 0).toString(),
+                  AdminTheme.accentOrange,
+                ),
               ],
             ),
             const SizedBox(height: 24),
@@ -89,9 +109,18 @@ class _BuildsScreenState extends State<BuildsScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.error_outline, size: 48, color: AdminTheme.accentRed),
+                      Icon(
+                        Icons.error_outline,
+                        size: 48,
+                        color: AdminTheme.accentRed,
+                      ),
                       const SizedBox(height: 16),
-                      Text(error, style: GoogleFonts.rajdhani(color: AdminTheme.textSecondary)),
+                      Text(
+                        error,
+                        style: GoogleFonts.rajdhani(
+                          color: AdminTheme.textSecondary,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -100,111 +129,226 @@ class _BuildsScreenState extends State<BuildsScreen> {
               Padding(
                 padding: const EdgeInsets.all(48),
                 child: Center(
-                  child: Text('No builds found', style: GoogleFonts.rajdhani(color: AdminTheme.textSecondary)),
-                ),
-              )
-            else
-            // Table with pagination
-            Column(
-              children: [
-                Container(
-                  decoration: BoxDecoration(
-                    color: AdminTheme.bgSecondary,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AdminTheme.borderGlow),
-                  ),
-                  child: SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: DataTable(
-                      headingRowColor: WidgetStateProperty.all(AdminTheme.bgTertiary),
-                      dataRowColor: WidgetStateProperty.resolveWith((states) {
-                        if (states.contains(WidgetState.hovered)) return AdminTheme.bgTertiary.withOpacity(0.5);
-                        return Colors.transparent;
-                      }),
-                      columns: [
-                        DataColumn(label: _header('#')),
-                        DataColumn(label: _header('Project')),
-                        DataColumn(label: _header('Owner')),
-                        DataColumn(label: _header('Platform')),
-                        DataColumn(label: _header('Status')),
-                        DataColumn(label: _header('Duration')),
-                        DataColumn(label: _header('Started')),
-                        DataColumn(label: _header('Actions')),
-                      ],
-                      rows: provider.paginatedBuilds.asMap().entries.map((e) {
-                        final b = e.value;
-                        final status = (b['status'] ?? '').toString();
-                        final isRunning = status == 'running';
-                        return DataRow(
-                          cells: [
-                            DataCell(Text('${e.key + 1}', style: GoogleFonts.jetBrainsMono(color: AdminTheme.textSecondary))),
-                            DataCell(Text(b['name']?.toString() ?? '', style: GoogleFonts.rajdhani(color: AdminTheme.textPrimary))),
-                            DataCell(Text(b['ownerDisplay']?.toString() ?? '', style: GoogleFonts.rajdhani(color: AdminTheme.textSecondary))),
-                            DataCell(Text(b['buildTarget']?.toString() ?? '', style: GoogleFonts.jetBrainsMono(color: AdminTheme.textSecondary, fontSize: 12))),
-                            DataCell(isRunning
-                                ? const SizedBox(width: 80, height: 24, child: LinearProgressIndicator(backgroundColor: AdminTheme.bgTertiary, color: AdminTheme.accentNeon))
-                                : StatusChip(label: status.toUpperCase(), status: status, clickable: false)),
-                            DataCell(Text(_formatDuration(b['buildTimings']?['durationMs']), style: GoogleFonts.jetBrainsMono(color: AdminTheme.textSecondary, fontSize: 12))),
-                            DataCell(Text(_formatDate(b['buildTimings']?['startedAt']), style: GoogleFonts.jetBrainsMono(color: AdminTheme.textSecondary, fontSize: 12))),
-                            DataCell(Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            IconButton(
-                              icon: const Icon(Icons.terminal, size: 20, color: AdminTheme.accentNeon),
-                              onPressed: () => _showLogsModal(context, b['_id']?.toString() ?? ''),
-                              tooltip: 'View Logs',
-                            ),
-                            if (status == 'queued' || status == 'running')
-                              IconButton(icon: const Icon(Icons.cancel, size: 20, color: AdminTheme.accentRed), onPressed: () {}, tooltip: 'Cancel'),
-                            if (status == 'failed') ...[
-                              IconButton(
-                                icon: const Icon(Icons.auto_awesome, size: 20, color: AdminTheme.accentPurple),
-                                onPressed: () => _showAiAnalysisModal(context, b),
-                                tooltip: 'Analyze Error',
-                              ),
-                              IconButton(icon: const Icon(Icons.refresh, size: 20, color: AdminTheme.accentGreen), onPressed: () {}, tooltip: 'Retry'),
-                            ],
-                          ],
-                        )),
-                      ],
-                    );
-                  }).toList(),
+                  child: Text(
+                    'No builds found',
+                    style: GoogleFonts.rajdhani(
+                      color: AdminTheme.textSecondary,
                     ),
                   ),
                 ),
-                // Pagination controls
-                if (provider.buildsTotalPages > 1) ...[
-                  const SizedBox(height: 24),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      IconButton(
-                        icon: const Icon(Icons.chevron_left, color: AdminTheme.textSecondary),
-                        onPressed: provider.buildsHasPrevPage ? provider.prevBuildsPage : null,
-                        tooltip: 'Previous page',
-                      ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        decoration: BoxDecoration(
-                          color: AdminTheme.bgSecondary,
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: AdminTheme.borderGlow),
+              )
+            else
+              // Table with pagination
+              Column(
+                children: [
+                  Container(
+                    decoration: BoxDecoration(
+                      color: AdminTheme.bgSecondary,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AdminTheme.borderGlow),
+                    ),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      child: DataTable(
+                        headingRowColor: WidgetStateProperty.all(
+                          AdminTheme.bgTertiary,
                         ),
-                        child: Text(
-                          'Page ${provider.buildsCurrentPage} of ${provider.buildsTotalPages}',
-                          style: GoogleFonts.rajdhani(color: AdminTheme.textPrimary),
-                        ),
+                        dataRowColor: WidgetStateProperty.resolveWith((states) {
+                          if (states.contains(WidgetState.hovered))
+                            return AdminTheme.bgTertiary.withOpacity(0.5);
+                          return Colors.transparent;
+                        }),
+                        columns: [
+                          DataColumn(label: _header('#')),
+                          DataColumn(label: _header('Project')),
+                          DataColumn(label: _header('Owner')),
+                          DataColumn(label: _header('Platform')),
+                          DataColumn(label: _header('Status')),
+                          DataColumn(label: _header('Duration')),
+                          DataColumn(label: _header('Started')),
+                          DataColumn(label: _header('Actions')),
+                        ],
+                        rows: provider.paginatedBuilds.asMap().entries.map((e) {
+                          final b = e.value;
+                          final status = (b['status'] ?? '').toString();
+                          final isRunning = status == 'running';
+                          return DataRow(
+                            cells: [
+                              DataCell(
+                                Text(
+                                  '${e.key + 1}',
+                                  style: GoogleFonts.jetBrainsMono(
+                                    color: AdminTheme.textSecondary,
+                                  ),
+                                ),
+                              ),
+                              DataCell(
+                                Text(
+                                  b['name']?.toString() ?? '',
+                                  style: GoogleFonts.rajdhani(
+                                    color: AdminTheme.textPrimary,
+                                  ),
+                                ),
+                              ),
+                              DataCell(
+                                Text(
+                                  b['ownerDisplay']?.toString() ?? '',
+                                  style: GoogleFonts.rajdhani(
+                                    color: AdminTheme.textSecondary,
+                                  ),
+                                ),
+                              ),
+                              DataCell(
+                                Text(
+                                  b['buildTarget']?.toString() ?? '',
+                                  style: GoogleFonts.jetBrainsMono(
+                                    color: AdminTheme.textSecondary,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                              DataCell(
+                                isRunning
+                                    ? const SizedBox(
+                                        width: 80,
+                                        height: 24,
+                                        child: LinearProgressIndicator(
+                                          backgroundColor:
+                                              AdminTheme.bgTertiary,
+                                          color: AdminTheme.accentNeon,
+                                        ),
+                                      )
+                                    : StatusChip(
+                                        label: status.toUpperCase(),
+                                        status: status,
+                                        clickable: false,
+                                      ),
+                              ),
+                              DataCell(
+                                Text(
+                                  _formatDuration(
+                                    b['buildTimings']?['durationMs'],
+                                  ),
+                                  style: GoogleFonts.jetBrainsMono(
+                                    color: AdminTheme.textSecondary,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                              DataCell(
+                                Text(
+                                  _formatDate(b['buildTimings']?['startedAt']),
+                                  style: GoogleFonts.jetBrainsMono(
+                                    color: AdminTheme.textSecondary,
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ),
+                              DataCell(
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    IconButton(
+                                      icon: const Icon(
+                                        Icons.terminal,
+                                        size: 20,
+                                        color: AdminTheme.accentNeon,
+                                      ),
+                                      onPressed: () => _showLogsModal(
+                                        context,
+                                        b['_id']?.toString() ?? '',
+                                      ),
+                                      tooltip: 'View Logs',
+                                    ),
+                                    if (status == 'queued' ||
+                                        status == 'running')
+                                      IconButton(
+                                        icon: const Icon(
+                                          Icons.cancel,
+                                          size: 20,
+                                          color: AdminTheme.accentRed,
+                                        ),
+                                        onPressed: () {},
+                                        tooltip: 'Cancel',
+                                      ),
+                                    if (status == 'failed') ...[
+                                      IconButton(
+                                        icon: const Icon(
+                                          Icons.auto_awesome,
+                                          size: 20,
+                                          color: AdminTheme.accentPurple,
+                                        ),
+                                        onPressed: () =>
+                                            _showAiAnalysisModal(context, b),
+                                        tooltip: 'Analyze Error',
+                                      ),
+                                      IconButton(
+                                        icon: const Icon(
+                                          Icons.refresh,
+                                          size: 20,
+                                          color: AdminTheme.accentGreen,
+                                        ),
+                                        onPressed: () {},
+                                        tooltip: 'Retry',
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                            ],
+                          );
+                        }).toList(),
                       ),
-                      IconButton(
-                        icon: const Icon(Icons.chevron_right, color: AdminTheme.textSecondary),
-                        onPressed: provider.buildsHasNextPage ? provider.nextBuildsPage : null,
-                        tooltip: 'Next page',
-                      ),
-                    ],
+                    ),
                   ),
+                  // Pagination controls
+                  if (provider.buildsTotalPages > 1) ...[
+                    const SizedBox(height: 24),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        IconButton(
+                          icon: const Icon(
+                            Icons.chevron_left,
+                            color: AdminTheme.textSecondary,
+                          ),
+                          onPressed: provider.buildsHasPrevPage
+                              ? provider.prevBuildsPage
+                              : null,
+                          tooltip: 'Previous page',
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AdminTheme.bgSecondary,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: AdminTheme.borderGlow),
+                          ),
+                          child: Text(
+                            'Page ${provider.buildsCurrentPage} of ${provider.buildsTotalPages}',
+                            style: GoogleFonts.rajdhani(
+                              color: AdminTheme.textPrimary,
+                            ),
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(
+                            Icons.chevron_right,
+                            color: AdminTheme.textSecondary,
+                          ),
+                          onPressed: provider.buildsHasNextPage
+                              ? provider.nextBuildsPage
+                              : null,
+                          tooltip: 'Next page',
+                        ),
+                      ],
+                    ),
+                  ],
                 ],
-              ],
-            ),
+              ),
           ],
         );
       },
@@ -228,7 +372,11 @@ class _BuildsScreenState extends State<BuildsScreen> {
 
   Widget _header(String text) => Text(
     text,
-    style: GoogleFonts.orbitron(fontSize: 12, fontWeight: FontWeight.w600, color: AdminTheme.textSecondary),
+    style: GoogleFonts.orbitron(
+      fontSize: 12,
+      fontWeight: FontWeight.w600,
+      color: AdminTheme.textSecondary,
+    ),
   );
 
   String _formatDuration(dynamic d) {
@@ -266,9 +414,19 @@ class _StatItem extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(label, style: GoogleFonts.rajdhani(color: AdminTheme.textSecondary)),
+        Text(
+          label,
+          style: GoogleFonts.rajdhani(color: AdminTheme.textSecondary),
+        ),
         const SizedBox(width: 8),
-        Text(value, style: GoogleFonts.jetBrainsMono(fontSize: 18, fontWeight: FontWeight.bold, color: color)),
+        Text(
+          value,
+          style: GoogleFonts.jetBrainsMono(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
       ],
     );
   }
@@ -301,12 +459,13 @@ class _AiAnalysisDialogState extends State<_AiAnalysisDialog> {
     });
 
     final provider = context.read<AdminProvider>();
-    
+
     // Get the actual error message from the build object
-    final errorMessage = widget.build['error']?.toString() ?? 
-                        widget.build['buildLog']?.toString() ?? 
-                        'Unknown build error';
-    
+    final errorMessage =
+        widget.build['error']?.toString() ??
+        widget.build['buildLog']?.toString() ??
+        'Unknown build error';
+
     final result = await provider.analyzeAiBuildError(
       errorMessage: errorMessage,
       buildTarget: widget.build['buildTarget']?.toString(),
@@ -333,9 +492,12 @@ class _AiAnalysisDialogState extends State<_AiAnalysisDialog> {
         children: [
           const Icon(Icons.auto_awesome, color: AdminTheme.accentPurple),
           const SizedBox(width: 12),
-          Text(
-            'AI Error Analysis',
-            style: GoogleFonts.orbitron(color: AdminTheme.textPrimary),
+          Flexible(
+            child: Text(
+              'AI Error Analysis',
+              style: GoogleFonts.orbitron(color: AdminTheme.textPrimary),
+              overflow: TextOverflow.ellipsis,
+            ),
           ),
         ],
       ),
@@ -348,127 +510,189 @@ class _AiAnalysisDialogState extends State<_AiAnalysisDialog> {
                   children: [
                     CircularProgressIndicator(color: AdminTheme.accentPurple),
                     SizedBox(height: 16),
-                    Text('Analyzing build error...', style: TextStyle(color: AdminTheme.textSecondary)),
+                    Text(
+                      'Analyzing build error...',
+                      style: TextStyle(color: AdminTheme.textSecondary),
+                    ),
                   ],
                 ),
               )
             : _error != null
-                ? Center(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
+            ? Center(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(
+                      Icons.error_outline,
+                      color: AdminTheme.accentRed,
+                      size: 48,
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      _error!,
+                      style: const TextStyle(color: AdminTheme.textSecondary),
+                    ),
+                  ],
+                ),
+              )
+            : _analysis != null
+            ? SingleChildScrollView(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Build info
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AdminTheme.bgTertiary,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Build: ${widget.build['name']}',
+                            style: GoogleFonts.rajdhani(
+                              color: AdminTheme.textPrimary,
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Target: ${widget.build['buildTarget']}',
+                            style: GoogleFonts.jetBrainsMono(
+                              color: AdminTheme.textSecondary,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Severity badge
+                    Row(
                       children: [
-                        const Icon(Icons.error_outline, color: AdminTheme.accentRed, size: 48),
-                        const SizedBox(height: 16),
-                        Text(_error!, style: const TextStyle(color: AdminTheme.textSecondary)),
+                        Text(
+                          'Severity: ',
+                          style: GoogleFonts.rajdhani(
+                            color: AdminTheme.textSecondary,
+                            fontSize: 14,
+                          ),
+                        ),
+                        Flexible(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _getSeverityColor(
+                                _analysis!['severity']?.toString() ?? 'medium',
+                              ).withOpacity(0.2),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: _getSeverityColor(
+                                  _analysis!['severity']?.toString() ??
+                                      'medium',
+                                ),
+                              ),
+                            ),
+                            child: Text(
+                              (_analysis!['severity']?.toString() ?? 'medium')
+                                  .toUpperCase(),
+                              style: GoogleFonts.orbitron(
+                                color: _getSeverityColor(
+                                  _analysis!['severity']?.toString() ??
+                                      'medium',
+                                ),
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
                       ],
                     ),
-                  )
-                : _analysis != null
-                    ? SingleChildScrollView(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Build info
-                            Container(
-                              padding: const EdgeInsets.all(12),
-                              decoration: BoxDecoration(
-                                color: AdminTheme.bgTertiary,
-                                borderRadius: BorderRadius.circular(8),
-                              ),
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Build: ${widget.build['name']}',
-                                    style: GoogleFonts.rajdhani(color: AdminTheme.textPrimary, fontSize: 14, fontWeight: FontWeight.bold),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Target: ${widget.build['buildTarget']}',
-                                    style: GoogleFonts.jetBrainsMono(color: AdminTheme.textSecondary, fontSize: 12),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 20),
+                    const SizedBox(height: 20),
 
-                            // Severity badge
-                            Row(
-                              children: [
-                                Text('Severity: ', style: GoogleFonts.rajdhani(color: AdminTheme.textSecondary, fontSize: 14)),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                                  decoration: BoxDecoration(
-                                    color: _getSeverityColor(_analysis!['severity']?.toString() ?? 'medium').withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: _getSeverityColor(_analysis!['severity']?.toString() ?? 'medium')),
-                                  ),
-                                  child: Text(
-                                    (_analysis!['severity']?.toString() ?? 'medium').toUpperCase(),
-                                    style: GoogleFonts.orbitron(
-                                      color: _getSeverityColor(_analysis!['severity']?.toString() ?? 'medium'),
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.bold,
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 20),
-
-                            // Analysis
-                            Text(
-                              'Analysis:',
-                              style: GoogleFonts.orbitron(color: AdminTheme.textPrimary, fontSize: 16, fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(height: 8),
-                            Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: AdminTheme.bgPrimary,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: AdminTheme.borderGlow),
-                              ),
-                              child: Text(
-                                _analysis!['analysis']?.toString() ?? '',
-                                style: GoogleFonts.rajdhani(color: AdminTheme.textSecondary, fontSize: 14, height: 1.6),
-                              ),
-                            ),
-                            const SizedBox(height: 20),
-
-                            // Suggested Fix
-                            Text(
-                              'Suggested Fix:',
-                              style: GoogleFonts.orbitron(color: AdminTheme.accentGreen, fontSize: 16, fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(height: 8),
-                            Container(
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: AdminTheme.bgPrimary,
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(color: AdminTheme.accentGreen.withOpacity(0.3)),
-                              ),
-                              child: Text(
-                                _analysis!['suggestedFix']?.toString() ?? '',
-                                style: GoogleFonts.jetBrainsMono(color: AdminTheme.textSecondary, fontSize: 13, height: 1.8),
-                              ),
-                            ),
-                          ],
+                    // Analysis
+                    Text(
+                      'Analysis:',
+                      style: GoogleFonts.orbitron(
+                        color: AdminTheme.textPrimary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AdminTheme.bgPrimary,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: AdminTheme.borderGlow),
+                      ),
+                      child: Text(
+                        _analysis!['analysis']?.toString() ?? '',
+                        style: GoogleFonts.rajdhani(
+                          color: AdminTheme.textSecondary,
+                          fontSize: 14,
+                          height: 1.6,
                         ),
-                      )
-                    : const SizedBox.shrink(),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Suggested Fix
+                    Text(
+                      'Suggested Fix:',
+                      style: GoogleFonts.orbitron(
+                        color: AdminTheme.accentGreen,
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AdminTheme.bgPrimary,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: AdminTheme.accentGreen.withOpacity(0.3),
+                        ),
+                      ),
+                      child: Text(
+                        _analysis!['suggestedFix']?.toString() ?? '',
+                        style: GoogleFonts.jetBrainsMono(
+                          color: AdminTheme.textSecondary,
+                          fontSize: 13,
+                          height: 1.8,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            : const SizedBox.shrink(),
       ),
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Close', style: TextStyle(color: AdminTheme.textSecondary)),
+          child: const Text(
+            'Close',
+            style: TextStyle(color: AdminTheme.textSecondary),
+          ),
         ),
         if (_analysis != null)
           ElevatedButton.icon(
             onPressed: () async {
               // Copy suggested fix to clipboard
-              final fixText = _analysis!['suggestedFix']?.toString() ?? 'No fix available';
+              final fixText =
+                  _analysis!['suggestedFix']?.toString() ?? 'No fix available';
               await Clipboard.setData(ClipboardData(text: fixText));
               ScaffoldMessenger.of(context).showSnackBar(
                 const SnackBar(
@@ -501,6 +725,7 @@ class _AiAnalysisDialogState extends State<_AiAnalysisDialog> {
     }
   }
 }
+
 class _BuildLogsDialog extends StatefulWidget {
   final String buildId;
   const _BuildLogsDialog({required this.buildId});
@@ -526,12 +751,21 @@ class _BuildLogsDialogState extends State<_BuildLogsDialog> {
       title: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Row(
-            children: [
-              const Icon(Icons.terminal, color: AdminTheme.accentGreen),
-              const SizedBox(width: 12),
-              Text('Build Logs', style: GoogleFonts.orbitron(color: AdminTheme.accentGreen)),
-            ],
+          Expanded(
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(Icons.terminal, color: AdminTheme.accentGreen),
+                const SizedBox(width: 12),
+                Flexible(
+                  child: Text(
+                    'Build Logs',
+                    style: GoogleFonts.orbitron(color: AdminTheme.accentGreen),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
           ),
           IconButton(
             icon: const Icon(Icons.copy, color: AdminTheme.accentNeon),
@@ -576,14 +810,20 @@ class _BuildLogsDialogState extends State<_BuildLogsDialog> {
             child: SingleChildScrollView(
               child: Text(
                 logs,
-                style: GoogleFonts.jetBrainsMono(color: AdminTheme.accentGreen, fontSize: 12),
+                style: GoogleFonts.jetBrainsMono(
+                  color: AdminTheme.accentGreen,
+                  fontSize: 12,
+                ),
               ),
             ),
           );
         },
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Close'),
+        ),
       ],
     );
   }

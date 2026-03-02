@@ -48,7 +48,13 @@ class _OverviewScreenState extends State<OverviewScreen> {
                 runSpacing: 20,
                 children: [
                   SizedBox(
-                    width: (constraints.maxWidth > 1200 ? (constraints.maxWidth - 60) / 4 : constraints.maxWidth > 768 ? (constraints.maxWidth - 40) / 2 : constraints.maxWidth) - 20,
+                    width:
+                        (constraints.maxWidth > 1200
+                            ? (constraints.maxWidth - 60) / 4
+                            : constraints.maxWidth > 768
+                            ? (constraints.maxWidth - 40) / 2
+                            : constraints.maxWidth) -
+                        20,
                     child: StatCard(
                       title: 'Total Users',
                       value: totalUsers.toString(),
@@ -58,7 +64,13 @@ class _OverviewScreenState extends State<OverviewScreen> {
                     ),
                   ),
                   SizedBox(
-                    width: (constraints.maxWidth > 1200 ? (constraints.maxWidth - 60) / 4 : constraints.maxWidth > 768 ? (constraints.maxWidth - 40) / 2 : constraints.maxWidth) - 20,
+                    width:
+                        (constraints.maxWidth > 1200
+                            ? (constraints.maxWidth - 60) / 4
+                            : constraints.maxWidth > 768
+                            ? (constraints.maxWidth - 40) / 2
+                            : constraints.maxWidth) -
+                        20,
                     child: StatCard(
                       title: 'Active Projects',
                       value: activeProjects.toString(),
@@ -68,7 +80,13 @@ class _OverviewScreenState extends State<OverviewScreen> {
                     ),
                   ),
                   SizedBox(
-                    width: (constraints.maxWidth > 1200 ? (constraints.maxWidth - 60) / 4 : constraints.maxWidth > 768 ? (constraints.maxWidth - 40) / 2 : constraints.maxWidth) - 20,
+                    width:
+                        (constraints.maxWidth > 1200
+                            ? (constraints.maxWidth - 60) / 4
+                            : constraints.maxWidth > 768
+                            ? (constraints.maxWidth - 40) / 2
+                            : constraints.maxWidth) -
+                        20,
                     child: StatCard(
                       title: 'Templates',
                       value: totalTemplates.toString(),
@@ -78,7 +96,13 @@ class _OverviewScreenState extends State<OverviewScreen> {
                     ),
                   ),
                   SizedBox(
-                    width: (constraints.maxWidth > 1200 ? (constraints.maxWidth - 60) / 4 : constraints.maxWidth > 768 ? (constraints.maxWidth - 40) / 2 : constraints.maxWidth) - 20,
+                    width:
+                        (constraints.maxWidth > 1200
+                            ? (constraints.maxWidth - 60) / 4
+                            : constraints.maxWidth > 768
+                            ? (constraints.maxWidth - 40) / 2
+                            : constraints.maxWidth) -
+                        20,
                     child: StatCard(
                       title: 'Builds Today',
                       value: buildsToday.toString(),
@@ -110,7 +134,9 @@ class _OverviewScreenState extends State<OverviewScreen> {
                 builder: (context, provider, _) {
                   return SizedBox(
                     width: constraints.maxWidth,
-                    child: _HealthMonitorCard(healthData: provider.healthMetrics),
+                    child: _HealthMonitorCard(
+                      healthData: provider.healthMetrics,
+                    ),
                   );
                 },
               );
@@ -126,7 +152,9 @@ class _OverviewScreenState extends State<OverviewScreen> {
                 runSpacing: 20,
                 children: [
                   SizedBox(
-                    width: isWide ? (constraints.maxWidth - 40) / 2 : constraints.maxWidth,
+                    width: isWide
+                        ? (constraints.maxWidth - 40) / 2
+                        : constraints.maxWidth,
                     child: PremiumCard(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -146,28 +174,38 @@ class _OverviewScreenState extends State<OverviewScreen> {
                                 ? const Center(
                                     child: Text(
                                       'No data available',
-                                      style: TextStyle(color: AdminTheme.textSecondary),
+                                      style: TextStyle(
+                                        color: AdminTheme.textSecondary,
+                                      ),
                                     ),
                                   )
                                 : LineChart(
                                     LineChartData(
                                       gridData: FlGridData(
                                         show: true,
-                                        getDrawingHorizontalLine: (value) => FlLine(
-                                          color: AdminTheme.borderGlow.withOpacity(0.3),
-                                          strokeWidth: 1,
-                                        ),
-                                        getDrawingVerticalLine: (value) => FlLine(
-                                          color: AdminTheme.borderGlow.withOpacity(0.3),
-                                          strokeWidth: 1,
-                                        ),
+                                        getDrawingHorizontalLine: (value) =>
+                                            FlLine(
+                                              color: AdminTheme.borderGlow
+                                                  .withOpacity(0.3),
+                                              strokeWidth: 1,
+                                            ),
+                                        getDrawingVerticalLine: (value) =>
+                                            FlLine(
+                                              color: AdminTheme.borderGlow
+                                                  .withOpacity(0.3),
+                                              strokeWidth: 1,
+                                            ),
                                       ),
                                       titlesData: FlTitlesData(
                                         rightTitles: const AxisTitles(
-                                          sideTitles: SideTitles(showTitles: false),
+                                          sideTitles: SideTitles(
+                                            showTitles: false,
+                                          ),
                                         ),
                                         topTitles: const AxisTitles(
-                                          sideTitles: SideTitles(showTitles: false),
+                                          sideTitles: SideTitles(
+                                            showTitles: false,
+                                          ),
                                         ),
                                         bottomTitles: AxisTitles(
                                           sideTitles: SideTitles(
@@ -176,14 +214,19 @@ class _OverviewScreenState extends State<OverviewScreen> {
                                             interval: 7,
                                             getTitlesWidget: (value, meta) {
                                               final index = value.toInt();
-                                              if (index < 0 || index >= newUsersData.length) {
+                                              if (index < 0 ||
+                                                  index >=
+                                                      newUsersData.length) {
                                                 return const Text('');
                                               }
-                                              final date = newUsersData[index]['_id'] as String;
+                                              final date =
+                                                  newUsersData[index]['_id']
+                                                      as String;
                                               return Text(
                                                 date.substring(5),
                                                 style: const TextStyle(
-                                                  color: AdminTheme.textSecondary,
+                                                  color:
+                                                      AdminTheme.textSecondary,
                                                   fontSize: 10,
                                                 ),
                                               );
@@ -198,7 +241,8 @@ class _OverviewScreenState extends State<OverviewScreen> {
                                               return Text(
                                                 value.toInt().toString(),
                                                 style: const TextStyle(
-                                                  color: AdminTheme.textSecondary,
+                                                  color:
+                                                      AdminTheme.textSecondary,
                                                   fontSize: 10,
                                                 ),
                                               );
@@ -209,31 +253,45 @@ class _OverviewScreenState extends State<OverviewScreen> {
                                       borderData: FlBorderData(
                                         show: true,
                                         border: Border.all(
-                                          color: AdminTheme.borderGlow.withOpacity(0.3),
+                                          color: AdminTheme.borderGlow
+                                              .withOpacity(0.3),
                                         ),
                                       ),
                                       lineBarsData: [
                                         LineChartBarData(
-                                          spots: newUsersData.asMap().entries.map((entry) {
-                                            return FlSpot(
-                                              entry.key.toDouble(),
-                                              (entry.value['count'] as num).toDouble(),
-                                            );
-                                          }).toList(),
+                                          spots: newUsersData
+                                              .asMap()
+                                              .entries
+                                              .map((entry) {
+                                                return FlSpot(
+                                                  entry.key.toDouble(),
+                                                  (entry.value['count'] as num)
+                                                      .toDouble(),
+                                                );
+                                              })
+                                              .toList(),
                                           isCurved: true,
                                           color: AdminTheme.accentNeon,
                                           barWidth: 3,
                                           isStrokeCapRound: true,
                                           dotData: FlDotData(
                                             show: true,
-                                            getDotPainter: (spot, percent, barData, index) {
-                                              return FlDotCirclePainter(
-                                                radius: 4,
-                                                color: AdminTheme.accentNeon,
-                                                strokeColor: AdminTheme.bgPrimary,
-                                                strokeWidth: 2,
-                                              );
-                                            },
+                                            getDotPainter:
+                                                (
+                                                  spot,
+                                                  percent,
+                                                  barData,
+                                                  index,
+                                                ) {
+                                                  return FlDotCirclePainter(
+                                                    radius: 4,
+                                                    color:
+                                                        AdminTheme.accentNeon,
+                                                    strokeColor:
+                                                        AdminTheme.bgPrimary,
+                                                    strokeWidth: 2,
+                                                  );
+                                                },
                                           ),
                                         ),
                                       ],
@@ -246,7 +304,9 @@ class _OverviewScreenState extends State<OverviewScreen> {
                     ),
                   ),
                   SizedBox(
-                    width: isWide ? (constraints.maxWidth - 40) / 2 : constraints.maxWidth,
+                    width: isWide
+                        ? (constraints.maxWidth - 40) / 2
+                        : constraints.maxWidth,
                     child: PremiumCard(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -266,28 +326,38 @@ class _OverviewScreenState extends State<OverviewScreen> {
                                 ? const Center(
                                     child: Text(
                                       'No data available',
-                                      style: TextStyle(color: AdminTheme.textSecondary),
+                                      style: TextStyle(
+                                        color: AdminTheme.textSecondary,
+                                      ),
                                     ),
                                   )
                                 : LineChart(
                                     LineChartData(
                                       gridData: FlGridData(
                                         show: true,
-                                        getDrawingHorizontalLine: (value) => FlLine(
-                                          color: AdminTheme.borderGlow.withOpacity(0.3),
-                                          strokeWidth: 1,
-                                        ),
-                                        getDrawingVerticalLine: (value) => FlLine(
-                                          color: AdminTheme.borderGlow.withOpacity(0.3),
-                                          strokeWidth: 1,
-                                        ),
+                                        getDrawingHorizontalLine: (value) =>
+                                            FlLine(
+                                              color: AdminTheme.borderGlow
+                                                  .withOpacity(0.3),
+                                              strokeWidth: 1,
+                                            ),
+                                        getDrawingVerticalLine: (value) =>
+                                            FlLine(
+                                              color: AdminTheme.borderGlow
+                                                  .withOpacity(0.3),
+                                              strokeWidth: 1,
+                                            ),
                                       ),
                                       titlesData: FlTitlesData(
                                         rightTitles: const AxisTitles(
-                                          sideTitles: SideTitles(showTitles: false),
+                                          sideTitles: SideTitles(
+                                            showTitles: false,
+                                          ),
                                         ),
                                         topTitles: const AxisTitles(
-                                          sideTitles: SideTitles(showTitles: false),
+                                          sideTitles: SideTitles(
+                                            showTitles: false,
+                                          ),
                                         ),
                                         bottomTitles: AxisTitles(
                                           sideTitles: SideTitles(
@@ -296,14 +366,19 @@ class _OverviewScreenState extends State<OverviewScreen> {
                                             interval: 7,
                                             getTitlesWidget: (value, meta) {
                                               final index = value.toInt();
-                                              if (index < 0 || index >= buildsLast30Days.length) {
+                                              if (index < 0 ||
+                                                  index >=
+                                                      buildsLast30Days.length) {
                                                 return const Text('');
                                               }
-                                              final date = buildsLast30Days[index]['_id'] as String;
+                                              final date =
+                                                  buildsLast30Days[index]['_id']
+                                                      as String;
                                               return Text(
                                                 date.substring(5),
                                                 style: const TextStyle(
-                                                  color: AdminTheme.textSecondary,
+                                                  color:
+                                                      AdminTheme.textSecondary,
                                                   fontSize: 10,
                                                 ),
                                               );
@@ -318,7 +393,8 @@ class _OverviewScreenState extends State<OverviewScreen> {
                                               return Text(
                                                 value.toInt().toString(),
                                                 style: const TextStyle(
-                                                  color: AdminTheme.textSecondary,
+                                                  color:
+                                                      AdminTheme.textSecondary,
                                                   fontSize: 10,
                                                 ),
                                               );
@@ -329,31 +405,45 @@ class _OverviewScreenState extends State<OverviewScreen> {
                                       borderData: FlBorderData(
                                         show: true,
                                         border: Border.all(
-                                          color: AdminTheme.borderGlow.withOpacity(0.3),
+                                          color: AdminTheme.borderGlow
+                                              .withOpacity(0.3),
                                         ),
                                       ),
                                       lineBarsData: [
                                         LineChartBarData(
-                                          spots: buildsLast30Days.asMap().entries.map((entry) {
-                                            return FlSpot(
-                                              entry.key.toDouble(),
-                                              (entry.value['count'] as num).toDouble(),
-                                            );
-                                          }).toList(),
+                                          spots: buildsLast30Days
+                                              .asMap()
+                                              .entries
+                                              .map((entry) {
+                                                return FlSpot(
+                                                  entry.key.toDouble(),
+                                                  (entry.value['count'] as num)
+                                                      .toDouble(),
+                                                );
+                                              })
+                                              .toList(),
                                           isCurved: true,
                                           color: AdminTheme.accentOrange,
                                           barWidth: 3,
                                           isStrokeCapRound: true,
                                           dotData: FlDotData(
                                             show: true,
-                                            getDotPainter: (spot, percent, barData, index) {
-                                              return FlDotCirclePainter(
-                                                radius: 4,
-                                                color: AdminTheme.accentOrange,
-                                                strokeColor: AdminTheme.bgPrimary,
-                                                strokeWidth: 2,
-                                              );
-                                            },
+                                            getDotPainter:
+                                                (
+                                                  spot,
+                                                  percent,
+                                                  barData,
+                                                  index,
+                                                ) {
+                                                  return FlDotCirclePainter(
+                                                    radius: 4,
+                                                    color:
+                                                        AdminTheme.accentOrange,
+                                                    strokeColor:
+                                                        AdminTheme.bgPrimary,
+                                                    strokeWidth: 2,
+                                                  );
+                                                },
                                           ),
                                         ),
                                       ],
@@ -366,7 +456,9 @@ class _OverviewScreenState extends State<OverviewScreen> {
                     ),
                   ),
                   SizedBox(
-                    width: isWide ? (constraints.maxWidth - 40) / 2 : constraints.maxWidth,
+                    width: isWide
+                        ? (constraints.maxWidth - 40) / 2
+                        : constraints.maxWidth,
                     child: PremiumCard(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -414,11 +506,15 @@ class _OverviewScreenState extends State<OverviewScreen> {
                 runSpacing: 20,
                 children: [
                   SizedBox(
-                    width: isWide ? (constraints.maxWidth - 40) / 2 : constraints.maxWidth,
+                    width: isWide
+                        ? (constraints.maxWidth - 40) / 2
+                        : constraints.maxWidth,
                     child: _RecentActivityTable(),
                   ),
                   SizedBox(
-                    width: isWide ? (constraints.maxWidth - 40) / 2 : constraints.maxWidth,
+                    width: isWide
+                        ? (constraints.maxWidth - 40) / 2
+                        : constraints.maxWidth,
                     child: _SystemStatusCard(),
                   ),
                 ],
@@ -471,26 +567,34 @@ class _RecentActivityTable extends StatelessWidget {
               ),
             )
           else
-            ...activities.map((a) => Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Row(
-                children: [
-                  StatusBadge(status: a['type']?.toString() ?? 'info'),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Text(
-                      a['title']?.toString() ?? '',
-                      style: GoogleFonts.rajdhani(color: AdminTheme.textSecondary, fontSize: 14),
-                      overflow: TextOverflow.ellipsis,
+            ...activities.map(
+              (a) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Row(
+                  children: [
+                    StatusBadge(status: a['type']?.toString() ?? 'info'),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        a['title']?.toString() ?? '',
+                        style: GoogleFonts.rajdhani(
+                          color: AdminTheme.textSecondary,
+                          fontSize: 14,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
-                  ),
-                  Text(
-                    _formatTime(a['timestamp']?.toString()),
-                    style: GoogleFonts.jetBrainsMono(color: AdminTheme.textMuted, fontSize: 12),
-                  ),
-                ],
+                    Text(
+                      _formatTime(a['timestamp']?.toString()),
+                      style: GoogleFonts.jetBrainsMono(
+                        color: AdminTheme.textMuted,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            )),
+            ),
         ],
       ),
     );
@@ -547,42 +651,60 @@ class _SystemStatusCard extends StatelessWidget {
               ),
             )
           else
-            ...statuses.map((s) => Padding(
-              padding: const EdgeInsets.only(bottom: 12),
-              child: Row(
-                children: [
-                  Container(
-                    width: 8,
-                    height: 8,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: (s['status'] == 'online') ? AdminTheme.accentGreen : AdminTheme.accentOrange,
-                      boxShadow: [
-                        BoxShadow(
-                          color: ((s['status'] == 'online') ? AdminTheme.accentGreen : AdminTheme.accentOrange).withOpacity(0.5),
-                          blurRadius: 4,
-                        ),
-                      ],
+            ...statuses.map(
+              (s) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 8,
+                      height: 8,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: (s['status'] == 'online')
+                            ? AdminTheme.accentGreen
+                            : AdminTheme.accentOrange,
+                        boxShadow: [
+                          BoxShadow(
+                            color:
+                                ((s['status'] == 'online')
+                                        ? AdminTheme.accentGreen
+                                        : AdminTheme.accentOrange)
+                                    .withOpacity(0.5),
+                            blurRadius: 4,
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Text(
-                    s['name']?.toString() ?? '',
-                    style: GoogleFonts.rajdhani(color: AdminTheme.textPrimary, fontWeight: FontWeight.w600),
-                  ),
-                  const Spacer(),
-                  Text(
-                    s['detail']?.toString() ?? '',
-                    style: GoogleFonts.jetBrainsMono(color: AdminTheme.textSecondary, fontSize: 12),
-                  ),
-                ],
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        s['name']?.toString() ?? '',
+                        style: GoogleFonts.rajdhani(
+                          color: AdminTheme.textPrimary,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      s['detail']?.toString() ?? '',
+                      style: GoogleFonts.jetBrainsMono(
+                        color: AdminTheme.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ],
+                ),
               ),
-            )),
+            ),
         ],
       ),
     );
   }
 }
+
 class _AiInsightsCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
@@ -612,7 +734,13 @@ class _AiInsightsCard extends StatelessWidget {
                     : () {
                         context.read<AdminProvider>().generateAiInsights();
                       },
-                icon: loading ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2)) : const Icon(Icons.refresh),
+                icon: loading
+                    ? const SizedBox(
+                        width: 16,
+                        height: 16,
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      )
+                    : const Icon(Icons.refresh),
                 label: const Text('Refresh'),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: AdminTheme.accentNeon,
@@ -677,23 +805,36 @@ class _HealthMonitorCardState extends State<_HealthMonitorCard> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Row(
-                    children: [
-                      const Icon(Icons.health_and_safety, color: AdminTheme.accentGreen, size: 24),
-                      const SizedBox(width: 12),
-                      Text(
-                        'Platform Health',
-                        style: GoogleFonts.orbitron(
-                          color: AdminTheme.textPrimary,
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
+                  Expanded(
+                    child: Row(
+                      children: [
+                        const Icon(
+                          Icons.health_and_safety,
+                          color: AdminTheme.accentGreen,
+                          size: 24,
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 12),
+                        Flexible(
+                          child: Text(
+                            'Platform Health',
+                            style: GoogleFonts.orbitron(
+                              color: AdminTheme.textPrimary,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                   if (!loading)
                     IconButton(
-                      icon: const Icon(Icons.refresh, color: AdminTheme.accentNeon, size: 20),
+                      icon: const Icon(
+                        Icons.refresh,
+                        color: AdminTheme.accentNeon,
+                        size: 20,
+                      ),
                       onPressed: () => provider.fetchHealthMetrics(),
                       tooltip: 'Refresh',
                     ),
@@ -706,7 +847,9 @@ class _HealthMonitorCardState extends State<_HealthMonitorCard> {
                 Center(
                   child: Text(
                     'No health data available',
-                    style: GoogleFonts.rajdhani(color: AdminTheme.textSecondary),
+                    style: GoogleFonts.rajdhani(
+                      color: AdminTheme.textSecondary,
+                    ),
                   ),
                 )
               else
@@ -716,13 +859,15 @@ class _HealthMonitorCardState extends State<_HealthMonitorCard> {
                   children: [
                     _HealthMetric(
                       label: 'Build Success Rate',
-                      value: '${(health['buildSuccessRate'] as num?)?.toStringAsFixed(1) ?? '-'}%',
+                      value:
+                          '${(health['buildSuccessRate'] as num?)?.toStringAsFixed(1) ?? '-'}%',
                       icon: Icons.trending_up,
                       color: AdminTheme.accentGreen,
                     ),
                     _HealthMetric(
                       label: 'Avg Build Time',
-                      value: '${((health['avgBuildTimeMs'] as num?)?.toInt() ?? 0) ~/ 60}m',
+                      value:
+                          '${((health['avgBuildTimeMs'] as num?)?.toInt() ?? 0) ~/ 60}m',
                       icon: Icons.timer,
                       color: AdminTheme.accentOrange,
                     ),
@@ -730,7 +875,12 @@ class _HealthMonitorCardState extends State<_HealthMonitorCard> {
                       label: 'Failed Last Hour',
                       value: '${health['failedBuildsLastHour'] ?? 0}',
                       icon: Icons.warning,
-                      color: ((health['failedBuildsLastHour'] as num?)?.toInt() ?? 0) > 3 ? AdminTheme.accentRed : AdminTheme.accentGreen,
+                      color:
+                          ((health['failedBuildsLastHour'] as num?)?.toInt() ??
+                                  0) >
+                              3
+                          ? AdminTheme.accentRed
+                          : AdminTheme.accentGreen,
                     ),
                     _HealthMetric(
                       label: 'System Uptime',

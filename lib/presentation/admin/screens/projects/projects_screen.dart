@@ -4,7 +4,6 @@ import 'package:provider/provider.dart';
 import '../../constants/admin_theme.dart';
 import '../../providers/admin_provider.dart';
 import '../../widgets/status_chip.dart';
-import 'archived_projects_screen.dart';
 
 class ProjectsScreen extends StatefulWidget {
   const ProjectsScreen({super.key});
@@ -56,8 +55,15 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                     onChanged: provider.setProjectsSearch,
                     decoration: InputDecoration(
                       hintText: 'Search projects...',
-                      prefixIcon: const Icon(Icons.search, color: AdminTheme.textSecondary, size: 20),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      prefixIcon: const Icon(
+                        Icons.search,
+                        color: AdminTheme.textSecondary,
+                        size: 20,
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
                     ),
                     style: const TextStyle(color: AdminTheme.textPrimary),
                   ),
@@ -69,11 +75,15 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                     DropdownMenuItem(value: 'all', child: Text('All Status')),
                     DropdownMenuItem(value: 'queued', child: Text('Queued')),
                     DropdownMenuItem(value: 'pending', child: Text('Pending')),
-                    DropdownMenuItem(value: 'building', child: Text('Building')),
+                    DropdownMenuItem(
+                      value: 'building',
+                      child: Text('Building'),
+                    ),
                     DropdownMenuItem(value: 'ready', child: Text('Ready')),
                     DropdownMenuItem(value: 'failed', child: Text('Failed')),
                   ],
-                  onChanged: (v) => provider.setProjectsStatusFilter(v ?? 'all'),
+                  onChanged: (v) =>
+                      provider.setProjectsStatusFilter(v ?? 'all'),
                 ),
               ],
             ),
@@ -95,10 +105,16 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(Icons.error_outline, size: 48, color: AdminTheme.accentRed),
+                      const Icon(
+                        Icons.error_outline,
+                        size: 48,
+                        color: AdminTheme.accentRed,
+                      ),
                       const SizedBox(height: 16),
-                      Text('Error: ${provider.projectsError}',
-                        style: const TextStyle(color: AdminTheme.accentRed)),
+                      Text(
+                        'Error: ${provider.projectsError}',
+                        style: const TextStyle(color: AdminTheme.accentRed),
+                      ),
                     ],
                   ),
                 ),
@@ -110,10 +126,16 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.folder_off, size: 48, color: AdminTheme.textMuted),
+                      Icon(
+                        Icons.folder_off,
+                        size: 48,
+                        color: AdminTheme.textMuted,
+                      ),
                       SizedBox(height: 16),
-                      Text('No projects found',
-                        style: TextStyle(color: AdminTheme.textSecondary)),
+                      Text(
+                        'No projects found',
+                        style: TextStyle(color: AdminTheme.textSecondary),
+                      ),
                     ],
                   ),
                 ),
@@ -124,9 +146,11 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                 children: [
                   LayoutBuilder(
                     builder: (context, constraints) {
-                      final crossAxisCount = constraints.maxWidth > 1400 ? 4
-                        : (constraints.maxWidth > 1000 ? 3
-                        : (constraints.maxWidth > 600 ? 2 : 1));
+                      final crossAxisCount = constraints.maxWidth > 1400
+                          ? 4
+                          : (constraints.maxWidth > 1000
+                                ? 3
+                                : (constraints.maxWidth > 600 ? 2 : 1));
                       return GridView.builder(
                         shrinkWrap: true,
                         physics: const NeverScrollableScrollPhysics(),
@@ -139,12 +163,19 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                         itemCount: projects.length,
                         itemBuilder: (context, i) {
                           final p = projects[i];
-                          final color = _categoryColors[p['templateName']] ?? _categoryColors['default']!;
+                          final color =
+                              _categoryColors[p['templateName']] ??
+                              _categoryColors['default']!;
                           return _ProjectCard(
                             project: p,
                             color: color,
                             onView: () => _showProjectDetail(context, p),
-                            onDelete: () => _showConfirm(context, 'Delete', 'Delete this project permanently?', p),
+                            onDelete: () => _showConfirm(
+                              context,
+                              'Delete',
+                              'Delete this project permanently?',
+                              p,
+                            ),
                           );
                         },
                       );
@@ -157,12 +188,20 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         IconButton(
-                          icon: const Icon(Icons.chevron_left, color: AdminTheme.textSecondary),
-                          onPressed: provider.projectsHasPrevPage ? provider.prevProjectsPage : null,
+                          icon: const Icon(
+                            Icons.chevron_left,
+                            color: AdminTheme.textSecondary,
+                          ),
+                          onPressed: provider.projectsHasPrevPage
+                              ? provider.prevProjectsPage
+                              : null,
                           tooltip: 'Previous page',
                         ),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 8,
+                          ),
                           decoration: BoxDecoration(
                             color: AdminTheme.bgSecondary,
                             borderRadius: BorderRadius.circular(6),
@@ -170,12 +209,19 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
                           ),
                           child: Text(
                             'Page $currentPage of $totalPages',
-                            style: GoogleFonts.rajdhani(color: AdminTheme.textPrimary),
+                            style: GoogleFonts.rajdhani(
+                              color: AdminTheme.textPrimary,
+                            ),
                           ),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.chevron_right, color: AdminTheme.textSecondary),
-                          onPressed: provider.projectsHasNextPage ? provider.nextProjectsPage : null,
+                          icon: const Icon(
+                            Icons.chevron_right,
+                            color: AdminTheme.textSecondary,
+                          ),
+                          onPressed: provider.projectsHasNextPage
+                              ? provider.nextProjectsPage
+                              : null,
                           tooltip: 'Next page',
                         ),
                       ],
@@ -194,7 +240,10 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AdminTheme.bgSecondary,
-        title: Text(p['name']?.toString() ?? '', style: const TextStyle(color: AdminTheme.textPrimary)),
+        title: Text(
+          p['name']?.toString() ?? '',
+          style: const TextStyle(color: AdminTheme.textPrimary),
+        ),
         content: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -209,46 +258,71 @@ class _ProjectsScreenState extends State<ProjectsScreen> {
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Close')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
         ],
       ),
     );
   }
 
-  void _showConfirm(BuildContext context, String action, String message, Map<String, dynamic> p) {
+  void _showConfirm(
+    BuildContext context,
+    String action,
+    String message,
+    Map<String, dynamic> p,
+  ) {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AdminTheme.bgSecondary,
-        title: Text('$action Project', style: const TextStyle(color: AdminTheme.textPrimary)),
-        content: Text(message, style: const TextStyle(color: AdminTheme.textSecondary)),
+        title: Text(
+          '$action Project',
+          style: const TextStyle(color: AdminTheme.textPrimary),
+        ),
+        content: Text(
+          message,
+          style: const TextStyle(color: AdminTheme.textSecondary),
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
           ElevatedButton(
             onPressed: () async {
               Navigator.pop(ctx);
               final provider = context.read<AdminProvider>();
               final projectId = p['_id'].toString();
-              
+
               bool success = false;
               if (action == 'Archive') {
                 success = await provider.archiveProject(projectId);
               } else if (action == 'Delete') {
                 success = await provider.hideProject(projectId);
               }
-              
+
               if (success) {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('$action successful'), backgroundColor: AdminTheme.accentGreen),
+                  SnackBar(
+                    content: Text('$action successful'),
+                    backgroundColor: AdminTheme.accentGreen,
+                  ),
                 );
               } else {
                 ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('$action failed'), backgroundColor: AdminTheme.accentRed),
+                  SnackBar(
+                    content: Text('$action failed'),
+                    backgroundColor: AdminTheme.accentRed,
+                  ),
                 );
               }
             },
             style: ElevatedButton.styleFrom(
-              backgroundColor: action == 'Delete' ? AdminTheme.accentRed : AdminTheme.accentNeon,
+              backgroundColor: action == 'Delete'
+                  ? AdminTheme.accentRed
+                  : AdminTheme.accentNeon,
               foregroundColor: AdminTheme.bgPrimary,
             ),
             child: Text(action),
@@ -275,7 +349,12 @@ class _ProjectCard extends StatefulWidget {
   final VoidCallback onView;
   final VoidCallback onDelete;
 
-  const _ProjectCard({required this.project, required this.color, required this.onView, required this.onDelete});
+  const _ProjectCard({
+    required this.project,
+    required this.color,
+    required this.onView,
+    required this.onDelete,
+  });
 
   @override
   State<_ProjectCard> createState() => _ProjectCardState();
@@ -299,7 +378,15 @@ class _ProjectCardState extends State<_ProjectCard> {
           color: AdminTheme.bgSecondary,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: AdminTheme.borderGlow),
-          boxShadow: _hovered ? [BoxShadow(color: widget.color.withOpacity(0.2), blurRadius: 20, offset: const Offset(0, 8))] : null,
+          boxShadow: _hovered
+              ? [
+                  BoxShadow(
+                    color: widget.color.withOpacity(0.2),
+                    blurRadius: 20,
+                    offset: const Offset(0, 8),
+                  ),
+                ]
+              : null,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -308,13 +395,24 @@ class _ProjectCardState extends State<_ProjectCard> {
               height: 100,
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [widget.color.withOpacity(0.4), widget.color.withOpacity(0.1)],
+                  colors: [
+                    widget.color.withOpacity(0.4),
+                    widget.color.withOpacity(0.1),
+                  ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(12),
+                ),
               ),
-              child: const Center(child: Icon(Icons.folder_special, size: 48, color: AdminTheme.textMuted)),
+              child: const Center(
+                child: Icon(
+                  Icons.folder_special,
+                  size: 48,
+                  color: AdminTheme.textMuted,
+                ),
+              ),
             ),
             Expanded(
               child: Padding(
@@ -324,20 +422,51 @@ class _ProjectCardState extends State<_ProjectCard> {
                   children: [
                     Text(
                       p['name']?.toString() ?? 'Untitled',
-                      style: GoogleFonts.orbitron(fontSize: 16, fontWeight: FontWeight.w600, color: AdminTheme.textPrimary),
+                      style: GoogleFonts.orbitron(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w600,
+                        color: AdminTheme.textPrimary,
+                      ),
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 8),
-                    Text(p['ownerDisplay']?.toString() ?? '', style: GoogleFonts.rajdhani(color: AdminTheme.textSecondary, fontSize: 12)),
+                    Text(
+                      p['ownerDisplay']?.toString() ?? '',
+                      style: GoogleFonts.rajdhani(
+                        color: AdminTheme.textSecondary,
+                        fontSize: 12,
+                      ),
+                    ),
                     const SizedBox(height: 8),
-                    StatusChip(label: status.replaceAll('_', ' '), status: status, clickable: false, color: AdminTheme.statusColor(status)),
+                    StatusChip(
+                      label: status.replaceAll('_', ' '),
+                      status: status,
+                      clickable: false,
+                      color: AdminTheme.statusColor(status),
+                    ),
                     const Spacer(),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
-                        IconButton(icon: const Icon(Icons.visibility, size: 18, color: AdminTheme.accentNeon), onPressed: widget.onView, tooltip: 'View'),
-                        IconButton(icon: const Icon(Icons.delete, size: 18, color: AdminTheme.accentRed), onPressed: widget.onDelete, tooltip: 'Delete'),
+                        IconButton(
+                          icon: const Icon(
+                            Icons.visibility,
+                            size: 18,
+                            color: AdminTheme.accentNeon,
+                          ),
+                          onPressed: widget.onView,
+                          tooltip: 'View',
+                        ),
+                        IconButton(
+                          icon: const Icon(
+                            Icons.delete,
+                            size: 18,
+                            color: AdminTheme.accentRed,
+                          ),
+                          onPressed: widget.onDelete,
+                          tooltip: 'Delete',
+                        ),
                       ],
                     ),
                   ],
@@ -364,8 +493,22 @@ class _DialogRow extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(label, style: GoogleFonts.rajdhani(color: AdminTheme.textSecondary)),
-          Text(value, style: GoogleFonts.rajdhani(color: AdminTheme.textPrimary, fontWeight: FontWeight.w600)),
+          Text(
+            label,
+            style: GoogleFonts.rajdhani(color: AdminTheme.textSecondary),
+          ),
+          const SizedBox(width: 12),
+          Flexible(
+            child: Text(
+              value,
+              style: GoogleFonts.rajdhani(
+                color: AdminTheme.textPrimary,
+                fontWeight: FontWeight.w600,
+              ),
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.end,
+            ),
+          ),
         ],
       ),
     );
