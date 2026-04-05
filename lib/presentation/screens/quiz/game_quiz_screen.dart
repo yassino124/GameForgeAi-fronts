@@ -1,14 +1,23 @@
 import 'dart:math';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:provider/provider.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/providers/auth_provider.dart';
+import '../../../core/services/daily_rewards_service.dart';
+import '../../../core/services/reward_sfx_service.dart';
 import '../../../core/services/local_notifications_service.dart';
 import '../../../core/utils/app_refresh_bus.dart';
 import '../../../core/themes/app_theme.dart';
+import '../../widgets/custom_back_button.dart';
+import '../../widgets/daily_wallet_sheet.dart';
+import '../../widgets/reward_confetti_overlay.dart';
 
 class GameQuizScreen extends StatefulWidget {
   const GameQuizScreen({super.key});
@@ -27,6 +36,9 @@ class _GameQuizScreenState extends State<GameQuizScreen> {
   static const _kPrefBadges = 'quiz_badges';
   static const _kPrefLastXpEarned = 'quiz_last_xp_earned';
   static const _kPrefFreezeUsedWeekKey = 'quiz_freeze_used_week_key';
+
+  static const _kPrefProfileDailyYmd = 'profile_daily_ymd';
+  static const _kPrefProfileDailyXp = 'profile_daily_xp';
 
   static const _kModeDaily = 'daily';
   static const _kModePractice = 'practice';
@@ -134,6 +146,238 @@ class _GameQuizScreenState extends State<GameQuizScreen> {
     super.initState();
     _questions = _pickQuestionsForToday();
     _loadPrefs();
+  }
+
+  IconData _milestoneIcon(String kind) {
+    switch (kind) {
+      case 'discount_templates':
+        return Icons.local_offer_rounded;
+      case 'discount_subscription':
+        return Icons.discount_rounded;
+      case 'free_pro_day':
+        return Icons.workspace_premium_rounded;
+      case 'mystery_box':
+        return Icons.inventory_2_rounded;
+      case 'ai_credits':
+        return Icons.auto_awesome_rounded;
+      default:
+        return Icons.emoji_events_rounded;
+    }
+  }
+
+  String _milestoneTitle(String kind, int value) {
+    if (kind == 'discount_templates') return '$value% OFF Templates';
+    if (kind == 'discount_subscription') return '$value% OFF Subscription';
+    if (kind == 'ai_credits') return '+$value AI Credits';
+    if (kind == 'mystery_box') return 'Mystery Box';
+    if (kind == 'free_pro_day') return 'Free Pro Day (24h)';
+    return kind.toUpperCase();
+  }
+
+  Future<void> _showMilestoneWow({required String token, required List<Map<String, dynamic>> milestones}) async {
+    try {
+      await HapticFeedback.mediumImpact();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('XP sync failed: ${e.toString()}')),
+        );
+      }
+    }
+    final hasDiscount = milestones.any((m) {
+      final k = (m['kind'] ?? '').toString();
+      return k == 'discount_templates' || k == 'discount_subscription';
+    });
+    if (hasDiscount) {
+      await RewardSfxService.playRareWin();
+    } else {
+      await RewardSfxService.playWin();
+    }
+
+    final hasTemplate = milestones.any((m) => (m['kind'] ?? '').toString() == 'discount_templates');
+    final hasSub = milestones.any((m) => (m['kind'] ?? '').toString() == 'discount_subscription');
+
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final cs = Theme.of(ctx).colorScheme;
+        final bottom = MediaQuery.of(ctx).viewInsets.bottom;
+
+        // Auto-forward to the best next action (after a short WOW moment).
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!ctx.mounted) return;
+          if (!hasTemplate && !hasSub) return;
+          Future<void>.delayed(const Duration(milliseconds: 900), () {
+            if (!ctx.mounted) return;
+            Navigator.of(ctx).pop();
+            if (hasTemplate) {
+              ctx.go('/marketplace?autofinder=1');
+              return;
+            }
+            if (hasSub) {
+              ctx.go('/subscription?autostart=1');
+              return;
+            }
+          });
+        });
+
+        return Padding(
+          padding: EdgeInsets.only(bottom: bottom),
+          child: TweenAnimationBuilder<double>(
+            tween: Tween(begin: 0, end: 1),
+            duration: const Duration(milliseconds: 520),
+            curve: Curves.easeOutCubic,
+            builder: (ctx, t, _) {
+              final s = 0.92 + (0.08 * t);
+              return Transform.scale(
+                scale: s,
+                child: Opacity(
+                  opacity: t,
+                  child: RewardConfettiOverlay(
+                    play: true,
+                    child: Container(
+                      margin: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.fromLTRB(18, 16, 18, 18),
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(28),
+                        border: Border.all(color: Colors.white.withOpacity(0.10), width: 1.2),
+                        gradient: LinearGradient(
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                          colors: [
+                            cs.primary.withOpacity(0.22),
+                            cs.surface.withOpacity(0.92),
+                            cs.surface.withOpacity(0.92),
+                          ],
+                        ),
+                        boxShadow: [
+                          BoxShadow(color: Colors.black.withOpacity(0.55), blurRadius: 40, offset: const Offset(0, 24)),
+                        ],
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Row(
+                            children: [
+                              Container(
+                                width: 44,
+                                height: 44,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(16),
+                                  gradient: AppColors.primaryGradient,
+                                ),
+                                child: const Icon(Icons.bolt_rounded, color: Colors.white),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('MILESTONE UNLOCKED', style: Theme.of(ctx).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w900)),
+                                    const SizedBox(height: 2),
+                                    Text('You hit a new XP goal!', style: Theme.of(ctx).textTheme.bodySmall?.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700)),
+                                  ],
+                                ),
+                              ),
+                              IconButton(
+                                onPressed: () => Navigator.of(ctx).pop(),
+                                icon: const Icon(Icons.close_rounded),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+                          ...milestones.take(4).map((m) {
+                            final kind = (m['kind'] ?? '').toString();
+                            final v = (m['value'] is num) ? (m['value'] as num).toInt() : int.tryParse(m['value']?.toString() ?? '') ?? 0;
+                            return Container(
+                              margin: const EdgeInsets.only(bottom: 10),
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(18),
+                                color: cs.surface.withOpacity(0.18),
+                                border: Border.all(color: Colors.white.withOpacity(0.10)),
+                              ),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 40,
+                                    height: 40,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(14),
+                                      color: cs.primary.withOpacity(0.14),
+                                      border: Border.all(color: cs.primary.withOpacity(0.22)),
+                                    ),
+                                    child: Icon(_milestoneIcon(kind), color: cs.primary),
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Text(
+                                      _milestoneTitle(kind, v),
+                                      style: Theme.of(ctx).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w900),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }),
+                          const SizedBox(height: 8),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: () {
+                                    Navigator.of(ctx).pop();
+                                    showModalBottomSheet<void>(
+                                      context: context,
+                                      isScrollControlled: true,
+                                      backgroundColor: Colors.transparent,
+                                      builder: (_) => DailyWalletSheet(token: token),
+                                    );
+                                  },
+                                  icon: const Icon(Icons.inventory_2_rounded),
+                                  label: const Text('WALLET'),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  onPressed: () {
+                                    Navigator.of(ctx).pop();
+                                    if (hasTemplate) {
+                                      context.go('/marketplace?autofinder=1');
+                                      return;
+                                    }
+                                    if (hasSub) {
+                                      context.go('/subscription?autostart=1');
+                                      return;
+                                    }
+                                    showModalBottomSheet<void>(
+                                      context: context,
+                                      isScrollControlled: true,
+                                      backgroundColor: Colors.transparent,
+                                      builder: (_) => DailyWalletSheet(token: token),
+                                    );
+                                  },
+                                  icon: const Icon(Icons.flash_on_rounded),
+                                  label: const Text('USE NOW'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+        );
+      },
+    );
   }
 
   String _weekKey(DateTime d) {
@@ -666,7 +910,48 @@ class _GameQuizScreenState extends State<GameQuizScreen> {
     await p.setStringList(_kPrefBadges, prevBadges);
     await p.setInt(_kPrefLastXpEarned, earned);
 
+    final storedDailyYmd = p.getString(_kPrefProfileDailyYmd) ?? '';
+    if (storedDailyYmd != today) {
+      await p.setString(_kPrefProfileDailyYmd, today);
+      await p.setInt(_kPrefProfileDailyXp, 0);
+    }
+    final prevDailyXp = p.getInt(_kPrefProfileDailyXp) ?? 0;
+    await p.setInt(_kPrefProfileDailyXp, prevDailyXp + earned);
+
     AppRefreshBus.bump();
+
+    // Sync XP to backend so milestone rewards (discount/box/etc.) are granted dynamically.
+    try {
+      final auth = context.read<AuthProvider>();
+      final token = auth.token;
+      if (token != null && token.trim().isNotEmpty) {
+        final awardRes = await DailyRewardsService.awardXp(
+          token: token,
+          xp: earned,
+          source: _mode == _kModeDaily ? 'quiz_daily' : 'quiz_practice',
+          meta: {
+            'score': _score,
+            'totalQuestions': _questions.length,
+          },
+        );
+        if (awardRes['success'] != true) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text(awardRes['message']?.toString() ?? 'XP sync failed')),
+            );
+          }
+        }
+        AppRefreshBus.bump();
+
+        final ms = awardRes['data']?['milestones'];
+        if (ms is List && ms.isNotEmpty && mounted) {
+          final milestones = ms.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+          if (milestones.isNotEmpty) {
+            await _showMilestoneWow(token: token, milestones: milestones);
+          }
+        }
+      }
+    } catch (_) {}
 
     if (!mounted) return;
     setState(() {
@@ -742,7 +1027,8 @@ class _GameQuizScreenState extends State<GameQuizScreen> {
     final isDone = _index >= _questions.length;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Game Quiz'),
+        leading: AppBarBackButton(color: cs.onSurface),
+        title: Text(_mode == _kModeDaily ? 'Daily Quiz' : 'Practice'),
         actions: [
           IconButton(
             tooltip: 'Achievements',
@@ -1172,7 +1458,14 @@ class _GameQuizScreenState extends State<GameQuizScreen> {
                 Expanded(
                   child: ElevatedButton.icon(
                     onPressed: () {
-                      Share.share('I scored $_score/$total on GameForge AI Quiz! 🎮🔥');
+                      final box = context.findRenderObject() as RenderBox?;
+                      final origin = (box != null)
+                          ? box.localToGlobal(Offset.zero) & box.size
+                          : Rect.fromLTWH(0, 0, MediaQuery.of(context).size.width, MediaQuery.of(context).size.height);
+                      Share.share(
+                        'I scored $_score/$total on GameForge AI Quiz! 🎮🔥',
+                        sharePositionOrigin: origin,
+                      );
                     },
                     icon: const Icon(Icons.share_rounded),
                     label: const Text('Share'),

@@ -1,7 +1,9 @@
 import 'dart:math' as math;
+import 'dart:ui';
 
 import 'package:flutter/material.dart';
 import '../../core/constants/app_constants.dart';
+import '../../core/services/api_service.dart';
 
 class AnimatedCard extends StatefulWidget {
   final Widget child;
@@ -86,23 +88,27 @@ class CustomCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final card = Container(
       margin: margin ?? AppSpacing.marginVerticalSmall,
       padding: padding ?? AppSpacing.paddingAll,
       decoration: BoxDecoration(
-        color: backgroundColor ?? cs.surface,
-        borderRadius: borderRadius ?? AppBorderRadius.allLarge,
-        border: border,
-        boxShadow: elevation != null 
-            ? [BoxShadow(
-                color: Colors.black.withOpacity(0.16),
-                offset: const Offset(0, 4),
-                blurRadius: elevation!,
-              )]
-            : AppShadows.boxShadowMedium,
+        color: backgroundColor ?? (isDark ? const Color(0xFF0D0E14).withOpacity(0.8) : cs.surface),
+        borderRadius: borderRadius ?? BorderRadius.circular(28),
+        border: border ?? (isDark ? Border.all(color: Colors.white.withOpacity(0.08)) : null),
+        boxShadow: isDark ? [] : [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          )
+        ],
       ),
-      child: child,
+      child: ClipRRect(
+        borderRadius: borderRadius ?? BorderRadius.circular(28),
+        child: child,
+      ),
     );
 
     if (onTap != null) {
@@ -143,7 +149,11 @@ class ProjectCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return LayoutBuilder(
+    final coverUrl = ApiService.normalizeImageUrl(thumbnailUrl);
+    return AnimatedCard(
+      duration: const Duration(milliseconds: 600),
+      slideY: 20,
+      child: LayoutBuilder(
       builder: (context, constraints) {
         final compact = constraints.maxWidth < 180;
         final defaultCoverH = compact ? 96.0 : 118.0;
@@ -158,153 +168,178 @@ class ProjectCard extends StatelessWidget {
 
         return CustomCard(
           onTap: onTap,
-          padding: EdgeInsets.zero,
-          borderRadius: BorderRadius.circular(22),
-          backgroundColor: cs.surface.withOpacity(isDark ? 0.36 : 0.72),
-          border: Border.all(color: cs.outlineVariant.withOpacity(0.26)),
-          elevation: 22,
+          padding: EdgeInsets.all(12),
+          borderRadius: BorderRadius.circular(32),
+          backgroundColor: Colors.transparent,
+          border: Border.all(
+            color: isDark ? Colors.white.withOpacity(0.08) : cs.outlineVariant.withOpacity(0.8),
+            width: 1.2,
+          ),
           child: SizedBox(
             height: constraints.maxHeight,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // Cover
-                SizedBox(
-                  height: coverH,
-                  width: double.infinity,
-                  child: Stack(
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(32),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+                child: Container(
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: isDark
+                          ? [
+                              Colors.white.withOpacity(0.08),
+                              Colors.white.withOpacity(0.02),
+                            ]
+                          : [
+                              cs.surface,
+                              cs.surface.withOpacity(0.9),
+                            ],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Positioned.fill(
-                        child: ClipRRect(
-                          borderRadius: const BorderRadius.vertical(
-                            top: Radius.circular(22),
-                          ),
-                          child: (thumbnailUrl != null && thumbnailUrl!.trim().isNotEmpty)
-                              ? Image.network(
-                                  thumbnailUrl!,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (context, error, stackTrace) {
-                                    return Container(
-                                      decoration: BoxDecoration(
-                                        gradient: AppColors.primaryGradient,
-                                      ),
-                                      child: const Center(
-                                        child: Icon(Icons.games, color: Colors.white70, size: 34),
-                                      ),
-                                    );
-                                  },
-                                )
-                              : Container(
-                                  decoration: const BoxDecoration(
-                                    gradient: AppColors.primaryGradient,
-                                  ),
-                                  child: const Center(
-                                    child: Icon(Icons.games, color: Colors.white70, size: 34),
+                      SizedBox(
+                        height: coverH,
+                        child: Stack(
+                          children: [
+                            Positioned.fill(
+                              child: ClipRRect(
+                                borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+                                child: coverUrl.isNotEmpty
+                                    ? Image.network(
+                                        coverUrl,
+                                        fit: BoxFit.cover,
+                                        errorBuilder: (context, error, stackTrace) {
+                                          debugPrint('ProjectCard image failed: $coverUrl ($error)');
+                                          return _fallbackCover(context, cs);
+                                        },
+                                      )
+                                    : _fallbackCover(context, cs),
+                              ),
+                            ),
+                            Positioned.fill(
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: isDark
+                                        ? [Colors.black.withOpacity(0.4), Colors.transparent, Colors.black.withOpacity(0.6)]
+                                        : [Colors.transparent, Colors.transparent, Colors.black.withOpacity(0.2)],
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
                                   ),
                                 ),
-                        ),
-                      ),
-                      Positioned.fill(
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                Colors.black.withOpacity(0.00),
-                                Colors.black.withOpacity(0.10),
-                                Colors.black.withOpacity(0.55),
-                              ],
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
+                              ),
                             ),
+                            Positioned(top: 12, left: 12, child: _buildStatusChip()),
+                            if (onMoreOptions != null)
+                              Positioned(
+                                top: 4,
+                                right: 4,
+                                child: IconButton(
+                                  onPressed: onMoreOptions,
+                                  icon: Icon(Icons.more_horiz_rounded, color: isDark ? Colors.white70 : cs.onSurfaceVariant),
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                      Expanded(
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                title.toUpperCase(),
+                                style: AppTypography.labelLarge.copyWith(
+                                  color: isDark ? Colors.white : cs.onSurface,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 1.2,
+                                  fontSize: 13,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 4),
+                              if (description != null && description!.isNotEmpty)
+                                Text(
+                                  description!,
+                                  style: AppTypography.body3.copyWith(
+                                    color: isDark ? Colors.white.withOpacity(0.5) : cs.onSurfaceVariant,
+                                    fontSize: 10,
+                                    height: 1.2,
+                                  ),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              const Spacer(),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    _formatDate(lastModified),
+                                    style: AppTypography.caption.copyWith(
+                                      color: isDark ? Colors.white.withOpacity(0.25) : cs.onSurfaceVariant.withOpacity(0.5),
+                                      fontSize: 9,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  Container(
+                                    padding: const EdgeInsets.all(6),
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      color: (isDark ? AppColors.primary : cs.primary).withOpacity(0.12),
+                                      border: Border.all(
+                                        color: (isDark ? AppColors.primary : cs.primary).withOpacity(0.25),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: Icon(
+                                      Icons.chevron_right_rounded,
+                                      color: isDark ? AppColors.primary : cs.primary,
+                                      size: 14,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
                           ),
                         ),
                       ),
-                      Positioned(
-                        top: AppSpacing.sm,
-                        left: AppSpacing.sm,
-                        child: _buildStatusChip(),
-                      ),
-                      if (onMoreOptions != null)
-                        Positioned(
-                          top: 0,
-                          right: 0,
-                          child: IconButton(
-                            onPressed: onMoreOptions,
-                            icon: const Icon(Icons.more_vert, color: Colors.white),
-                          ),
-                        ),
                     ],
                   ),
                 ),
-
-                Expanded(
-                  child: Padding(
-                    padding: EdgeInsets.fromLTRB(
-                      AppSpacing.md,
-                      compact ? 4 : AppSpacing.md,
-                      AppSpacing.md,
-                      compact ? 4 : AppSpacing.sm,
-                    ),
-                    child: LayoutBuilder(
-                      builder: (context, inner) {
-                        // iOS grid tiles can end up around ~90px height; keep a safety margin
-                        // so we don't overflow by a few pixels.
-                        final tight = compact && inner.maxHeight < 112;
-
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              title,
-                              style: AppTypography.subtitle2,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            if (!tight && description != null) ...[
-                              const SizedBox(height: AppSpacing.xs),
-                              Text(
-                                description!,
-                                style: AppTypography.caption,
-                                maxLines: compact ? 1 : 2,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ],
-                            if (!tight) const Spacer(),
-                            if (!tight)
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: Text(
-                                  _formatDate(lastModified),
-                                  style: AppTypography.caption,
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
-                                  softWrap: false,
-                                ),
-                              ),
-                            if (!tight && progress != null && progress! < 1.0) ...[
-                              SizedBox(height: compact ? AppSpacing.sm : AppSpacing.md),
-                              LinearProgressIndicator(
-                                value: progress,
-                                backgroundColor: AppColors.border,
-                                valueColor: const AlwaysStoppedAnimation<Color>(AppColors.primary),
-                              ),
-                              const SizedBox(height: AppSpacing.xs),
-                              Text(
-                                '${(progress! * 100).toInt()}% Complete',
-                                style: AppTypography.caption,
-                              ),
-                            ],
-                          ],
-                        );
-                      },
-                    ),
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         );
       },
+      ),
+    );
+  }
+
+  Widget _fallbackCover(BuildContext context, ColorScheme cs) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            (isDark ? AppColors.primary : cs.primary).withOpacity(0.2),
+            (isDark ? AppColors.accent : cs.secondary).withOpacity(0.1),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Center(
+        child: Icon(
+          Icons.auto_awesome_mosaic_rounded,
+          color: isDark ? Colors.white24 : cs.onSurface.withOpacity(0.2),
+          size: 32,
+        ),
+      ),
     );
   }
 

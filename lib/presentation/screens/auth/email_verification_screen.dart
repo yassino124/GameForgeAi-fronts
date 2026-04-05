@@ -1,12 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_staggered_animations/flutter_staggered_animations.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/constants/app_constants.dart';
+import '../../../core/services/auth_service.dart';
 import '../../../core/themes/app_theme.dart';
 import '../../widgets/widgets.dart';
 
 class EmailVerificationScreen extends StatefulWidget {
-  const EmailVerificationScreen({super.key});
+  final String? initialEmail;
+
+  const EmailVerificationScreen({super.key, this.initialEmail});
 
   @override
   State<EmailVerificationScreen> createState() => _EmailVerificationScreenState();
@@ -14,36 +18,40 @@ class EmailVerificationScreen extends StatefulWidget {
 
 class _EmailVerificationScreenState extends State<EmailVerificationScreen>
     with TickerProviderStateMixin {
-  late AnimationController _checkmarkController;
+  static const int _resendInitialSeconds = 30;
   late AnimationController _pulseController;
-  late Animation<double> _checkmarkAnimation;
   late Animation<double> _pulseAnimation;
+  late AnimationController _successController;
+  late Animation<double> _successScale;
+  late final List<TextEditingController> _digitControllers;
+  late final List<FocusNode> _digitFocusNodes;
 
-  bool _isVerified = false;
+  late final String _email;
   bool _canResend = true;
-  int _resendCountdown = 30;
+  bool _isVerifying = false;
+  int _focusedOtpIndex = -1;
+  bool _verificationSuccess = false;
+  int _resendCountdown = _resendInitialSeconds;
+
+  double get _resendProgress =>
+      (_resendCountdown / _resendInitialSeconds).clamp(0.0, 1.0);
+
+  String get _resendTimeLabel {
+    final seconds = _resendCountdown.clamp(0, _resendInitialSeconds);
+    return '00:${seconds.toString().padLeft(2, '0')}';
+  }
 
   @override
   void initState() {
     super.initState();
-    
-    _checkmarkController = AnimationController(
-      duration: const Duration(milliseconds: 800),
-      vsync: this,
-    );
+
+    _digitControllers = List.generate(6, (_) => TextEditingController());
+    _digitFocusNodes = List.generate(6, (_) => FocusNode());
     
     _pulseController = AnimationController(
       duration: const Duration(milliseconds: 1500),
       vsync: this,
     );
-    
-    _checkmarkAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _checkmarkController,
-      curve: Curves.elasticOut,
-    ));
     
     _pulseAnimation = Tween<double>(
       begin: 0.8,
@@ -53,18 +61,38 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
       curve: Curves.easeInOut,
     ));
 
+    _successController = AnimationController(
+      duration: const Duration(milliseconds: 560),
+      vsync: this,
+    );
+    _successScale = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1, end: 1.08)
+            .chain(CurveTween(curve: Curves.easeOutBack)),
+        weight: 60,
+      ),
+      TweenSequenceItem(
+        tween: Tween<double>(begin: 1.08, end: 1)
+            .chain(CurveTween(curve: Curves.easeInOutCubic)),
+        weight: 40,
+      ),
+    ]).animate(_successController);
+
     // Start animations
-    _checkmarkController.forward();
     _pulseController.repeat(reverse: true);
 
-    // Simulate email verification after 3 seconds
-    Future.delayed(const Duration(seconds: 3), () {
-      if (mounted) {
-        setState(() {
-          _isVerified = true;
-        });
-      }
-    });
+    for (int i = 0; i < _digitFocusNodes.length; i++) {
+      _digitFocusNodes[i].addListener(() {
+        if (!mounted) return;
+        if (_digitFocusNodes[i].hasFocus) {
+          setState(() => _focusedOtpIndex = i);
+        } else if (_focusedOtpIndex == i) {
+          setState(() => _focusedOtpIndex = -1);
+        }
+      });
+    }
+
+    _email = (widget.initialEmail ?? '').trim();
 
     // Start countdown for resend
     _startResendCountdown();
@@ -72,12 +100,62 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
 
   @override
   void dispose() {
-    _checkmarkController.dispose();
     _pulseController.dispose();
+    _successController.dispose();
+    for (final c in _digitControllers) {
+      c.dispose();
+    }
+    for (final n in _digitFocusNodes) {
+      n.dispose();
+    }
     super.dispose();
   }
 
+  String get _otpCode => _digitControllers.map((c) => c.text).join();
+
+  void _onDigitChanged(int index, String value) {
+    final v = value.trim();
+
+    if (v.length > 1) {
+      final digits = v.replaceAll(RegExp(r'\D'), '');
+      for (int i = 0; i < 6; i++) {
+        _digitControllers[i].text = i < digits.length ? digits[i] : '';
+      }
+      if (digits.length >= 6) {
+        _digitFocusNodes[5].unfocus();
+      } else {
+        final next = digits.length.clamp(0, 5);
+        _digitFocusNodes[next].requestFocus();
+      }
+      setState(() {});
+      return;
+    }
+
+    if (v.isNotEmpty && index < 5) {
+      _digitFocusNodes[index + 1].requestFocus();
+    }
+    setState(() {});
+
+    if (_otpCode.length == 6 && !_isVerifying) {
+      _verifyCode();
+    }
+  }
+
+  void _onBackspace(int index) {
+    if (_digitControllers[index].text.isEmpty && index > 0) {
+      _digitFocusNodes[index - 1].requestFocus();
+      _digitControllers[index - 1].clear();
+      setState(() {});
+    }
+  }
+
   void _startResendCountdown() {
+    if (mounted) {
+      setState(() {
+        _canResend = false;
+      });
+    }
+
     Future.doWhile(() async {
       await Future.delayed(const Duration(seconds: 1));
       if (mounted && _resendCountdown > 0) {
@@ -101,15 +179,23 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
     return Scaffold(
       body: Container(
         decoration: BoxDecoration(
-          gradient: Theme.of(context).brightness == Brightness.dark
-              ? AppColors.backgroundGradient
-              : AppTheme.backgroundGradientLight,
+          gradient: AppTheme.authBackgroundGradient(context),
         ),
-        child: SafeArea(
-          child: Padding(
-            padding: AppSpacing.paddingHorizontalLarge,
-            child: Column(
-              children: [
+        child: Stack(
+          children: [
+            const AuthBackdropGlow(),
+            SafeArea(
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return SingleChildScrollView(
+                    keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                    padding: AppSpacing.paddingHorizontalLarge.copyWith(
+                      bottom: AppSpacing.xxl,
+                    ),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                      child: Column(
+                        children: [
                 const SizedBox(height: AppSpacing.xxxl),
                 
                 // Email icon with animation
@@ -129,37 +215,18 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
                               height: 120,
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                color: _isVerified 
-                                    ? AppColors.success.withOpacity(0.1)
-                                    : AppColors.primary.withOpacity(0.1),
-                                boxShadow: _isVerified
-                                    ? AppShadows.custom(color: AppColors.success)
-                                    : AppShadows.boxShadowPrimaryGlow,
+                                color: AppColors.primary.withValues(alpha: 0.1),
+                                boxShadow: AppShadows.boxShadowPrimaryGlow,
                               ),
                               child: Stack(
                                 children: [
                                   Center(
                                     child: Icon(
-                                      _isVerified ? Icons.check_circle : Icons.email,
+                                      Icons.email,
                                       size: 60,
-                                      color: _isVerified ? AppColors.success : AppColors.primary,
+                                      color: AppColors.primary,
                                     ),
                                   ),
-                                  
-                                  // Checkmark animation
-                                  if (_isVerified)
-                                    Positioned.fill(
-                                      child: AnimatedBuilder(
-                                        animation: _checkmarkAnimation,
-                                        builder: (context, child) {
-                                          return CustomPaint(
-                                            painter: CheckmarkPainter(
-                                              progress: _checkmarkAnimation.value,
-                                            ),
-                                          );
-                                        },
-                                      ),
-                                    ),
                                 ],
                               ),
                             ),
@@ -180,7 +247,7 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
                     verticalOffset: 30.0,
                     child: FadeInAnimation(
                       child: Text(
-                        _isVerified ? 'Email Verified!' : 'Verify your email',
+                        'Verify your email',
                         style: AppTypography.h2,
                         textAlign: TextAlign.center,
                       ),
@@ -198,9 +265,9 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
                     verticalOffset: 30.0,
                     child: FadeInAnimation(
                       child: Text(
-                        _isVerified
-                            ? 'Your email has been successfully verified. You can now start creating amazing games!'
-                            : 'We\'ve sent a verification link to your email. Please check your inbox and click the link to verify your account.',
+                        _email.isNotEmpty
+                            ? 'We\'ve sent a 6-digit verification code to $_email. Enter it below to activate your account.'
+                            : 'We\'ve sent a 6-digit verification code to your email. Enter it below to activate your account.',
                         style: AppTypography.body1.copyWith(
                           color: AppColors.textSecondary,
                         ),
@@ -211,45 +278,231 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
                 ),
                 
                 const SizedBox(height: AppSpacing.xxxl),
-                
-                // Resend email section (only show if not verified)
-                if (!_isVerified) ...[
-                  AnimationConfiguration.staggeredList(
-                    position: 3,
-                    duration: const Duration(milliseconds: 500),
-                    child: SlideAnimation(
-                      verticalOffset: 30.0,
-                      child: FadeInAnimation(
-                        child: Column(
-                          children: [
-                            Text(
-                              'Didn\'t receive the email?',
-                              style: AppTypography.body2.copyWith(
-                                color: AppColors.textSecondary,
+
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(AppSpacing.lg),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(24),
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.white.withValues(alpha: 0.04)
+                        : Colors.white.withValues(alpha: 0.82),
+                    border: Border.all(color: AppColors.border.withValues(alpha: 0.35)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withValues(alpha: 0.08),
+                        blurRadius: 24,
+                        offset: const Offset(0, 10),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          'Verification Code',
+                          style: AppTypography.body1.copyWith(fontWeight: FontWeight.w700),
+                        ),
+                      ),
+
+                      const SizedBox(height: AppSpacing.md),
+
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: List.generate(6, (index) {
+                          final isFocused = _focusedOtpIndex == index;
+                          final hasValue = _digitControllers[index].text.isNotEmpty;
+                          return AnimatedContainer(
+                            duration: const Duration(milliseconds: 220),
+                            curve: Curves.easeOutCubic,
+                            width: 48,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(14),
+                              boxShadow: [
+                                if (isFocused)
+                                  BoxShadow(
+                                    color: AppColors.primary.withValues(alpha: 0.30),
+                                    blurRadius: 16,
+                                    spreadRadius: 1,
+                                  )
+                                else if (hasValue)
+                                  BoxShadow(
+                                    color: AppColors.primary.withValues(alpha: 0.12),
+                                    blurRadius: 10,
+                                    spreadRadius: 0,
+                                  ),
+                              ],
+                            ),
+                            child: KeyboardListener(
+                              focusNode: FocusNode(skipTraversal: true),
+                              onKeyEvent: (event) {
+                                if (event is KeyDownEvent && event.logicalKey == LogicalKeyboardKey.backspace) {
+                                  _onBackspace(index);
+                                }
+                              },
+                              child: TextField(
+                                controller: _digitControllers[index],
+                                focusNode: _digitFocusNodes[index],
+                                textAlign: TextAlign.center,
+                                keyboardType: TextInputType.number,
+                                textInputAction: index == 5 ? TextInputAction.done : TextInputAction.next,
+                                maxLength: 1,
+                                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                style: AppTypography.h4,
+                                decoration: InputDecoration(
+                                  counterText: '',
+                                  filled: true,
+                                  fillColor: Theme.of(context).brightness == Brightness.dark
+                                      ? Colors.white.withValues(alpha: 0.04)
+                                      : Colors.black.withValues(alpha: 0.03),
+                                  contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                                  enabledBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                    borderSide: BorderSide(
+                                      color: hasValue ? AppColors.primary.withValues(alpha: 0.75) : AppColors.border,
+                                      width: hasValue ? 1.6 : 1,
+                                    ),
+                                  ),
+                                  focusedBorder: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                    borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                                  ),
+                                ),
+                                onChanged: (value) => _onDigitChanged(index, value),
+                                onTap: () {
+                                  setState(() => _focusedOtpIndex = index);
+                                },
+                                onSubmitted: (_) {
+                                  if (index == 5) {
+                                    _verifyCode();
+                                  }
+                                },
                               ),
                             ),
-                            const SizedBox(height: AppSpacing.md),
-                            TextButton(
-                              onPressed: _canResend ? _resendEmail : null,
-                              child: Text(
-                                _canResend 
-                                    ? 'Resend Email'
-                                    : 'Resend in $_resendCountdown',
-                                style: AppTypography.button.copyWith(
-                                  color: _canResend 
-                                      ? AppColors.primary
-                                      : AppColors.textSecondary,
-                                ),
+                          );
+                        }),
+                      ),
+
+                      const SizedBox(height: AppSpacing.lg),
+
+                      AnimatedBuilder(
+                        animation: _successScale,
+                        builder: (context, child) {
+                          final scale = _verificationSuccess ? _successScale.value : 1.0;
+                          return Transform.scale(
+                            scale: scale,
+                            child: child,
+                          );
+                        },
+                        child: CustomButton(
+                          text: _verificationSuccess ? 'Verified ✓' : 'Verify Code',
+                          isLoading: _isVerifying,
+                          onPressed: _otpCode.length == 6 ? _verifyCode : null,
+                          type: ButtonType.primary,
+                          size: ButtonSize.large,
+                          isFullWidth: true,
+                        ),
+                      ),
+
+                      const SizedBox(height: AppSpacing.md),
+
+                      Text(
+                        'Didn\'t receive the email?',
+                        style: AppTypography.body2.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                      const SizedBox(height: AppSpacing.sm),
+                      AnimatedContainer(
+                        duration: const Duration(milliseconds: 250),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: AppSpacing.md,
+                          vertical: AppSpacing.sm,
+                        ),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(999),
+                          color: _canResend
+                              ? AppColors.success.withValues(alpha: 0.12)
+                              : AppColors.primary.withValues(alpha: 0.10),
+                          border: Border.all(
+                            color: _canResend
+                                ? AppColors.success.withValues(alpha: 0.35)
+                                : AppColors.primary.withValues(alpha: 0.35),
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            SizedBox(
+                              width: 34,
+                              height: 34,
+                              child: Stack(
+                                alignment: Alignment.center,
+                                children: [
+                                  CircularProgressIndicator(
+                                    strokeWidth: 3,
+                                    value: _canResend ? 1 : _resendProgress,
+                                    backgroundColor: AppColors.border.withValues(alpha: 0.30),
+                                    valueColor: AlwaysStoppedAnimation<Color>(
+                                      _canResend ? AppColors.success : AppColors.primary,
+                                    ),
+                                  ),
+                                  Icon(
+                                    _canResend ? Icons.check_rounded : Icons.schedule_rounded,
+                                    size: 14,
+                                    color: _canResend ? AppColors.success : AppColors.primary,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(width: AppSpacing.sm),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    _canResend ? 'Ready to resend' : 'Resend available in $_resendTimeLabel',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: AppTypography.caption.copyWith(
+                                      fontWeight: FontWeight.w800,
+                                      color: _canResend ? AppColors.success : AppColors.primary,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 2),
+                                  Text(
+                                    _canResend
+                                        ? 'You can request another code now.'
+                                        : 'Please wait until the cooldown finishes.',
+                                    style: AppTypography.caption.copyWith(
+                                      color: AppColors.textSecondary,
+                                      fontSize: 11,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
                         ),
                       ),
-                    ),
+
+                      const SizedBox(height: AppSpacing.sm),
+
+                      TextButton.icon(
+                        onPressed: _canResend ? _resendEmail : null,
+                        icon: const Icon(Icons.mark_email_unread_outlined, size: 16),
+                        label: Text(
+                          _canResend ? 'Resend Email' : 'Please wait ${_resendCountdown}s',
+                          style: AppTypography.button.copyWith(
+                            color: _canResend ? AppColors.primary : AppColors.textSecondary,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
-                  
-                  const SizedBox(height: AppSpacing.xxxl),
-                ],
+                ),
+
+                const SizedBox(height: AppSpacing.xxxl),
                 
                 // Continue button
                 AnimationConfiguration.staggeredList(
@@ -259,10 +512,15 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
                     verticalOffset: 30.0,
                     child: FadeInAnimation(
                       child: CustomButton(
-                        text: 'Continue to App',
-                        onPressed: _isVerified ? () {
-                          context.go('/dashboard');
-                        } : null,
+                        text: 'I verified, continue to Sign in',
+                        onPressed: () {
+                          if (_email.isNotEmpty) {
+                            final encodedEmail = Uri.encodeComponent(_email);
+                            context.go('/signin?email=$encodedEmail');
+                          } else {
+                            context.go('/signin');
+                          }
+                        },
                         type: ButtonType.primary,
                         size: ButtonSize.large,
                         isFullWidth: true,
@@ -272,28 +530,42 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
                 ),
                 
                 const SizedBox(height: AppSpacing.xxl),
-              ],
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              ),
             ),
-          ),
+          ],
         ),
       ),
     );
   }
 
   Future<void> _resendEmail() async {
+    if (_email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Missing email. Please go back and register again.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
     setState(() {
       _canResend = false;
-      _resendCountdown = 30;
+      _resendCountdown = _resendInitialSeconds;
     });
 
     try {
-      // TODO: Implement resend email logic
-      await Future.delayed(const Duration(seconds: 1));
+      final res = await AuthService.resendVerificationEmail(_email);
       
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Verification email sent!'),
+          SnackBar(
+            content: Text(res['message']?.toString() ?? 'Verification email sent!'),
             backgroundColor: AppColors.success,
           ),
         );
@@ -310,6 +582,65 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
     }
 
     _startResendCountdown();
+  }
+
+  Future<void> _verifyCode() async {
+    final code = _otpCode.trim();
+    if (_email.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Missing email. Please go back and register again.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+    if (!RegExp(r'^\d{6}$').hasMatch(code)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Please enter a valid 6-digit verification code.'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isVerifying = true);
+    try {
+      final res = await AuthService.verifyEmailCode(email: _email, code: code);
+      if (!mounted) return;
+
+      final ok = res['success'] == true;
+      final msg = res['message']?.toString() ?? (ok ? 'Email verified successfully.' : 'Verification failed');
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(msg),
+          backgroundColor: ok ? AppColors.success : AppColors.error,
+        ),
+      );
+
+      if (ok) {
+        setState(() => _verificationSuccess = true);
+        _successController.forward(from: 0);
+        for (final c in _digitControllers) {
+          c.clear();
+        }
+        await Future.delayed(const Duration(milliseconds: 380));
+        if (!mounted) return;
+        final encodedEmail = Uri.encodeComponent(_email);
+        context.go('/signin?email=$encodedEmail');
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to verify code: $e'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    } finally {
+      if (mounted) setState(() => _isVerifying = false);
+    }
   }
 }
 

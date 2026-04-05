@@ -268,14 +268,16 @@ class StatusBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: const EdgeInsets.symmetric(
         horizontal: AppSpacing.sm,
         vertical: AppSpacing.xs,
       ),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.2),
+        color: color.withOpacity(isDark ? 0.2 : 0.12),
         borderRadius: AppBorderRadius.allSmall,
+        border: isDark ? null : Border.all(color: color.withOpacity(0.2)),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
@@ -291,8 +293,8 @@ class StatusBadge extends StatelessWidget {
           Text(
             text,
             style: AppTypography.caption.copyWith(
-              color: color,
-              fontWeight: FontWeight.w500,
+              color: isDark ? color : color.withOpacity(0.9),
+              fontWeight: FontWeight.w700,
             ),
           ),
         ],

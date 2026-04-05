@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:async';
+import 'package:provider/provider.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/themes/app_theme.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/services/templates_service.dart';
+import '../../../core/providers/auth_provider.dart';
 import '../../widgets/widgets.dart';
 import 'package:video_player/video_player.dart';
 
@@ -93,6 +95,7 @@ class _TemplateSelectionScreenState extends State<TemplateSelectionScreen> {
         if (e is! Map) return null;
         final id = (e['_id'] ?? e['id'])?.toString() ?? '';
         if (id.isEmpty) return null;
+        final priceNum = (e['price'] is num) ? (e['price'] as num).toDouble() : double.tryParse(e['price']?.toString() ?? '') ?? 0.0;
         return GameTemplate(
           id: id,
           name: e['name']?.toString() ?? 'Template',
@@ -100,6 +103,7 @@ class _TemplateSelectionScreenState extends State<TemplateSelectionScreen> {
           description: e['description']?.toString() ?? '',
           rating: (e['rating'] is num) ? (e['rating'] as num).toDouble() : 4.7,
           downloads: (e['downloads'] is num) ? (e['downloads'] as num).toInt() : 0,
+          price: priceNum,
           imageUrl: _resolveMediaUrl(e['previewImageUrl']?.toString()),
           screenshotUrls: (e['screenshotUrls'] is List)
               ? (e['screenshotUrls'] as List).map((x) => _resolveMediaUrl(x?.toString()) ?? '').where((x) => x.isNotEmpty).toList()
@@ -281,18 +285,6 @@ class _TemplateSelectionScreenState extends State<TemplateSelectionScreen> {
                 const SizedBox(height: AppSpacing.sm),
 
                 CustomButton(
-                  text: 'Instant HTML5 (Phaser)',
-                  onPressed: () {
-                    context.go('/ai-phaser');
-                  },
-                  type: ButtonType.secondary,
-                  isFullWidth: true,
-                  icon: const Icon(Icons.bolt_rounded),
-                ),
-
-                const SizedBox(height: AppSpacing.sm),
-
-                CustomButton(
                   text: 'Next',
                   onPressed: _selectedTemplate != null
                       ? () {
@@ -398,9 +390,39 @@ class _TemplateSelectionScreenState extends State<TemplateSelectionScreen> {
     final cs = Theme.of(context).colorScheme;
     final isSelected = _selectedTemplate?.id == template.id;
     final coverUrl = _resolveMediaUrl(template.imageUrl);
+    final isPaid = template.price > 0;
 
     return GestureDetector(
-      onTap: () {
+      onTap: () async {
+        if (isPaid) {
+          final auth = context.read<AuthProvider>();
+          final token = auth.token;
+
+          bool hasAccess = false;
+          if (token != null && token.trim().isNotEmpty) {
+            try {
+              final accessRes = await TemplatesService.getTemplateAccess(token: token, templateId: template.id);
+              hasAccess = accessRes['success'] == true && accessRes['data'] is Map && (accessRes['data'] as Map)['hasAccess'] == true;
+            } catch (_) {
+              hasAccess = false;
+            }
+          }
+
+          if (!hasAccess) {
+            if (!mounted) return;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('This template is paid. Purchase to unlock.'),
+                backgroundColor: cs.surface,
+              ),
+            );
+            if (!mounted) return;
+            context.go('/template/${template.id}');
+            return;
+          }
+        }
+
+        if (!mounted) return;
         setState(() {
           _selectedTemplate = isSelected ? null : template;
         });
@@ -458,6 +480,37 @@ class _TemplateSelectionScreenState extends State<TemplateSelectionScreen> {
                           _getCategoryIcon(template.category),
                           size: 40,
                           color: cs.onPrimary.withOpacity(0.85),
+                        ),
+                      ),
+
+                    if (isPaid)
+                      Positioned(
+                        top: AppSpacing.sm,
+                        left: AppSpacing.sm,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: AppSpacing.sm,
+                            vertical: AppSpacing.xs,
+                          ),
+                          decoration: BoxDecoration(
+                            color: cs.surface.withOpacity(0.88),
+                            borderRadius: AppBorderRadius.allSmall,
+                            border: Border.all(color: cs.outlineVariant.withOpacity(0.55)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.lock_rounded, size: 14, color: cs.onSurface),
+                              const SizedBox(width: 6),
+                              Text(
+                                '\$${template.price.toStringAsFixed(template.price >= 10 ? 0 : 2)}',
+                                style: AppTypography.caption.copyWith(
+                                  color: cs.onSurface,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
 
@@ -651,6 +704,7 @@ class GameTemplate {
   final String description;
   final double rating;
   final int downloads;
+  final double price;
   final String? imageUrl;
   final List<String> screenshotUrls;
   final String? previewVideoUrl;
@@ -663,6 +717,7 @@ class GameTemplate {
     required this.description,
     required this.rating,
     required this.downloads,
+    required this.price,
     this.imageUrl,
     this.screenshotUrls = const [],
     this.previewVideoUrl,

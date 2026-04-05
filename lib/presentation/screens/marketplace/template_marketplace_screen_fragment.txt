@@ -1,0 +1,830 @@
+   960	        ],
+   961	      ),
+   962	    );
+   963	  }
+   964	}
+   965	
+   966	class _CompatBadgeData {
+   967	  final String label;
+   968	  final IconData icon;
+   969	  _CompatBadgeData(this.label, this.icon);
+   970	}
+   971	
+   972	class _Shimmer extends StatefulWidget {
+   973	  final BorderRadius borderRadius;
+   974	  final double height;
+   975	  final double? width;
+   976	
+   977	  const _Shimmer({
+   978	    required this.borderRadius,
+   979	    required this.height,
+   980	    this.width,
+   981	  });
+   982	
+   983	  @override
+   984	  State<_Shimmer> createState() => _ShimmerState();
+   985	}
+   986	
+   987	class _ShimmerState extends State<_Shimmer> with SingleTickerProviderStateMixin {
+   988	  late final AnimationController _c;
+   989	
+   990	  @override
+   991	  void initState() {
+   992	    super.initState();
+   993	    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))..repeat();
+   994	  }
+   995	
+   996	  @override
+   997	  void dispose() {
+   998	    _c.dispose();
+   999	    super.dispose();
+  1000	  }
+  1001	
+  1002	  @override
+  1003	  Widget build(BuildContext context) {
+  1004	    final cs = Theme.of(context).colorScheme;
+  1005	    return AnimatedBuilder(
+  1006	      animation: _c,
+  1007	      builder: (context, _) {
+  1008	        final t = _c.value;
+  1009	        final x = -1.0 + (2.0 * t);
+  1010	        return ClipRRect(
+  1011	          borderRadius: widget.borderRadius,
+  1012	          child: Container(
+  1013	            width: widget.width,
+  1014	            height: widget.height,
+  1015	            decoration: BoxDecoration(
+  1016	              color: cs.surfaceContainerHighest.withOpacity(0.22),
+  1017	            ),
+  1018	            child: ShaderMask(
+  1019	              shaderCallback: (rect) {
+  1020	                return LinearGradient(
+  1021	                  begin: Alignment(x - 1, 0),
+  1022	                  end: Alignment(x + 1, 0),
+  1023	                  colors: [
+  1024	                    Colors.transparent,
+  1025	                    Colors.white.withOpacity(0.18),
+  1026	                    Colors.transparent,
+  1027	                  ],
+  1028	                  stops: const [0.25, 0.5, 0.75],
+  1029	                ).createShader(rect);
+  1030	              },
+  1031	              blendMode: BlendMode.srcATop,
+  1032	              child: Container(color: Colors.white.withOpacity(0.06)),
+  1033	            ),
+  1034	          ),
+  1035	        );
+  1036	      },
+  1037	    );
+  1038	  }
+  1039	}
+  1040	
+  1041	class _SkeletonTemplateCard extends StatelessWidget {
+  1042	  const _SkeletonTemplateCard();
+  1043	
+  1044	  @override
+  1045	  Widget build(BuildContext context) {
+  1046	    final cs = Theme.of(context).colorScheme;
+  1047	    return Container(
+  1048	      decoration: BoxDecoration(
+  1049	        color: cs.surface,
+  1050	        borderRadius: BorderRadius.circular(AppBorderRadius.large),
+  1051	        border: Border.all(color: cs.outlineVariant.withOpacity(0.55)),
+  1052	      ),
+  1053	      child: ClipRRect(
+  1054	        borderRadius: BorderRadius.circular(AppBorderRadius.large),
+  1055	        child: Column(
+  1056	          crossAxisAlignment: CrossAxisAlignment.start,
+  1057	          children: [
+  1058	            const _Shimmer(borderRadius: BorderRadius.zero, height: 110),
+  1059	            Padding(
+  1060	              padding: const EdgeInsets.all(AppSpacing.md),
+  1061	              child: Column(
+  1062	                crossAxisAlignment: CrossAxisAlignment.start,
+  1063	                children: [
+  1064	                  _Shimmer(borderRadius: BorderRadius.circular(999), height: 14, width: 92),
+  1065	                  const SizedBox(height: 10),
+  1066	                  _Shimmer(borderRadius: BorderRadius.circular(8), height: 14, width: 140),
+  1067	                  const SizedBox(height: 8),
+  1068	                  _Shimmer(borderRadius: BorderRadius.circular(8), height: 14, width: 120),
+  1069	                  const SizedBox(height: 12),
+  1070	                  Row(
+  1071	                    children: [
+  1072	                      _Shimmer(borderRadius: BorderRadius.circular(999), height: 22, width: 62),
+  1073	                      const SizedBox(width: 8),
+  1074	                      _Shimmer(borderRadius: BorderRadius.circular(999), height: 22, width: 72),
+  1075	                    ],
+  1076	                  ),
+  1077	                ],
+  1078	              ),
+  1079	            ),
+  1080	          ],
+  1081	        ),
+  1082	      ),
+  1083	    );
+  1084	  }
+  1085	}
+  1086	
+  1087	class _SkeletonTemplateRow extends StatelessWidget {
+  1088	  const _SkeletonTemplateRow();
+  1089	
+  1090	  @override
+  1091	  Widget build(BuildContext context) {
+  1092	    final cs = Theme.of(context).colorScheme;
+  1093	    return Container(
+  1094	      padding: const EdgeInsets.all(AppSpacing.md),
+  1095	      decoration: BoxDecoration(
+  1096	        color: cs.surface,
+  1097	        borderRadius: BorderRadius.circular(AppBorderRadius.large),
+  1098	        border: Border.all(color: cs.outlineVariant.withOpacity(0.55)),
+  1099	      ),
+  1100	      child: Row(
+  1101	        children: [
+  1102	          _Shimmer(borderRadius: BorderRadius.circular(AppBorderRadius.medium), height: 78, width: 112),
+  1103	          const SizedBox(width: AppSpacing.md),
+  1104	          Expanded(
+  1105	            child: Column(
+  1106	              crossAxisAlignment: CrossAxisAlignment.start,
+  1107	              children: [
+  1108	                _Shimmer(borderRadius: BorderRadius.circular(8), height: 14, width: 160),
+  1109	                const SizedBox(height: 8),
+  1110	                _Shimmer(borderRadius: BorderRadius.circular(8), height: 14, width: 120),
+  1111	                const SizedBox(height: 10),
+  1112	                _Shimmer(borderRadius: BorderRadius.circular(8), height: 14, width: 220),
+  1113	                const SizedBox(height: 8),
+  1114	                _Shimmer(borderRadius: BorderRadius.circular(8), height: 14, width: 190),
+  1115	              ],
+  1116	            ),
+  1117	          ),
+  1118	        ],
+  1119	      ),
+  1120	    );
+  1121	  }
+  1122	}
+  1123	
+  1124	class _MarketplaceSkeleton extends StatelessWidget {
+  1125	  final bool isGrid;
+  1126	  const _MarketplaceSkeleton({required this.isGrid});
+  1127	
+  1128	  @override
+  1129	  Widget build(BuildContext context) {
+  1130	    if (isGrid) {
+  1131	      return GridView.builder(
+  1132	        shrinkWrap: true,
+  1133	        physics: const NeverScrollableScrollPhysics(),
+  1134	        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+  1135	          crossAxisCount: 2,
+  1136	          childAspectRatio: 0.68,
+  1137	          crossAxisSpacing: AppSpacing.lg,
+  1138	          mainAxisSpacing: AppSpacing.lg,
+  1139	        ),
+  1140	        itemCount: 6,
+  1141	        itemBuilder: (_, __) => const _SkeletonTemplateCard(),
+  1142	      );
+  1143	    }
+  1144	
+  1145	    return Column(
+  1146	      children: List.generate(
+  1147	        5,
+  1148	        (i) => const Padding(
+  1149	          padding: EdgeInsets.only(bottom: AppSpacing.lg),
+  1150	          child: _SkeletonTemplateRow(),
+  1151	        ),
+  1152	      ),
+  1153	    );
+  1154	  }
+  1155	}
+  1156	
+  1157	class _DevBadge extends StatelessWidget {
+  1158	  final bool compact;
+  1159	
+  1160	  const _DevBadge({this.compact = false});
+  1161	
+  1162	  const _DevBadge.compact() : compact = true;
+  1163	
+  1164	  @override
+  1165	  Widget build(BuildContext context) {
+  1166	    final cs = Theme.of(context).colorScheme;
+  1167	    final pad = compact
+  1168	        ? const EdgeInsets.symmetric(horizontal: 8, vertical: 4)
+  1169	        : const EdgeInsets.symmetric(horizontal: 10, vertical: 6);
+  1170	
+  1171	    final iconSize = compact ? 12.0 : 14.0;
+  1172	    final fontSize = compact ? 9.0 : 10.0;
+  1173	
+  1174	    return DecoratedBox(
+  1175	      decoration: BoxDecoration(
+  1176	        gradient: LinearGradient(
+  1177	          colors: [cs.primary.withOpacity(0.95), cs.secondary.withOpacity(0.90)],
+  1178	          begin: Alignment.topLeft,
+  1179	          end: Alignment.bottomRight,
+  1180	        ),
+  1181	        borderRadius: BorderRadius.circular(999),
+  1182	        border: Border.all(color: Colors.white.withOpacity(0.22)),
+  1183	        boxShadow: [
+  1184	          BoxShadow(
+  1185	            color: Colors.black.withOpacity(0.22),
+  1186	            blurRadius: 10,
+  1187	            offset: const Offset(0, 6),
+  1188	          ),
+  1189	        ],
+  1190	      ),
+  1191	      child: Padding(
+  1192	        padding: pad,
+  1193	        child: Row(
+  1194	          mainAxisSize: MainAxisSize.min,
+  1195	          children: [
+  1196	            Icon(Icons.verified_rounded, size: iconSize, color: cs.onPrimary),
+  1197	            const SizedBox(width: 6),
+  1198	            Text(
+  1199	              'DEV',
+  1200	              style: AppTypography.caption.copyWith(
+  1201	                color: cs.onPrimary,
+  1202	                fontWeight: FontWeight.w900,
+  1203	                fontSize: fontSize,
+  1204	                letterSpacing: 0.8,
+  1205	              ),
+  1206	            ),
+  1207	          ],
+  1208	        ),
+  1209	      ),
+  1210	    );
+  1211	  }
+  1212	}
+  1213	
+  1214	class _PressableGlow extends StatefulWidget {
+  1215	  final Widget child;
+  1216	  final VoidCallback? onTap;
+  1217	  final VoidCallback? onLongPress;
+  1218	
+  1219	  const _PressableGlow({
+  1220	    required this.child,
+  1221	    required this.onTap,
+  1222	    required this.onLongPress,
+  1223	  });
+  1224	
+  1225	  @override
+  1226	  State<_PressableGlow> createState() => _PressableGlowState();
+  1227	}
+  1228	
+  1229	class _PressableGlowState extends State<_PressableGlow> {
+  1230	  bool _down = false;
+  1231	
+  1232	  void _set(bool v) {
+  1233	    if (_down == v) return;
+  1234	    setState(() => _down = v);
+  1235	  }
+  1236	
+  1237	  @override
+  1238	  Widget build(BuildContext context) {
+  1239	    final cs = Theme.of(context).colorScheme;
+  1240	    return GestureDetector(
+  1241	      onTap: widget.onTap,
+  1242	      onLongPress: widget.onLongPress,
+  1243	      onTapDown: (_) => _set(true),
+  1244	      onTapCancel: () => _set(false),
+  1245	      onTapUp: (_) => _set(false),
+  1246	      child: AnimatedScale(
+  1247	        duration: const Duration(milliseconds: 120),
+  1248	        curve: Curves.easeOut,
+  1249	        scale: _down ? 0.985 : 1,
+  1250	        child: AnimatedContainer(
+  1251	          duration: const Duration(milliseconds: 160),
+  1252	          curve: Curves.easeOut,
+  1253	          decoration: BoxDecoration(
+  1254	            borderRadius: BorderRadius.circular(AppBorderRadius.large),
+  1255	            boxShadow: _down
+  1256	                ? [
+  1257	                    BoxShadow(
+  1258	                      color: cs.primary.withOpacity(0.22),
+  1259	                      blurRadius: 22,
+  1260	                      spreadRadius: 1,
+  1261	                      offset: const Offset(0, 14),
+  1262	                    ),
+  1263	                  ]
+  1264	                : const [],
+  1265	          ),
+  1266	          child: widget.child,
+  1267	        ),
+  1268	      ),
+  1269	    );
+  1270	  }
+  1271	}
+  1272	
+  1273	class _AnimatedChoiceChip extends StatefulWidget {
+  1274	  final String label;
+  1275	  final bool selected;
+  1276	  final VoidCallback onTap;
+  1277	  final bool densePill;
+  1278	
+  1279	  const _AnimatedChoiceChip({
+  1280	    required this.label,
+  1281	    required this.selected,
+  1282	    required this.onTap,
+  1283	    this.densePill = false,
+  1284	  });
+  1285	
+  1286	  @override
+  1287	  State<_AnimatedChoiceChip> createState() => _AnimatedChoiceChipState();
+  1288	}
+  1289	
+  1290	class _AnimatedChoiceChipState extends State<_AnimatedChoiceChip> {
+  1291	  bool _down = false;
+  1292	
+  1293	  @override
+  1294	  Widget build(BuildContext context) {
+  1295	    final cs = Theme.of(context).colorScheme;
+  1296	    final sel = widget.selected;
+  1297	    final br = widget.densePill ? 999.0 : AppBorderRadius.medium.toDouble();
+  1298	    final isDark = Theme.of(context).brightness == Brightness.dark;
+  1299	    final fg = sel ? Colors.white : cs.onSurfaceVariant;
+  1300	    final fw = sel ? FontWeight.w900 : FontWeight.w700;
+  1301	
+  1302	    return GestureDetector(
+  1303	      onTap: widget.onTap,
+  1304	      onTapDown: (_) => setState(() => _down = true),
+  1305	      onTapCancel: () => setState(() => _down = false),
+  1306	      onTapUp: (_) => setState(() => _down = false),
+  1307	      child: AnimatedScale(
+  1308	        duration: const Duration(milliseconds: 120),
+  1309	        curve: Curves.easeOut,
+  1310	        scale: _down ? 0.97 : 1,
+  1311	        child: AnimatedContainer(
+  1312	          duration: const Duration(milliseconds: 180),
+  1313	          curve: Curves.easeOutCubic,
+  1314	          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+  1315	          decoration: BoxDecoration(
+  1316	            gradient: sel
+  1317	                ? LinearGradient(
+  1318	                    colors: [cs.primary, cs.secondary],
+  1319	                    begin: Alignment.topLeft,
+  1320	                    end: Alignment.bottomRight,
+  1321	                  )
+  1322	                : LinearGradient(
+  1323	                    colors: [
+  1324	                      cs.surfaceContainerHighest.withOpacity(isDark ? 0.22 : 0.55),
+  1325	                      cs.surface.withOpacity(isDark ? 0.16 : 0.45),
+  1326	                    ],
+  1327	                    begin: Alignment.topLeft,
+  1328	                    end: Alignment.bottomRight,
+  1329	                  ),
+  1330	            borderRadius: BorderRadius.circular(br),
+  1331	            border: Border.all(color: sel ? cs.primary.withOpacity(0.38) : cs.outlineVariant.withOpacity(0.55)),
+  1332	            boxShadow: sel
+  1333	                ? [
+  1334	                    BoxShadow(
+  1335	                      color: cs.primary.withOpacity(0.22),
+  1336	                      blurRadius: 18,
+  1337	                      offset: const Offset(0, 10),
+  1338	                    ),
+  1339	                  ]
+  1340	                : const [],
+  1341	          ),
+  1342	          child: Row(
+  1343	            mainAxisSize: MainAxisSize.min,
+  1344	            children: [
+  1345	              if (sel) ...[
+  1346	                Icon(Icons.check_rounded, size: 16, color: fg),
+  1347	                const SizedBox(width: 6),
+  1348	              ],
+  1349	              Text(
+  1350	                widget.label,
+  1351	                style: AppTypography.caption.copyWith(color: fg, fontWeight: fw),
+  1352	              ),
+  1353	            ],
+  1354	          ),
+  1355	        ),
+  1356	      ),
+  1357	    );
+  1358	  }
+  1359	}
+  1360	
+  1361	class _MarketplaceSkeleton extends StatelessWidget {
+  1362	  final bool isGrid;
+  1363	  const _MarketplaceSkeleton({required this.isGrid});
+  1364	
+  1365	  @override
+  1366	  Widget build(BuildContext context) {
+  1367	    if (isGrid) {
+  1368	      return GridView.builder(
+  1369	        shrinkWrap: true,
+  1370	        physics: const NeverScrollableScrollPhysics(),
+  1371	        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+  1372	          crossAxisCount: 2,
+  1373	          childAspectRatio: 0.68,
+  1374	          crossAxisSpacing: AppSpacing.lg,
+  1375	          mainAxisSpacing: AppSpacing.lg,
+  1376	        ),
+  1377	        itemCount: 6,
+  1378	        itemBuilder: (_, __) => const _SkeletonTemplateCard(),
+  1379	      );
+  1380	    }
+  1381	
+  1382	    return Column(
+  1383	      children: List.generate(
+  1384	        5,
+  1385	        (i) => const Padding(
+  1386	          padding: EdgeInsets.only(bottom: AppSpacing.lg),
+  1387	          child: _SkeletonTemplateRow(),
+  1388	        ),
+  1389	      ),
+  1390	    );
+  1391	  }
+  1392	}
+  1393	
+  1394	class _Shimmer extends StatefulWidget {
+  1395	  final BorderRadius borderRadius;
+  1396	  final double height;
+  1397	  final double? width;
+  1398	
+  1399	  const _Shimmer({
+  1400	    required this.borderRadius,
+  1401	    required this.height,
+  1402	    this.width,
+  1403	  });
+  1404	
+  1405	  @override
+  1406	  State<_Shimmer> createState() => _ShimmerState();
+  1407	}
+  1408	
+  1409	class _ShimmerState extends State<_Shimmer> with SingleTickerProviderStateMixin {
+  1410	  late final AnimationController _c;
+  1411	
+  1412	  @override
+  1413	  void initState() {
+  1414	    super.initState();
+  1415	    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))..repeat();
+  1416	  }
+  1417	
+  1418	  @override
+  1419	  void dispose() {
+  1420	    _c.dispose();
+  1421	    super.dispose();
+  1422	  }
+  1423	
+  1424	  @override
+  1425	  Widget build(BuildContext context) {
+  1426	    final cs = Theme.of(context).colorScheme;
+  1427	    return AnimatedBuilder(
+  1428	      animation: _c,
+  1429	      builder: (context, _) {
+  1430	        final t = _c.value;
+  1431	        final x = -1.0 + (2.0 * t);
+  1432	        return ClipRRect(
+  1433	          borderRadius: widget.borderRadius,
+  1434	          child: Container(
+  1435	            width: widget.width,
+  1436	            height: widget.height,
+  1437	            decoration: BoxDecoration(
+  1438	              color: cs.surfaceContainerHighest.withOpacity(0.22),
+  1439	            ),
+  1440	            child: ShaderMask(
+  1441	              shaderCallback: (rect) {
+  1442	                return LinearGradient(
+  1443	                  begin: Alignment(x - 1, 0),
+  1444	                  end: Alignment(x + 1, 0),
+  1445	                  colors: [
+  1446	                    Colors.transparent,
+  1447	                    Colors.white.withOpacity(0.18),
+  1448	                    Colors.transparent,
+  1449	                  ],
+  1450	                  stops: const [0.25, 0.5, 0.75],
+  1451	                ).createShader(rect);
+  1452	              },
+  1453	              blendMode: BlendMode.srcATop,
+  1454	              child: Container(color: Colors.white.withOpacity(0.06)),
+  1455	            ),
+  1456	          ),
+  1457	        );
+  1458	      },
+  1459	    );
+  1460	  }
+  1461	}
+  1462	
+  1463	class _SkeletonTemplateCard extends StatelessWidget {
+  1464	  const _SkeletonTemplateCard();
+  1465	
+  1466	  @override
+  1467	  Widget build(BuildContext context) {
+  1468	    final cs = Theme.of(context).colorScheme;
+  1469	    return Container(
+  1470	      decoration: BoxDecoration(
+  1471	        color: cs.surface,
+  1472	        borderRadius: BorderRadius.circular(AppBorderRadius.large),
+  1473	        border: Border.all(color: cs.outlineVariant.withOpacity(0.55)),
+  1474	      ),
+  1475	      child: ClipRRect(
+  1476	        borderRadius: BorderRadius.circular(AppBorderRadius.large),
+  1477	        child: Column(
+  1478	          crossAxisAlignment: CrossAxisAlignment.start,
+  1479	          children: [
+  1480	            const _Shimmer(borderRadius: BorderRadius.zero, height: 110),
+  1481	            Padding(
+  1482	              padding: const EdgeInsets.all(AppSpacing.md),
+  1483	              child: Column(
+  1484	                crossAxisAlignment: CrossAxisAlignment.start,
+  1485	                children: [
+  1486	                  _Shimmer(borderRadius: BorderRadius.circular(999), height: 14, width: 92),
+  1487	                  const SizedBox(height: 10),
+  1488	                  _Shimmer(borderRadius: BorderRadius.circular(8), height: 14, width: 140),
+  1489	                  const SizedBox(height: 8),
+  1490	                  _Shimmer(borderRadius: BorderRadius.circular(8), height: 14, width: 120),
+  1491	                  const SizedBox(height: 12),
+  1492	                  Row(
+  1493	                    children: [
+  1494	                      _Shimmer(borderRadius: BorderRadius.circular(999), height: 22, width: 62),
+  1495	                      const SizedBox(width: 8),
+  1496	                      _Shimmer(borderRadius: BorderRadius.circular(999), height: 22, width: 72),
+  1497	                    ],
+  1498	                  ),
+  1499	                ],
+  1500	              ),
+  1501	            ),
+  1502	          ],
+  1503	        ),
+  1504	      ),
+  1505	    );
+  1506	  }
+  1507	}
+  1508	
+  1509	class _SkeletonTemplateRow extends StatelessWidget {
+  1510	  const _SkeletonTemplateRow();
+  1511	
+  1512	  @override
+  1513	  Widget build(BuildContext context) {
+  1514	    final cs = Theme.of(context).colorScheme;
+  1515	    return Container(
+  1516	      padding: const EdgeInsets.all(AppSpacing.md),
+  1517	      decoration: BoxDecoration(
+  1518	        color: cs.surface,
+  1519	        borderRadius: BorderRadius.circular(AppBorderRadius.large),
+  1520	        border: Border.all(color: cs.outlineVariant.withOpacity(0.55)),
+  1521	      ),
+  1522	      child: Row(
+  1523	        children: [
+  1524	          _Shimmer(borderRadius: BorderRadius.circular(AppBorderRadius.medium), height: 78, width: 112),
+  1525	          const SizedBox(width: AppSpacing.md),
+  1526	          Expanded(
+  1527	            child: Column(
+  1528	              crossAxisAlignment: CrossAxisAlignment.start,
+  1529	              children: [
+  1530	                _Shimmer(borderRadius: BorderRadius.circular(8), height: 14, width: 160),
+  1531	                const SizedBox(height: 8),
+  1532	                _Shimmer(borderRadius: BorderRadius.circular(8), height: 14, width: 120),
+  1533	                const SizedBox(height: 10),
+  1534	                _Shimmer(borderRadius: BorderRadius.circular(8), height: 14, width: 220),
+  1535	                const SizedBox(height: 8),
+  1536	                _Shimmer(borderRadius: BorderRadius.circular(8), height: 14, width: 190),
+  1537	              ],
+  1538	            ),
+  1539	          ),
+  1540	        ],
+  1541	      ),
+  1542	    );
+  1543	  }
+  1544	}
+  1545	
+  1546	class _CompatBadge {
+  1547	  final String label;
+  1548	  final IconData icon;
+  1549	
+  1550	  const _CompatBadge({
+  1551	    required this.label,
+  1552	    required this.icon,
+  1553	  });
+  1554	}
+  1555	
+  1556	class _DevBadge extends StatelessWidget {
+  1557	  final bool compact;
+  1558	
+  1559	  const _DevBadge({this.compact = false});
+  1560	
+  1561	  const _DevBadge.compact() : compact = true;
+  1562	
+  1563	  @override
+  1564	  Widget build(BuildContext context) {
+  1565	    final cs = Theme.of(context).colorScheme;
+  1566	    final pad = compact
+  1567	        ? const EdgeInsets.symmetric(horizontal: 8, vertical: 4)
+  1568	        : const EdgeInsets.symmetric(horizontal: 10, vertical: 6);
+  1569	
+  1570	    final iconSize = compact ? 12.0 : 14.0;
+  1571	    final fontSize = compact ? 9.0 : 10.0;
+  1572	
+  1573	    return DecoratedBox(
+  1574	      decoration: BoxDecoration(
+  1575	        gradient: LinearGradient(
+  1576	          colors: [cs.primary.withOpacity(0.95), cs.secondary.withOpacity(0.90)],
+  1577	          begin: Alignment.topLeft,
+  1578	          end: Alignment.bottomRight,
+  1579	        ),
+  1580	        borderRadius: BorderRadius.circular(999),
+  1581	        border: Border.all(color: Colors.white.withOpacity(0.22)),
+  1582	        boxShadow: [
+  1583	          BoxShadow(
+  1584	            color: Colors.black.withOpacity(0.22),
+  1585	            blurRadius: 10,
+  1586	            offset: const Offset(0, 6),
+  1587	          ),
+  1588	        ],
+  1589	      ),
+  1590	      child: Padding(
+  1591	        padding: pad,
+  1592	        child: Row(
+  1593	          mainAxisSize: MainAxisSize.min,
+  1594	          children: [
+  1595	            Icon(Icons.verified_rounded, size: iconSize, color: cs.onPrimary),
+  1596	            const SizedBox(width: 6),
+  1597	            Text(
+  1598	              'DEV',
+  1599	              style: AppTypography.caption.copyWith(
+  1600	                color: cs.onPrimary,
+  1601	                fontWeight: FontWeight.w900,
+  1602	                fontSize: fontSize,
+  1603	                letterSpacing: 0.8,
+  1604	              ),
+  1605	            ),
+  1606	          ],
+  1607	        ),
+  1608	      ),
+  1609	    );
+  1610	  }
+  1611	}
+  1612	
+  1613	class GameTemplate {
+  1614	  final String id;
+  1615	  final String name;
+  1616	  final String category;
+  1617	  final String description;
+  1618	  final double rating;
+  1619	  final int downloads;
+  1620	  final double price;
+  1621	  final String? imageUrl;
+  1622	  final String? previewVideoUrl;
+  1623	  final List<String> tags;
+  1624	  final bool isFeatured;
+  1625	  final String creator;
+  1626	  final String? ownerRole;
+  1627	  final String? ownerUsername;
+  1628	  final String? ownerAvatar;
+  1629	  final DateTime createdAt;
+  1630	
+  1631	  bool get isDevOwner {
+  1632	    final r = (ownerRole ?? '').trim().toLowerCase();
+  1633	    return r == 'dev' || r == 'devl';
+  1634	  }
+  1635	
+  1636	  GameTemplate({
+  1637	    required this.id,
+  1638	    required this.name,
+  1639	    required this.category,
+  1640	    required this.description,
+  1641	    required this.rating,
+  1642	    required this.downloads,
+  1643	    required this.price,
+  1644	    this.imageUrl,
+  1645	    this.previewVideoUrl,
+  1646	    required this.tags,
+  1647	    required this.isFeatured,
+  1648	    required this.creator,
+  1649	    this.ownerRole,
+  1650	    this.ownerUsername,
+  1651	    this.ownerAvatar,
+  1652	    required this.createdAt,
+  1653	  });
+  1654	
+  1655	  factory GameTemplate.fromMap(Map<String, dynamic> map) {
+  1656	    return GameTemplate(
+  1657	      id: map['_id']?.toString() ?? map['id']?.toString() ?? '',
+  1658	      name: map['name']?.toString() ?? '',
+  1659	      category: map['category']?.toString() ?? 'Other',
+  1660	      description: map['description']?.toString() ?? '',
+  1661	      rating: double.tryParse(map['rating']?.toString() ?? '') ?? 0.0,
+  1662	      downloads: int.tryParse(map['downloads']?.toString() ?? '') ?? 0,
+  1663	      price: double.tryParse(map['price']?.toString() ?? '') ?? 0.0,
+  1664	      imageUrl: map['imageUrl']?.toString() ?? map['previewImage']?.toString(),
+  1665	      previewVideoUrl: map['previewVideoUrl']?.toString() ?? map['previewVideo']?.toString(),
+  1666	      tags: (map['tags'] is List) 
+  1667	          ? List<String>.from(map['tags'].map((e) => e.toString()))
+  1668	          : (map['tags']?.toString() ?? '').split(',').where((s) => s.trim().isNotEmpty).toList(),
+  1669	      isFeatured: map['isFeatured'] == true,
+  1670	      creator: map['creator']?.toString() ?? 'Anonymous',
+  1671	      ownerRole: map['ownerRole']?.toString(),
+  1672	      ownerUsername: map['ownerUsername']?.toString(),
+  1673	      ownerAvatar: map['ownerAvatar']?.toString(),
+  1674	      createdAt: DateTime.tryParse(map['createdAt']?.toString() ?? '') ?? DateTime.now(),
+  1675	    );
+  1676	  }
+  1677	}
+  1678	
+  1679	class _VideoPlayerDialog extends StatefulWidget {
+  1680	  final String url;
+  1681	
+  1682	  const _VideoPlayerDialog({
+  1683	    required this.url,
+  1684	  });
+  1685	
+  1686	  @override
+  1687	  State<_VideoPlayerDialog> createState() => _VideoPlayerDialogState();
+  1688	}
+  1689	
+  1690	class _VideoPlayerDialogState extends State<_VideoPlayerDialog> {
+  1691	  late final VideoPlayerController _controller;
+  1692	  late final Future<void> _init;
+  1693	
+  1694	  @override
+  1695	  void initState() {
+  1696	    super.initState();
+  1697	    _controller = VideoPlayerController.networkUrl(Uri.parse(widget.url));
+  1698	    _init = _controller.initialize().then((_) {
+  1699	      _controller.setLooping(true);
+  1700	      _controller.play();
+  1701	      if (mounted) setState(() {});
+  1702	    });
+  1703	  }
+  1704	
+  1705	  @override
+  1706	  void dispose() {
+  1707	    _controller.dispose();
+  1708	    super.dispose();
+  1709	  }
+  1710	
+  1711	  @override
+  1712	  Widget build(BuildContext context) {
+  1713	    final cs = Theme.of(context).colorScheme;
+  1714	    return Dialog(
+  1715	      backgroundColor: cs.surface,
+  1716	      insetPadding: const EdgeInsets.all(AppSpacing.lg),
+  1717	      child: ClipRRect(
+  1718	        borderRadius: BorderRadius.circular(AppBorderRadius.large),
+  1719	        child: AspectRatio(
+  1720	          aspectRatio: 16 / 9,
+  1721	          child: FutureBuilder<void>(
+  1722	            future: _init,
+  1723	            builder: (context, snap) {
+  1724	              if (snap.connectionState != ConnectionState.done) {
+  1725	                return const Center(child: CircularProgressIndicator());
+  1726	              }
+  1727	              return Stack(
+  1728	                children: [
+  1729	                  Positioned.fill(child: VideoPlayer(_controller)),
+  1730	                  Positioned(
+  1731	                    top: 10,
+  1732	                    right: 10,
+  1733	                    child: Material(
+  1734	                      color: Colors.transparent,
+  1735	                      child: InkWell(
+  1736	                        borderRadius: BorderRadius.circular(999),
+  1737	                        onTap: () => Navigator.of(context).pop(),
+  1738	                        child: Container(
+  1739	                          padding: const EdgeInsets.all(8),
+  1740	                          decoration: BoxDecoration(
+  1741	                            color: Colors.black.withOpacity(0.45),
+  1742	                            shape: BoxShape.circle,
+  1743	                          ),
+  1744	                          child: const Icon(Icons.close, size: 18, color: Colors.white),
+  1745	                        ),
+  1746	                      ),
+  1747	                    ),
+  1748	                  ),
+  1749	                ],
+  1750	              );
+  1751	            },
+  1752	          ),
+  1753	        ),
+  1754	      ),
+  1755	    );
+  1756	  }
+  1757	}
+  1758	
+  1759	class _MarketplaceMeshPainter extends CustomPainter {
+  1760	  final Color color1;
+  1761	  final Color color2;
+  1762	  final double progress;
+  1763	
+  1764	  _MarketplaceMeshPainter({
+  1765	    required this.color1,
+  1766	    required this.color2,
+  1767	    required this.progress,
+  1768	  });
+  1769	
+  1770	  @override
+  1771	  void paint(Canvas canvas, Size size) {
+  1772	    final paint = Paint()..maskFilter = const MaskFilter.blur(BlurStyle.normal, 60);
+  1773	    paint.color = color1;
+  1774	    canvas.drawCircle(
+  1775	      Offset(size.width * 0.1, size.height * (0.1 + 0.1 * progress)),
+  1776	      size.width * 0.6 * progress,
+  1777	      paint,
+  1778	    );
+  1779	    paint.color = color2;
+  1780	    canvas.drawCircle(
+  1781	      Offset(size.width * 0.9, size.height * (0.4 - 0.05 * progress)),
+  1782	      size.width * 0.4 * progress,
+  1783	      paint,
+  1784	    );
+  1785	  }
+  1786	
+  1787	  @override
+  1788	  bool shouldRepaint(covariant _MarketplaceMeshPainter oldDelegate) => true;
+  1789	}

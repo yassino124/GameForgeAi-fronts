@@ -27,7 +27,107 @@ class _BuildResultsScreenState extends State<BuildResultsScreen> {
   Map<String, dynamic>? _project;
   String? _downloadUrlWebgl;
   String? _downloadUrlApk;
+  String? _downloadUrlWindows;
+  String? _downloadUrlMacos;
   String? _previewUrl;
+
+  Future<void> _copyDownloadLink(String url) async {
+    final u = url.trim();
+    if (u.isEmpty) return;
+    await Clipboard.setData(ClipboardData(text: u));
+    AppNotifier.showSuccess('Link copied');
+  }
+
+  Widget _buildDesktopPlatformResult(
+    BuildContext context, {
+    required String title,
+    required IconData icon,
+    required bool isReady,
+    required bool isFailed,
+    required String? downloadUrl,
+    required String buildTime,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    final hasDownload = downloadUrl != null && downloadUrl.trim().isNotEmpty;
+    return Container(
+      margin: const EdgeInsets.only(bottom: AppSpacing.lg),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(AppBorderRadius.large),
+        border: Border.all(color: cs.outlineVariant),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(AppSpacing.md),
+                decoration: BoxDecoration(
+                  color: AppColors.success.withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(icon, color: AppColors.success, size: 24),
+              ),
+              const SizedBox(width: AppSpacing.lg),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title, style: AppTypography.subtitle2.copyWith(color: cs.onSurface)),
+                    const SizedBox(height: AppSpacing.xs),
+                    Text(
+                      buildTime.isNotEmpty ? buildTime : '—',
+                      style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+              ),
+              StatusBadge(
+                text: isReady ? 'Ready' : (isFailed ? 'Failed' : 'Pending'),
+                color: isReady
+                    ? AppColors.success
+                    : (isFailed ? AppColors.error : cs.onSurfaceVariant),
+                icon: isReady
+                    ? Icons.check_circle
+                    : (isFailed ? Icons.error : Icons.hourglass_bottom),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          Row(
+            children: [
+              Expanded(
+                child: CustomButton(
+                  text: 'Download',
+                  onPressed: (!isReady || !hasDownload)
+                      ? null
+                      : () {
+                          _launchDownload(context, downloadUrl!);
+                        },
+                  type: ButtonType.primary,
+                  icon: const Icon(Icons.download),
+                ),
+              ),
+              const SizedBox(width: AppSpacing.lg),
+              Expanded(
+                child: CustomButton(
+                  text: 'Copy link',
+                  onPressed: (!isReady || !hasDownload)
+                      ? null
+                      : () {
+                          _copyDownloadLink(downloadUrl!);
+                        },
+                  type: ButtonType.secondary,
+                  icon: const Icon(Icons.link),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
   @override
   void didChangeDependencies() {
@@ -138,6 +238,18 @@ class _BuildResultsScreenState extends State<BuildResultsScreen> {
                   },
             type: ButtonType.primary,
             icon: const Icon(Icons.download),
+            isFullWidth: true,
+          ),
+          const SizedBox(height: AppSpacing.md),
+          CustomButton(
+            text: 'Copy link',
+            onPressed: (!isReady || !hasDownload)
+                ? null
+                : () {
+                    _copyDownloadLink(downloadUrl!);
+                  },
+            type: ButtonType.secondary,
+            icon: const Icon(Icons.link),
             isFullWidth: true,
           ),
         ],
@@ -256,13 +368,37 @@ class _BuildResultsScreenState extends State<BuildResultsScreen> {
                   onPressed: (!isReady || !hasPreview)
                       ? null
                       : () {
-                          context.push('/play-webgl', extra: {'url': previewUrl!});
+                          final pid = (_projectId ?? '').trim();
+                          final raw = (previewUrl ?? '').trim();
+                          if (raw.isEmpty) return;
+                          String url = raw;
+                          if (pid.isNotEmpty) {
+                            try {
+                              final u = Uri.parse(raw);
+                              final qp = Map<String, String>.from(u.queryParameters);
+                              qp['projectId'] = pid;
+                              url = u.replace(queryParameters: qp).toString();
+                            } catch (_) {}
+                          }
+                          context.push('/play-webgl', extra: {'url': url, 'projectId': pid});
                         },
                   type: ButtonType.primary,
                   icon: const Icon(Icons.play_arrow),
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: AppSpacing.md),
+          CustomButton(
+            text: 'Copy link',
+            onPressed: (!isReady || !hasDownload)
+                ? null
+                : () {
+                    _copyDownloadLink(downloadUrl!);
+                  },
+            type: ButtonType.secondary,
+            icon: const Icon(Icons.link),
+            isFullWidth: true,
           ),
         ],
       ),
@@ -316,32 +452,50 @@ class _BuildResultsScreenState extends State<BuildResultsScreen> {
 
       final p = Map<String, dynamic>.from(projectRes['data'] as Map);
       final status = (p['status']?.toString() ?? '').toLowerCase();
+      final buildTarget = (p['buildTarget']?.toString() ?? '').trim().toLowerCase();
+      final isAndroidApk = buildTarget == 'android_apk' || buildTarget == 'android';
+      final isWindows = buildTarget == 'windows' || buildTarget == 'win';
+      final isMacos = buildTarget == 'macos' || buildTarget == 'osx';
 
       String? downloadUrlWebgl;
       String? downloadUrlApk;
+      String? downloadUrlWindows;
+      String? downloadUrlMacos;
       String? previewUrl;
       if (status == 'ready') {
         try {
-          final res = await Future.wait([
-            ProjectsService.getProjectDownloadUrl(token: token, projectId: id, target: 'webgl'),
-            ProjectsService.getProjectDownloadUrl(token: token, projectId: id, target: 'android_apk'),
-          ]);
-          final dWeb = res.isNotEmpty ? (res[0] as Map<String, dynamic>?) : null;
-          final dApk = res.length > 1 ? (res[1] as Map<String, dynamic>?) : null;
-
-          if (dWeb != null && dWeb['success'] == true && dWeb['data'] is Map) {
-            downloadUrlWebgl = ((dWeb['data'] as Map)['url'])?.toString();
-          }
-          if (dApk != null && dApk['success'] == true && dApk['data'] is Map) {
-            downloadUrlApk = ((dApk['data'] as Map)['url'])?.toString();
+          if (isAndroidApk) {
+            final dApk = await ProjectsService.getProjectDownloadUrl(token: token, projectId: id, target: 'android_apk');
+            if (dApk['success'] == true && dApk['data'] is Map) {
+              downloadUrlApk = ((dApk['data'] as Map)['url'])?.toString();
+            }
+          } else if (isWindows) {
+            final dWin = await ProjectsService.getProjectDownloadUrl(token: token, projectId: id, target: 'windows');
+            if (dWin['success'] == true && dWin['data'] is Map) {
+              downloadUrlWindows = ((dWin['data'] as Map)['url'])?.toString();
+            }
+          } else if (isMacos) {
+            final dMac = await ProjectsService.getProjectDownloadUrl(token: token, projectId: id, target: 'macos');
+            if (dMac['success'] == true && dMac['data'] is Map) {
+              downloadUrlMacos = ((dMac['data'] as Map)['url'])?.toString();
+            }
+          } else {
+            final dWeb = await ProjectsService.getProjectDownloadUrl(token: token, projectId: id, target: 'webgl');
+            if (dWeb['success'] == true && dWeb['data'] is Map) {
+              downloadUrlWebgl = ((dWeb['data'] as Map)['url'])?.toString();
+            }
           }
         } catch (_) {
           // ignore
         }
 
-        final prRes = await ProjectsService.getProjectPreviewUrl(token: token, projectId: id);
-        if (prRes['success'] == true && prRes['data'] is Map) {
-          previewUrl = (prRes['data'] as Map)['url']?.toString();
+        try {
+          final prRes = await ProjectsService.getProjectPreviewUrl(token: token, projectId: id);
+          if (prRes['success'] == true && prRes['data'] is Map) {
+            previewUrl = (prRes['data'] as Map)['url']?.toString();
+          }
+        } catch (_) {
+          // ignore
         }
       }
 
@@ -350,6 +504,8 @@ class _BuildResultsScreenState extends State<BuildResultsScreen> {
         _project = p;
         _downloadUrlWebgl = downloadUrlWebgl;
         _downloadUrlApk = downloadUrlApk;
+        _downloadUrlWindows = downloadUrlWindows;
+        _downloadUrlMacos = downloadUrlMacos;
         _previewUrl = previewUrl;
       });
     } catch (e) {
@@ -381,6 +537,8 @@ class _BuildResultsScreenState extends State<BuildResultsScreen> {
     final hasWebgl = (_previewUrl != null && _previewUrl!.trim().isNotEmpty) ||
         (_downloadUrlWebgl != null && _downloadUrlWebgl!.trim().isNotEmpty);
     final hasApk = _downloadUrlApk != null && _downloadUrlApk!.trim().isNotEmpty;
+    final hasWindows = _downloadUrlWindows != null && _downloadUrlWindows!.trim().isNotEmpty;
+    final hasMacos = _downloadUrlMacos != null && _downloadUrlMacos!.trim().isNotEmpty;
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -453,20 +611,32 @@ class _BuildResultsScreenState extends State<BuildResultsScreen> {
             ],
             if (projectId != null && projectId.trim().isNotEmpty) ...[
               CustomButton(
-                text: 'Play WebGL',
-                onPressed: (!hasWebgl || isAndroidApk)
-                    ? null
-                    : () async {
+                text: 'Play',
+                onPressed: () async {
                   final url = _previewUrl;
-                  if (url == null || url.trim().isEmpty) {
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Preview not ready')),
-                      );
+                  if (url != null && url.trim().isNotEmpty) {
+                    final pid = (projectId ?? '').trim();
+                    final raw = url.trim();
+                    String out = raw;
+                    if (pid.isNotEmpty) {
+                      try {
+                        final u = Uri.parse(raw);
+                        final qp = Map<String, String>.from(u.queryParameters);
+                        qp['projectId'] = pid;
+                        out = u.replace(queryParameters: qp).toString();
+                      } catch (_) {}
                     }
+                    if (context.mounted) context.push('/play-webgl', extra: {'url': out, 'projectId': pid});
                     return;
                   }
-                  if (context.mounted) context.push('/play-webgl', extra: {'url': url});
+
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('This build is not playable in-app. Build WebGL to play instantly.'),
+                      ),
+                    );
+                  }
                 },
                 type: ButtonType.primary,
                 icon: const Icon(Icons.play_arrow),
@@ -615,24 +785,27 @@ class _BuildResultsScreenState extends State<BuildResultsScreen> {
                 downloadUrl: _downloadUrlApk,
                 buildTime: _formatDurationMs(durationMs),
               )
+            else if (buildTarget == 'macos' || buildTarget == 'osx')
+              _buildDesktopPlatformResult(
+                context,
+                title: 'macOS',
+                icon: Icons.laptop_mac,
+                isReady: isReady,
+                isFailed: isFailed,
+                downloadUrl: _downloadUrlMacos,
+                buildTime: _formatDurationMs(durationMs),
+              )
+            else if (buildTarget == 'windows' || buildTarget == 'win')
+              _buildDesktopPlatformResult(
+                context,
+                title: 'Windows',
+                icon: Icons.desktop_windows,
+                isReady: isReady,
+                isFailed: isFailed,
+                downloadUrl: _downloadUrlWindows,
+                buildTime: _formatDurationMs(durationMs),
+              )
             else
-              _buildWebPlatformResult(
-                context,
-                isReady: isReady,
-                downloadUrl: _downloadUrlWebgl,
-                previewUrl: _previewUrl,
-                buildTime: _formatDurationMs(durationMs),
-              ),
-
-            if (!isAndroidApk && hasApk)
-              _buildAndroidPlatformResult(
-                context,
-                isReady: isReady,
-                downloadUrl: _downloadUrlApk,
-                buildTime: _formatDurationMs(durationMs),
-              ),
-
-            if (isAndroidApk && hasWebgl)
               _buildWebPlatformResult(
                 context,
                 isReady: isReady,
@@ -804,7 +977,11 @@ class _BuildResultsScreenState extends State<BuildResultsScreen> {
       AppNotifier.showError('No link available');
       return;
     }
-    Share.share(url);
+    final box = context.findRenderObject() as RenderBox?;
+    final origin = (box != null)
+        ? box.localToGlobal(Offset.zero) & box.size
+        : Rect.fromLTWH(0, 0, MediaQuery.of(context).size.width, MediaQuery.of(context).size.height);
+    Share.share(url, sharePositionOrigin: origin);
   }
 
   void _copyQRCode(BuildContext context) {

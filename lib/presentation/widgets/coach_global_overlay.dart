@@ -394,12 +394,43 @@ class _CoachGlobalOverlayState extends State<CoachGlobalOverlay> with SingleTick
                         ],
                         border: Border.all(color: Colors.white.withOpacity(0.12)),
                       ),
-                      child: Icon(
-                        listening
-                            ? Icons.hearing_rounded
-                            : (coach.handsFree ? Icons.auto_awesome_rounded : Icons.mic_rounded),
-                        color: cs.onPrimary,
-                        size: 28,
+                      child: Stack(
+                        clipBehavior: Clip.none,
+                        children: [
+                          Center(
+                            child: Icon(
+                              listening
+                                  ? Icons.hearing_rounded
+                                  : (coach.handsFree ? Icons.auto_awesome_rounded : Icons.mic_rounded),
+                              color: cs.onPrimary,
+                              size: 28,
+                            ),
+                          ),
+                          Positioned(
+                            top: -6,
+                            right: -6,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF59E0B),
+                                borderRadius: BorderRadius.circular(999),
+                                border: Border.all(color: Colors.white.withOpacity(0.20)),
+                                boxShadow: [
+                                  BoxShadow(color: Colors.black.withOpacity(0.22), blurRadius: 12, offset: const Offset(0, 8)),
+                                ],
+                              ),
+                              child: Text(
+                                'HOT',
+                                style: AppTypography.labelSmall.copyWith(
+                                  color: Colors.black,
+                                  fontSize: 9,
+                                  fontWeight: FontWeight.w900,
+                                  letterSpacing: 0.6,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
@@ -489,7 +520,15 @@ class _CoachGlobalOverlayState extends State<CoachGlobalOverlay> with SingleTick
             },
             onTap: () {
               if (!enabled) return;
-              setState(() => _expanded = !_expanded);
+              if (_expanded) {
+                setState(() => _expanded = false);
+                return;
+              }
+
+              Future.microtask(() async {
+                await coach.hideOverlay(stopAudio: false);
+                await coach.startPushToTalk(token: token);
+              });
             },
             onDoubleTap: () async {
               if (!enabled) return;

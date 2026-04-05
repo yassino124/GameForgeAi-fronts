@@ -1,8 +1,10 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/themes/app_theme.dart';
@@ -10,6 +12,7 @@ import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/services/ai_service.dart';
 import '../../../core/services/app_notifier.dart';
+import '../../../core/services/assets_service.dart';
 import '../../../core/services/projects_service.dart';
 import '../../widgets/widgets.dart';
 
@@ -178,10 +181,33 @@ class _AIConfigurationScreenState extends State<AIConfigurationScreen> with Sing
   double _gravityY = 0.0;
   double _jumpForce = 0.0;
 
+  // ── World / FX configs ────────────────────────────────────────────────────
+  String _gameMode = 'endless';     // endless / timed / survival / puzzle / battle
+  String _skyboxTheme = 'day';      // day / night / sunset / space / dungeon / underwater / volcano
+  double _playerScale = 1.0;        // 0.25 → 3.0
+  String _ambientLightColor = '#FFFFFF';
+  bool _bloomEnabled = false;
+  double _bloomIntensity = 0.5;
+  bool _particlesEnabled = true;
+  double _scoreMultiplier = 1.0;    // 0.5 → 5.0
+  double _enemyMultiplier = 1.0;    // 0.25 → 4.0
+  bool _godMode = false;
+  bool _infiniteJump = false;
+  int _timeLimit = 60;              // 10 → 300
+  int _lives = 3;                   // 1 → 10
+  final TextEditingController _musicUrlCtrl = TextEditingController();
+  final TextEditingController _bgImageUrlCtrl = TextEditingController();
+
   final TextEditingController _primaryColorCtrl = TextEditingController(text: '#22C55E');
   final TextEditingController _secondaryColorCtrl = TextEditingController(text: '#3B82F6');
   final TextEditingController _accentColorCtrl = TextEditingController(text: '#F59E0B');
   final TextEditingController _playerColorCtrl = TextEditingController(text: '#F59E0B');
+
+  // Asset uploads
+  File? _playerSpriteFile;
+  File? _backgroundImageFile;
+  File? _soundFile;
+
 
   final List<String> _aiModels = [
     'GPT-4',
@@ -204,6 +230,115 @@ class _AIConfigurationScreenState extends State<AIConfigurationScreen> with Sing
     _neonPulse = AnimationController(vsync: this, duration: const Duration(milliseconds: 1400));
     _neonT = Tween<double>(begin: 0.65, end: 1.0).animate(CurvedAnimation(parent: _neonPulse, curve: Curves.easeInOut));
     _neonPulse.repeat(reverse: true);
+  }
+
+  bool _isProAndroidGateMessage(String message) {
+    final s = message.toLowerCase();
+    return s.contains('android') && s.contains('pro') && s.contains('sub');
+  }
+
+  Future<void> _showProAndroidUpsellSheet({required String message}) async {
+    if (!mounted) return;
+    final cs = Theme.of(context).colorScheme;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: false,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return SafeArea(
+          child: Container(
+            margin: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.lg),
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            decoration: BoxDecoration(
+              color: cs.surface,
+              borderRadius: BorderRadius.circular(AppBorderRadius.large),
+              border: Border.all(color: cs.outlineVariant.withOpacity(0.7)),
+              boxShadow: AppShadows.boxShadowLarge,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: cs.primary.withOpacity(0.14),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: cs.primary.withOpacity(0.25)),
+                      ),
+                      child: Icon(Icons.workspace_premium_rounded, color: cs.primary),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Text(
+                        'Upgrade required',
+                        style: AppTypography.subtitle1.copyWith(
+                          color: cs.onSurface,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.of(ctx).pop(),
+                      icon: Icon(Icons.close_rounded, color: cs.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: AppSpacing.sm),
+                Text(
+                  'Android (APK) export is available on Pro. Upgrade to unlock Android builds and higher limits.',
+                  style: AppTypography.body2.copyWith(
+                    color: cs.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                    height: 1.25,
+                  ),
+                ),
+                if (message.trim().isNotEmpty) ...[
+                  const SizedBox(height: AppSpacing.sm),
+                  Text(
+                    message.trim(),
+                    style: AppTypography.caption.copyWith(
+                      color: cs.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: AppSpacing.lg),
+                Row(
+                  children: [
+                    Expanded(
+                      child: CustomButton(
+                        text: 'Not now',
+                        onPressed: () => Navigator.of(ctx).pop(),
+                        type: ButtonType.secondary,
+                        isFullWidth: true,
+                      ),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: CustomButton(
+                        text: 'Upgrade to Pro',
+                        onPressed: () async {
+                          Navigator.of(ctx).pop();
+                          if (!context.mounted) return;
+                          await context.push('/subscription');
+                        },
+                        type: ButtonType.primary,
+                        isFullWidth: true,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   String? _normHex(String? v) {
@@ -448,7 +583,7 @@ class _AIConfigurationScreenState extends State<AIConfigurationScreen> with Sing
     '#000000',
   ];
 
-  Future<void> _pickColor({required String label, required TextEditingController controller}) async {
+  Future<void> _pickColor({required String label, required TextEditingController controller, void Function(String hex)? onPicked}) async {
     final cs = Theme.of(context).colorScheme;
     final tmp = TextEditingController(text: controller.text);
     try {
@@ -549,6 +684,7 @@ class _AIConfigurationScreenState extends State<AIConfigurationScreen> with Sing
 
       if (res != null && res.trim().isNotEmpty) {
         controller.text = res.trim();
+        onPicked?.call(res.trim());
         setState(() {});
       }
     } finally {
@@ -582,9 +718,53 @@ class _AIConfigurationScreenState extends State<AIConfigurationScreen> with Sing
     });
 
     try {
+      // ── Upload selected assets first ──────────────────────────────────────
+      String? playerSpriteUrl;
+      String? backgroundImageUrl;
+      String? soundFileUrl;
+
+      if (_playerSpriteFile != null) {
+        AppNotifier.showSuccess('Uploading player sprite…');
+        playerSpriteUrl = await _uploadAssetFile(
+          token: token,
+          file: _playerSpriteFile!,
+          type: 'texture',
+          name: 'player_sprite',
+        );
+      }
+      if (_backgroundImageFile != null) {
+        AppNotifier.showSuccess('Uploading background image…');
+        backgroundImageUrl = await _uploadAssetFile(
+          token: token,
+          file: _backgroundImageFile!,
+          type: 'texture',
+          name: 'background_image',
+        );
+      }
+      if (_soundFile != null) {
+        AppNotifier.showSuccess('Uploading sound file…');
+        soundFileUrl = await _uploadAssetFile(
+          token: token,
+          file: _soundFile!,
+          type: 'audio',
+          name: 'background_sound',
+        );
+      }
+
+      // Append asset URLs to prompt so AI can embed them in game config
+      var enrichedPrompt = prompt;
+      if (playerSpriteUrl != null) {
+        enrichedPrompt += '\n[playerSpriteUrl: $playerSpriteUrl]';
+      }
+      if (backgroundImageUrl != null) {
+        enrichedPrompt += '\n[backgroundImageUrl: $backgroundImageUrl]';
+      }
+      if (soundFileUrl != null) {
+        enrichedPrompt += '\n[soundFileUrl: $soundFileUrl]';
+      }
       final res = await ProjectsService.createFromAi(
         token: token,
-        prompt: prompt,
+        prompt: enrichedPrompt,
         buildTarget: _buildTarget,
         templateId: (templateId != null && templateId.trim().isNotEmpty) ? templateId : null,
         timeScale: _timeScale,
@@ -599,6 +779,23 @@ class _AIConfigurationScreenState extends State<AIConfigurationScreen> with Sing
         cameraZoom: _cameraZoom,
         gravityY: _gravityY,
         jumpForce: _jumpForce,
+        playerSpriteUrl: playerSpriteUrl,
+        backgroundImageUrl: backgroundImageUrl,
+        soundFileUrl: soundFileUrl,
+        scoreMultiplier: _scoreMultiplier,
+        enemyMultiplier: _enemyMultiplier,
+        bloomEnabled: _bloomEnabled,
+        bloomIntensity: _bloomIntensity,
+        godMode: _godMode,
+        infiniteJump: _infiniteJump,
+        timeLimit: _timeLimit,
+        lives: _lives,
+        playerScale: _playerScale,
+        gameMode: _gameMode,
+        skyboxTheme: _skyboxTheme,
+        ambientLightColor: _ambientLightColor,
+        bgMusicUrl: _musicUrlCtrl.text,
+        bgImageUrl: _bgImageUrlCtrl.text,
       );
       if (!context.mounted) return;
       final data = res['data'];
@@ -619,18 +816,59 @@ class _AIConfigurationScreenState extends State<AIConfigurationScreen> with Sing
       setState(() {
         _error = (res['message']?.toString() ?? 'Failed to create project').trim();
       });
-      AppNotifier.showError(_error ?? 'Failed to create project');
+      final msg = (_error ?? 'Failed to create project').trim();
+      if (_isProAndroidGateMessage(msg)) {
+        await _showProAndroidUpsellSheet(message: msg);
+      } else {
+        AppNotifier.showError(msg);
+      }
     } catch (e) {
       if (!context.mounted) return;
       setState(() {
         _error = e.toString();
       });
-      AppNotifier.showError(_friendlyError(_error ?? e.toString()));
+      final msg = _friendlyError(_error ?? e.toString());
+      if (_isProAndroidGateMessage(msg)) {
+        await _showProAndroidUpsellSheet(message: msg);
+      } else {
+        AppNotifier.showError(msg);
+      }
     } finally {
       if (!context.mounted) return;
       setState(() {
         _creating = false;
       });
+    }
+  }
+
+  /// Uploads [file] to the assets API and returns the public download URL.
+  /// Returns null if upload or URL fetch failed (non-blocking).
+  Future<String?> _uploadAssetFile({
+    required String token,
+    required File file,
+    required String type,
+    String? name,
+  }) async {
+    try {
+      final uploadRes = await AssetsService.uploadAsset(
+        token: token,
+        file: file,
+        type: type,
+        name: name,
+      );
+      if (uploadRes['success'] != true) return null;
+      final assetData = uploadRes['data'];
+      final assetId = (assetData is Map ? assetData['_id'] : null)?.toString();
+      if (assetId == null || assetId.isEmpty) return null;
+
+      final urlRes = await AssetsService.getDownloadUrl(token: token, assetId: assetId);
+      if (urlRes['success'] != true) return null;
+      final urlData = urlRes['data'];
+      final rawUrl = (urlData is Map ? urlData['url'] : null)?.toString();
+      if (rawUrl == null || rawUrl.isEmpty) return null;
+      return ApiService.normalizeImageUrl(rawUrl);
+    } catch (_) {
+      return null;
     }
   }
 
@@ -936,6 +1174,8 @@ class _AIConfigurationScreenState extends State<AIConfigurationScreen> with Sing
                   items: const [
                     DropdownMenuItem(value: 'webgl', child: Text('Web (WebGL)')),
                     DropdownMenuItem(value: 'android_apk', child: Text('Android (APK)')),
+                    DropdownMenuItem(value: 'windows', child: Text('Desktop (Windows)')),
+                    DropdownMenuItem(value: 'macos', child: Text('Desktop (macOS)')),
                   ],
                   onChanged: _creating
                       ? null
@@ -948,7 +1188,11 @@ class _AIConfigurationScreenState extends State<AIConfigurationScreen> with Sing
                 Text(
                   _buildTarget == 'android_apk'
                       ? 'You will get an APK file to install on Android devices.'
-                      : 'You will get a playable WebGL build + downloadable zip.',
+                      : _buildTarget == 'windows'
+                          ? 'You will get a Windows desktop zip (exe + data folder).' 
+                          : _buildTarget == 'macos'
+                              ? 'You will get a macOS desktop zip (.app bundle).'
+                              : 'You will get a playable WebGL build + downloadable zip.',
                   style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant),
                 ),
               ],
@@ -1087,10 +1331,105 @@ class _AIConfigurationScreenState extends State<AIConfigurationScreen> with Sing
 
   Widget _buildStyleTab() {
     final cs = Theme.of(context).colorScheme;
+
+    // 20 WOW palette presets
+    final presets = [
+      {'label': '⚡ Neon',      'p': '#22C55E', 's': '#3B82F6', 'a': '#F59E0B', 'pc': '#F59E0B'},
+      {'label': '🌐 Cyber',     'p': '#00E5FF', 's': '#7C4DFF', 'a': '#FF1744', 'pc': '#FF1744'},
+      {'label': '🍬 Pastel',    'p': '#A7F3D0', 's': '#BFDBFE', 'a': '#FBCFE8', 'pc': '#FBCFE8'},
+      {'label': '🌑 Dark',      'p': '#0EA5E9', 's': '#A78BFA', 'a': '#22C55E', 'pc': '#22C55E'},
+      {'label': '🌊 Ocean',     'p': '#0369A1', 's': '#06B6D4', 'a': '#67E8F9', 'pc': '#67E8F9'},
+      {'label': '🌅 Sunset',    'p': '#F97316', 's': '#EF4444', 'a': '#FBBF24', 'pc': '#FBBF24'},
+      {'label': '🌌 Galaxy',    'p': '#4F46E5', 's': '#7C3AED', 'a': '#C084FC', 'pc': '#C084FC'},
+      {'label': '🌿 Forest',    'p': '#16A34A', 's': '#15803D', 'a': '#BEF264', 'pc': '#BEF264'},
+      {'label': '❄️ Arctic',    'p': '#BAE6FD', 's': '#E0F2FE', 'a': '#38BDF8', 'pc': '#38BDF8'},
+      {'label': '🔥 Inferno',   'p': '#DC2626', 's': '#EA580C', 'a': '#FDE047', 'pc': '#FDE047'},
+      {'label': '🎮 Retro',     'p': '#A3E635', 's': '#4ADE80', 'a': '#FACC15', 'pc': '#FACC15'},
+      {'label': '🌸 Sakura',    'p': '#F9A8D4', 's': '#FBCFE8', 'a': '#FDF2F8', 'pc': '#FDF2F8'},
+      {'label': '💎 Diamond',   'p': '#E2E8F0', 's': '#94A3B8', 'a': '#38BDF8', 'pc': '#38BDF8'},
+      {'label': '🌙 Midnight',  'p': '#1E3A5F', 's': '#2D4A6F', 'a': '#F59E0B', 'pc': '#F59E0B'},
+      {'label': '🍊 Citrus',    'p': '#84CC16', 's': '#F97316', 'a': '#EAB308', 'pc': '#EAB308'},
+      {'label': '🎭 Vapor',     'p': '#F472B6', 's': '#818CF8', 'a': '#34D399', 'pc': '#34D399'},
+      {'label': '🩸 Crimson',   'p': '#9F1239', 's': '#BE123C', 'a': '#FB7185', 'pc': '#FB7185'},
+      {'label': '🏜️ Desert',    'p': '#D97706', 's': '#B45309', 'a': '#FEF3C7', 'pc': '#FEF3C7'},
+      {'label': '🟣 Neon Pink', 'p': '#DB2777', 's': '#9333EA', 'a': '#F0ABFC', 'pc': '#F0ABFC'},
+      {'label': '🌈 Rainbow',   'p': '#EF4444', 's': '#3B82F6', 'a': '#22C55E', 'pc': '#A78BFA'},
+    ];
+
+    Color? _px(String? hex) => _parseHexToColor(hex ?? '');
+
+    bool _isActive(Map<String, String> p) =>
+        (_normHex(_primaryColorCtrl.text) == _normHex(p['p'])) &&
+        (_normHex(_secondaryColorCtrl.text) == _normHex(p['s'])) &&
+        (_normHex(_accentColorCtrl.text) == _normHex(p['a']));
+
+    void _applyPreset(Map<String, String> p) {
+      setState(() {
+        _primaryColorCtrl.text   = p['p']!;
+        _secondaryColorCtrl.text = p['s']!;
+        _accentColorCtrl.text    = p['a']!;
+        _playerColorCtrl.text    = p['pc']!;
+      });
+    }
+
+    // Live palette preview card
+    Widget _paletteBar() {
+      final p1 = _px(_primaryColorCtrl.text);
+      final p2 = _px(_secondaryColorCtrl.text);
+      final p3 = _px(_accentColorCtrl.text);
+      final p4 = _px(_playerColorCtrl.text);
+      return Container(
+        height: 52,
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AppBorderRadius.large),
+          gradient: LinearGradient(
+            colors: [
+              p1 ?? cs.primary,
+              p2 ?? cs.secondary,
+              p3 ?? cs.tertiary,
+              p4 ?? cs.primary,
+            ],
+          ),
+          boxShadow: [
+            BoxShadow(
+              color: (p1 ?? cs.primary).withOpacity(0.35),
+              blurRadius: 18,
+              offset: const Offset(0, 8),
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+          children: [
+            _paletteLabel('Primary', p1),
+            _paletteLabel('Secondary', p2),
+            _paletteLabel('Accent', p3),
+            _paletteLabel('Player', p4),
+          ],
+        ),
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _sectionTitle('Look'),
+        _sectionTitle('Live Preview'),
+        AnimatedCard(
+          delay: const Duration(milliseconds: 80),
+          child: Container(
+            padding: const EdgeInsets.all(AppSpacing.md),
+            decoration: BoxDecoration(
+              color: cs.surface,
+              borderRadius: BorderRadius.circular(AppBorderRadius.large),
+              border: Border.all(color: cs.outlineVariant.withOpacity(0.7)),
+              boxShadow: AppShadows.boxShadowSmall,
+            ),
+            child: _paletteBar(),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+
+        _sectionTitle('Palette Presets'),
         AnimatedCard(
           delay: const Duration(milliseconds: 110),
           child: Container(
@@ -1104,70 +1443,122 @@ class _AIConfigurationScreenState extends State<AIConfigurationScreen> with Sing
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Palette presets', style: AppTypography.body2.copyWith(fontWeight: FontWeight.w800)),
-                const SizedBox(height: AppSpacing.sm),
-                Align(
-                  alignment: Alignment.centerLeft,
-                  child: Wrap(
-                    spacing: 10,
-                    runSpacing: 10,
-                    children: [
-                      _PalettePresetChip(
-                        label: 'Neon',
-                        colors: const ['#22C55E', '#3B82F6', '#F59E0B'],
-                        enabled: !_creating,
-                        onTap: () {
-                          setState(() {
-                            _primaryColorCtrl.text = '#22C55E';
-                            _secondaryColorCtrl.text = '#3B82F6';
-                            _accentColorCtrl.text = '#F59E0B';
-                            _playerColorCtrl.text = '#F59E0B';
-                          });
-                        },
-                      ),
-                      _PalettePresetChip(
-                        label: 'Cyber',
-                        colors: const ['#00E5FF', '#7C4DFF', '#FF1744'],
-                        enabled: !_creating,
-                        onTap: () {
-                          setState(() {
-                            _primaryColorCtrl.text = '#00E5FF';
-                            _secondaryColorCtrl.text = '#7C4DFF';
-                            _accentColorCtrl.text = '#FF1744';
-                            _playerColorCtrl.text = '#FF1744';
-                          });
-                        },
-                      ),
-                      _PalettePresetChip(
-                        label: 'Pastel',
-                        colors: const ['#A7F3D0', '#BFDBFE', '#FBCFE8'],
-                        enabled: !_creating,
-                        onTap: () {
-                          setState(() {
-                            _primaryColorCtrl.text = '#A7F3D0';
-                            _secondaryColorCtrl.text = '#BFDBFE';
-                            _accentColorCtrl.text = '#FBCFE8';
-                            _playerColorCtrl.text = '#FBCFE8';
-                          });
-                        },
-                      ),
-                      _PalettePresetChip(
-                        label: 'Dark',
-                        colors: const ['#0EA5E9', '#A78BFA', '#22C55E'],
-                        enabled: !_creating,
-                        onTap: () {
-                          setState(() {
-                            _primaryColorCtrl.text = '#0EA5E9';
-                            _secondaryColorCtrl.text = '#A78BFA';
-                            _accentColorCtrl.text = '#22C55E';
-                            _playerColorCtrl.text = '#22C55E';
-                          });
-                        },
-                      ),
-                    ],
-                  ),
+                Text(
+                  '20 curated themes — tap to apply instantly',
+                  style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant),
                 ),
-                const SizedBox(height: AppSpacing.lg),
+                const SizedBox(height: AppSpacing.md),
+                GridView.count(
+                  crossAxisCount: 2,
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  mainAxisSpacing: 10,
+                  crossAxisSpacing: 10,
+                  childAspectRatio: 2.6,
+                  children: presets.map((p) {
+                    final active = _isActive(p);
+                    final c1 = _px(p['p']);
+                    final c2 = _px(p['s']);
+                    final c3 = _px(p['a']);
+                    return GestureDetector(
+                      onTap: _creating ? null : () {
+                        HapticFeedback.selectionClick();
+                        _applyPreset(p);
+                      },
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        curve: Curves.easeOutCubic,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: active ? (c1 ?? cs.primary).withOpacity(0.80) : cs.outlineVariant.withOpacity(0.5),
+                            width: active ? 1.8 : 1.0,
+                          ),
+                          boxShadow: active
+                              ? [BoxShadow(color: (c1 ?? cs.primary).withOpacity(0.30), blurRadius: 16, offset: const Offset(0, 6))]
+                              : AppShadows.boxShadowSmall,
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(13),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              // Gradient background strip
+                              Positioned(
+                                bottom: 0,
+                                left: 0,
+                                right: 0,
+                                height: 7,
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      colors: [
+                                        c1 ?? cs.primary,
+                                        c2 ?? cs.secondary,
+                                        c3 ?? cs.tertiary,
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              // Card body
+                              Container(
+                                color: active ? (c1 ?? cs.primary).withOpacity(0.13) : cs.surface,
+                                padding: const EdgeInsets.fromLTRB(10, 0, 6, 8),
+                                child: Row(
+                                  children: [
+                                    Expanded(
+                                      child: Text(
+                                        p['label']!,
+                                        style: AppTypography.caption.copyWith(
+                                          fontWeight: FontWeight.w900,
+                                          fontSize: 11,
+                                          color: active ? (c1 ?? cs.primary) : cs.onSurface,
+                                        ),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    if (active)
+                                      Container(
+                                        width: 18,
+                                        height: 18,
+                                        decoration: BoxDecoration(
+                                          shape: BoxShape.circle,
+                                          color: (c1 ?? cs.primary).withOpacity(0.2),
+                                        ),
+                                        child: Icon(Icons.check_rounded, size: 12, color: c1 ?? cs.primary),
+                                      ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+
+        _sectionTitle('Custom Colors'),
+        AnimatedCard(
+          delay: const Duration(milliseconds: 130),
+          child: Container(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            decoration: BoxDecoration(
+              color: cs.surface,
+              borderRadius: BorderRadius.circular(AppBorderRadius.large),
+              border: Border.all(color: cs.outlineVariant.withOpacity(0.7)),
+              boxShadow: AppShadows.boxShadowSmall,
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
                 _ColorHexRow(
                   label: 'Primary',
                   controller: _primaryColorCtrl,
@@ -1210,6 +1601,385 @@ class _AIConfigurationScreenState extends State<AIConfigurationScreen> with Sing
       ],
     );
   }
+
+  Widget _paletteLabel(String label, Color? color) {
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        Container(
+          width: 20,
+          height: 20,
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            color: color ?? Colors.white24,
+            border: Border.all(color: Colors.white38, width: 1.5),
+          ),
+        ),
+        const SizedBox(height: 3),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 9,
+            fontWeight: FontWeight.w800,
+            color: Colors.white,
+            shadows: [Shadow(color: Colors.black45, blurRadius: 4)],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _presetDot(Color? color) {
+    return Container(
+      width: 14,
+      height: 14,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: color ?? Colors.white24,
+        border: Border.all(color: Colors.black12, width: 0.5),
+      ),
+    );
+  }
+
+  // ── Assets Tab ──────────────────────────────────────────────────────────────
+  Widget _buildAssetsTab() {
+    final cs = Theme.of(context).colorScheme;
+
+    Widget assetCard({
+      required String title,
+      required String subtitle,
+      required IconData icon,
+      required Color iconColor,
+      required File? file,
+      required bool isImage,
+      required VoidCallback onPick,
+      required VoidCallback onClear,
+      BoxFit fit = BoxFit.cover,
+    }) {
+      final hasFile = file != null;
+      return AnimatedCard(
+        delay: const Duration(milliseconds: 90),
+        child: Container(
+          decoration: BoxDecoration(
+            color: cs.surface,
+            borderRadius: BorderRadius.circular(AppBorderRadius.large),
+            border: Border.all(
+              color: hasFile
+                  ? iconColor.withOpacity(0.5)
+                  : cs.outlineVariant.withOpacity(0.7),
+              width: hasFile ? 1.5 : 1.0,
+            ),
+            boxShadow: hasFile
+                ? [BoxShadow(color: iconColor.withOpacity(0.15), blurRadius: 16, offset: const Offset(0, 6))]
+                : AppShadows.boxShadowSmall,
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 44,
+                      height: 44,
+                      decoration: BoxDecoration(
+                        color: iconColor.withOpacity(0.12),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: iconColor.withOpacity(0.25)),
+                      ),
+                      child: Icon(icon, color: iconColor, size: 22),
+                    ),
+                    const SizedBox(width: AppSpacing.md),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            title,
+                            style: AppTypography.subtitle2.copyWith(
+                              fontWeight: FontWeight.w900,
+                              color: cs.onSurface,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            subtitle,
+                            style: AppTypography.caption.copyWith(
+                              color: cs.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    if (hasFile)
+                      IconButton(
+                        onPressed: _creating ? null : onClear,
+                        icon: Icon(Icons.close_rounded, color: cs.onSurfaceVariant, size: 20),
+                        tooltip: 'Remove',
+                      ),
+                  ],
+                ),
+              ),
+
+              // Preview / pick area
+              GestureDetector(
+                onTap: _creating ? null : onPick,
+                child: Container(
+                  margin: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.lg),
+                  height: hasFile && isImage ? 140 : 70,
+                  decoration: BoxDecoration(
+                    color: hasFile
+                        ? Colors.transparent
+                        : cs.surfaceVariant.withOpacity(0.5),
+                    borderRadius: BorderRadius.circular(AppBorderRadius.medium),
+                    border: Border.all(
+                      color: hasFile
+                          ? iconColor.withOpacity(0.4)
+                          : cs.outlineVariant.withOpacity(0.6),
+                      style: hasFile ? BorderStyle.solid : BorderStyle.solid,
+                    ),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: hasFile && isImage
+                      ? Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            Image.file(file!, fit: fit),
+                            Positioned(
+                              bottom: 8,
+                              right: 8,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                decoration: BoxDecoration(
+                                  color: Colors.black54,
+                                  borderRadius: BorderRadius.circular(999),
+                                ),
+                                child: Text(
+                                  'Tap to change',
+                                  style: AppTypography.caption.copyWith(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        )
+                      : Center(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                hasFile ? Icons.audio_file_rounded : Icons.add_photo_alternate_rounded,
+                                color: hasFile ? iconColor : cs.onSurfaceVariant.withOpacity(0.5),
+                                size: 28,
+                              ),
+                              const SizedBox(height: 6),
+                              Text(
+                                hasFile
+                                    ? file!.path.split('/').last
+                                    : 'Tap to select from gallery',
+                                style: AppTypography.caption.copyWith(
+                                  color: hasFile ? iconColor : cs.onSurfaceVariant,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                textAlign: TextAlign.center,
+                              ),
+                            ],
+                          ),
+                        ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Info banner
+        Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: cs.primary.withOpacity(0.08),
+            borderRadius: BorderRadius.circular(AppBorderRadius.large),
+            border: Border.all(color: cs.primary.withOpacity(0.2)),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.info_outline_rounded, color: cs.primary, size: 18),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  'Custom assets override the AI-generated defaults. Select images/sounds to personalize your game.',
+                  style: AppTypography.caption.copyWith(
+                    color: cs.onSurface,
+                    fontWeight: FontWeight.w700,
+                    height: 1.4,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+
+        _sectionTitle('Player Sprite'),
+        assetCard(
+          title: 'Player Sprite',
+          subtitle: 'PNG/JPG image used as your player character',
+          icon: Icons.person_rounded,
+          iconColor: const Color(0xFF3B82F6),
+          file: _playerSpriteFile,
+          isImage: true,
+          fit: BoxFit.contain,
+          onPick: () async {
+            final picker = ImagePicker();
+            final source = await _showImageSourceSheet();
+            if (source == null) return;
+            final picked = await picker.pickImage(source: source, imageQuality: 90);
+            if (picked == null) return;
+            setState(() => _playerSpriteFile = File(picked.path));
+            AppNotifier.showSuccess('Player sprite selected');
+          },
+          onClear: () => setState(() => _playerSpriteFile = null),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+
+        _sectionTitle('Background Image'),
+        assetCard(
+          title: 'Background Image',
+          subtitle: 'PNG/JPG used as the game world background/sky',
+          icon: Icons.landscape_rounded,
+          iconColor: const Color(0xFF22C55E),
+          file: _backgroundImageFile,
+          isImage: true,
+          onPick: () async {
+            final picker = ImagePicker();
+            final source = await _showImageSourceSheet();
+            if (source == null) return;
+            final picked = await picker.pickImage(source: source, imageQuality: 90);
+            if (picked == null) return;
+            setState(() => _backgroundImageFile = File(picked.path));
+            AppNotifier.showSuccess('Background image selected');
+          },
+          onClear: () => setState(() => _backgroundImageFile = null),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+
+        _sectionTitle('Background Music / Sound'),
+        assetCard(
+          title: 'Sound / Music',
+          subtitle: 'MP3/WAV file for background music or sound effect',
+          icon: Icons.music_note_rounded,
+          iconColor: const Color(0xFFF59E0B),
+          file: _soundFile,
+          isImage: false,
+          onPick: () async {
+            final picker = ImagePicker();
+            // Use video picker as proxy for media files (picks audio on Android)
+            final picked = await picker.pickMedia();
+            if (picked == null) {
+              AppNotifier.showError('Audio file picker not available on this device. Use a URL in the Prompt instead.');
+              return;
+            }
+            setState(() => _soundFile = File(picked.path));
+            AppNotifier.showSuccess('Sound file selected');
+          },
+          onClear: () => setState(() => _soundFile = null),
+        ),
+
+        const SizedBox(height: AppSpacing.xl),
+        Container(
+          padding: const EdgeInsets.all(AppSpacing.md),
+          decoration: BoxDecoration(
+            color: cs.surfaceVariant.withOpacity(0.5),
+            borderRadius: BorderRadius.circular(AppBorderRadius.large),
+            border: Border.all(color: cs.outlineVariant.withOpacity(0.5)),
+          ),
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.lightbulb_outline_rounded, color: cs.onSurfaceVariant, size: 16),
+              const SizedBox(width: AppSpacing.sm),
+              Expanded(
+                child: Text(
+                  'Assets are embedded as metadata hints for the AI builder. The generated Unity game runtime must support reading custom assets via the GameForgeBridge.',
+                  style: AppTypography.caption.copyWith(
+                    color: cs.onSurfaceVariant,
+                    height: 1.4,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<ImageSource?> _showImageSourceSheet() async {
+    final cs = Theme.of(context).colorScheme;
+    return showModalBottomSheet<ImageSource>(
+      context: context,
+      backgroundColor: cs.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(AppBorderRadius.large)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(height: AppSpacing.sm),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: cs.onSurface.withOpacity(0.18),
+                borderRadius: BorderRadius.circular(999),
+              ),
+            ),
+            const SizedBox(height: AppSpacing.md),
+            ListTile(
+              leading: Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: cs.primary.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(Icons.photo_library_rounded, color: cs.primary),
+              ),
+              title: Text('Photo Library', style: AppTypography.body2.copyWith(fontWeight: FontWeight.w800)),
+              subtitle: Text('Pick from your gallery', style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant)),
+              onTap: () => Navigator.of(ctx).pop(ImageSource.gallery),
+            ),
+            ListTile(
+              leading: Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  color: cs.secondary.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Icon(Icons.camera_alt_rounded, color: cs.secondary),
+              ),
+              title: Text('Camera', style: AppTypography.body2.copyWith(fontWeight: FontWeight.w800)),
+              subtitle: Text('Take a new photo', style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant)),
+              onTap: () => Navigator.of(ctx).pop(ImageSource.camera),
+            ),
+            const SizedBox(height: AppSpacing.lg),
+          ],
+        ),
+      ),
+    );
+  }
+
 
   Widget _buildAdvancedTab() {
     final cs = Theme.of(context).colorScheme;
@@ -1463,7 +2233,459 @@ class _AIConfigurationScreenState extends State<AIConfigurationScreen> with Sing
     );
   }
 
-  @override
+  // ── World & FX Tab ─────────────────────────────────────────────────────────
+  Widget _buildWorldTab() {
+    final cs = Theme.of(context).colorScheme;
+
+    Widget _card({required Widget child, Duration delay = const Duration(milliseconds: 100)}) =>
+        AnimatedCard(
+          delay: delay,
+          child: Container(
+            padding: const EdgeInsets.all(AppSpacing.lg),
+            decoration: BoxDecoration(
+              color: cs.surface,
+              borderRadius: BorderRadius.circular(AppBorderRadius.large),
+              border: Border.all(color: cs.outlineVariant.withOpacity(0.7)),
+              boxShadow: AppShadows.boxShadowSmall,
+            ),
+            child: child,
+          ),
+        );
+
+    Widget _sliderRow({
+      required String label,
+      required String value,
+      required double sliderValue,
+      required double min,
+      required double max,
+      required int divisions,
+      required ValueChanged<double>? onChanged,
+      Color? activeColor,
+    }) =>
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Expanded(child: Text(label, style: AppTypography.body2.copyWith(fontWeight: FontWeight.w700))),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: (activeColor ?? cs.primary).withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(999),
+                  ),
+                  child: Text(value,
+                      style: AppTypography.caption
+                          .copyWith(color: activeColor ?? cs.primary, fontWeight: FontWeight.w900)),
+                ),
+              ],
+            ),
+            Slider(
+              value: sliderValue.clamp(min, max),
+              min: min,
+              max: max,
+              divisions: divisions,
+              activeColor: activeColor ?? cs.primary,
+              inactiveColor: cs.outlineVariant,
+              onChanged: _creating ? null : onChanged,
+            ),
+          ],
+        );
+
+    Widget _toggleRow(String label, String subtitle, bool value, ValueChanged<bool>? onChanged,
+        {IconData icon = Icons.toggle_on_rounded, Color? color}) =>
+        Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: (color ?? cs.primary).withOpacity(0.12),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(icon, color: color ?? cs.primary, size: 18),
+            ),
+            const SizedBox(width: AppSpacing.md),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label, style: AppTypography.body2.copyWith(fontWeight: FontWeight.w800)),
+                  Text(subtitle,
+                      style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant)),
+                ],
+              ),
+            ),
+            Switch(
+              value: value,
+              onChanged: _creating ? null : onChanged,
+              activeColor: color ?? cs.primary,
+            ),
+          ],
+        );
+
+    final gameModes = [
+      {'id': 'endless',  'label': '♾️ Endless',   'sub': 'Never-ending run'},
+      {'id': 'timed',    'label': '⏱️ Timed',     'sub': 'Beat the clock'},
+      {'id': 'survival', 'label': '💀 Survival',  'sub': 'Last as long as possible'},
+      {'id': 'puzzle',   'label': '🧩 Puzzle',    'sub': 'Solve to advance'},
+      {'id': 'battle',   'label': '⚔️ Battle',    'sub': 'Defeat all enemies'},
+    ];
+
+    final skyboxThemes = [
+      {'id': 'day',        'label': '☀️ Day',        'color': '#87CEEB'},
+      {'id': 'night',      'label': '🌙 Night',      'color': '#0F172A'},
+      {'id': 'sunset',     'label': '🌅 Sunset',     'color': '#F97316'},
+      {'id': 'space',      'label': '🌌 Space',      'color': '#1E1B4B'},
+      {'id': 'dungeon',    'label': '🏰 Dungeon',    'color': '#292524'},
+      {'id': 'underwater', 'label': '🌊 Underwater', 'color': '#0369A1'},
+      {'id': 'volcano',    'label': '🌋 Volcano',    'color': '#991B1B'},
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Game Mode ──────────────────────────────────────────────────────
+        _sectionTitle('Game Mode'),
+        _card(
+          delay: const Duration(milliseconds: 80),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Choose how the game is played',
+                  style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant)),
+              const SizedBox(height: AppSpacing.md),
+              ...gameModes.map((m) {
+                final selected = _gameMode == m['id'];
+                return GestureDetector(
+                  onTap: _creating ? null : () => setState(() => _gameMode = m['id']!),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 180),
+                    margin: const EdgeInsets.only(bottom: 8),
+                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: AppSpacing.md),
+                    decoration: BoxDecoration(
+                      color: selected ? cs.primary.withOpacity(0.12) : cs.surfaceContainerHighest.withOpacity(0.3),
+                      borderRadius: BorderRadius.circular(AppBorderRadius.medium),
+                      border: Border.all(
+                        color: selected ? cs.primary.withOpacity(0.7) : cs.outlineVariant.withOpacity(0.5),
+                        width: selected ? 1.5 : 1.0,
+                      ),
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(m['label']!,
+                                  style: AppTypography.body2.copyWith(
+                                    fontWeight: FontWeight.w900,
+                                    color: selected ? cs.primary : cs.onSurface,
+                                  )),
+                              Text(m['sub']!,
+                                  style: AppTypography.caption
+                                      .copyWith(color: cs.onSurfaceVariant)),
+                            ],
+                          ),
+                        ),
+                        if (selected) Icon(Icons.check_circle_rounded, color: cs.primary, size: 20),
+                      ],
+                    ),
+                  ),
+                );
+              }).toList(),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+
+        // ── Skybox Theme ───────────────────────────────────────────────────
+        _sectionTitle('Skybox / Environment'),
+        _card(
+          delay: const Duration(milliseconds: 100),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Game world visual environment',
+                  style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant)),
+              const SizedBox(height: AppSpacing.md),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: skyboxThemes.map((s) {
+                  final selected = _skyboxTheme == s['id'];
+                  final c = _parseHexToColor(s['color']!) ?? cs.primary;
+                  return GestureDetector(
+                    onTap: _creating ? null : () => setState(() => _skyboxTheme = s['id']!),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 180),
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: selected ? c.withOpacity(0.18) : cs.surface,
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(
+                          color: selected ? c.withOpacity(0.8) : cs.outlineVariant.withOpacity(0.6),
+                          width: selected ? 1.5 : 1.0,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                              width: 14, height: 14,
+                              decoration: BoxDecoration(
+                                  color: c, shape: BoxShape.circle,
+                                  border: Border.all(color: Colors.black12, width: 0.5))),
+                          const SizedBox(width: 8),
+                          Text(s['label']!,
+                              style: AppTypography.caption.copyWith(
+                                fontWeight: FontWeight.w800,
+                                color: selected ? c : cs.onSurface,
+                              )),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+
+        // ── Player & Camera ────────────────────────────────────────────────
+        _sectionTitle('Player & Camera'),
+        _card(
+          delay: const Duration(milliseconds: 120),
+          child: Column(
+            children: [
+              _sliderRow(
+                label: 'Player Scale',
+                value: '${_playerScale.toStringAsFixed(2)}×',
+                sliderValue: _playerScale,
+                min: 0.25, max: 3.0, divisions: 55,
+                onChanged: (v) => setState(() => _playerScale = v),
+                activeColor: const Color(0xFF3B82F6),
+              ),
+              const Divider(height: AppSpacing.lg),
+              _sliderRow(
+                label: 'Camera Zoom',
+                value: _cameraZoom <= 0 ? 'auto' : _cameraZoom.toStringAsFixed(1),
+                sliderValue: _cameraZoom.clamp(0, 30),
+                min: 0, max: 30, divisions: 300,
+                onChanged: (v) => setState(() => _cameraZoom = v),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+
+        // ── Physics ────────────────────────────────────────────────────────
+        _sectionTitle('Physics'),
+        _card(
+          delay: const Duration(milliseconds: 130),
+          child: Column(
+            children: [
+              _sliderRow(
+                label: 'Gravity Y',
+                value: _gravityY == 0 ? 'default' : _gravityY.toStringAsFixed(1),
+                sliderValue: _gravityY.clamp(-50, 0),
+                min: -50, max: 0, divisions: 200,
+                onChanged: (v) => setState(() => _gravityY = v),
+                activeColor: const Color(0xFFF97316),
+              ),
+              const Divider(height: AppSpacing.lg),
+              _sliderRow(
+                label: 'Jump Force',
+                value: _jumpForce == 0 ? 'default' : _jumpForce.toStringAsFixed(1),
+                sliderValue: _jumpForce.clamp(0, 50),
+                min: 0, max: 50, divisions: 250,
+                onChanged: (v) => setState(() => _jumpForce = v),
+                activeColor: const Color(0xFFA78BFA),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+
+        // ── Gameplay Multipliers ───────────────────────────────────────────
+        _sectionTitle('Gameplay Multipliers'),
+        _card(
+          delay: const Duration(milliseconds: 140),
+          child: Column(
+            children: [
+              _sliderRow(
+                label: '⚡ Score Multiplier',
+                value: '${_scoreMultiplier.toStringAsFixed(1)}×',
+                sliderValue: _scoreMultiplier,
+                min: 0.5, max: 5.0, divisions: 45,
+                onChanged: (v) => setState(() => _scoreMultiplier = v),
+                activeColor: const Color(0xFFF59E0B),
+              ),
+              const Divider(height: AppSpacing.lg),
+              _sliderRow(
+                label: '👾 Enemy Multiplier',
+                value: '${_enemyMultiplier.toStringAsFixed(2)}×',
+                sliderValue: _enemyMultiplier,
+                min: 0.25, max: 4.0, divisions: 60,
+                onChanged: (v) => setState(() => _enemyMultiplier = v),
+                activeColor: const Color(0xFFEF4444),
+              ),
+              const Divider(height: AppSpacing.lg),
+              _sliderRow(
+                label: '⏱️ Time Limit (Secs)',
+                value: _timeLimit.toString(),
+                sliderValue: _timeLimit.toDouble(),
+                min: 10, max: 300, divisions: 290,
+                onChanged: (v) => setState(() => _timeLimit = v.toInt()),
+                activeColor: const Color(0xFF10B981),
+              ),
+              const Divider(height: AppSpacing.lg),
+              _sliderRow(
+                label: '❤️ Lives',
+                value: _lives.toString(),
+                sliderValue: _lives.toDouble(),
+                min: 1, max: 10, divisions: 9,
+                onChanged: (v) => setState(() => _lives = v.toInt()),
+                activeColor: const Color(0xFFEC4899),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+
+        // ── Visual FX ─────────────────────────────────────────────────────
+        _sectionTitle('Visual FX'),
+        _card(
+          delay: const Duration(milliseconds: 150),
+          child: Column(
+            children: [
+              _toggleRow('🌟 Bloom (Glow)', 'Post-process light bloom effect',
+                  _bloomEnabled, (v) => setState(() => _bloomEnabled = v),
+                  icon: Icons.flare_rounded, color: const Color(0xFFFBBF24)),
+              if (_bloomEnabled) ...[
+                const SizedBox(height: AppSpacing.sm),
+                _sliderRow(
+                  label: 'Bloom Intensity',
+                  value: _bloomIntensity.toStringAsFixed(2),
+                  sliderValue: _bloomIntensity,
+                  min: 0.0, max: 2.0, divisions: 40,
+                  onChanged: (v) => setState(() => _bloomIntensity = v),
+                  activeColor: const Color(0xFFFBBF24),
+                ),
+              ],
+              const Divider(height: AppSpacing.lg),
+              _toggleRow('🎆 Particle Effects', 'Sparks, smoke, trail particles',
+                  _particlesEnabled, (v) => setState(() => _particlesEnabled = v),
+                  icon: Icons.auto_awesome_rounded, color: const Color(0xFF8B5CF6)),
+              const Divider(height: AppSpacing.lg),
+              _toggleRow('🌫️ Fog', 'Atmospheric fog effect',
+                  _fogEnabled, (v) => setState(() => _fogEnabled = v),
+                  icon: Icons.blur_on_rounded, color: const Color(0xFF64748B)),
+              if (_fogEnabled) ...[
+                const SizedBox(height: AppSpacing.sm),
+                _sliderRow(
+                  label: 'Fog Density',
+                  value: _fogDensity.toStringAsFixed(4),
+                  sliderValue: _fogDensity.clamp(0, 0.1),
+                  min: 0, max: 0.1, divisions: 100,
+                  onChanged: (v) => setState(() => _fogDensity = v),
+                  activeColor: const Color(0xFF64748B),
+                ),
+              ],
+              const Divider(height: AppSpacing.lg),
+              _ColorHexRow(
+                label: '💡 Ambient Light',
+                controller: TextEditingController(text: _ambientLightColor),
+                enabled: !_creating,
+                color: _parseHexToColor(_ambientLightColor),
+                onChanged: () {},
+                onPick: () async {
+                  final ctrl = TextEditingController(text: _ambientLightColor);
+                  try {
+                    await _pickColor(label: 'Ambient Light', controller: ctrl);
+                    if (!mounted) return;
+                    setState(() => _ambientLightColor = ctrl.text.trim());
+                  } finally {
+                    ctrl.dispose();
+                  }
+                },
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+
+        // ── Cheat Codes ───────────────────────────────────────────────────
+        _sectionTitle('⚡ Power Settings'),
+        _card(
+          delay: const Duration(milliseconds: 160),
+          child: Column(
+            children: [
+              _toggleRow('🛡️ God Mode', 'Player is invincible',
+                  _godMode, (v) => setState(() => _godMode = v),
+                  icon: Icons.shield_rounded, color: const Color(0xFFEF4444)),
+              const Divider(height: AppSpacing.lg),
+              _toggleRow('🪂 Infinite Jump', 'Jump as many times as you want',
+                  _infiniteJump, (v) => setState(() => _infiniteJump = v),
+                  icon: Icons.keyboard_double_arrow_up_rounded,
+                  color: const Color(0xFF3B82F6)),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.lg),
+
+        // ── Media URLs ────────────────────────────────────────────────────
+        _sectionTitle('🎵 Media'),
+        _card(
+          delay: const Duration(milliseconds: 170),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Background Music URL',
+                  style: AppTypography.body2.copyWith(fontWeight: FontWeight.w800)),
+              const SizedBox(height: AppSpacing.sm),
+              TextField(
+                controller: _musicUrlCtrl,
+                enabled: !_creating,
+                style: AppTypography.body2,
+                decoration: InputDecoration(
+                  hintText: 'https://… (MP3/OGG)',
+                  prefixIcon: const Icon(Icons.music_note_rounded),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppBorderRadius.medium),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                ),
+              ),
+              const SizedBox(height: AppSpacing.lg),
+              Text('Background Image URL',
+                  style: AppTypography.body2.copyWith(fontWeight: FontWeight.w800)),
+              const SizedBox(height: AppSpacing.sm),
+              TextField(
+                controller: _bgImageUrlCtrl,
+                enabled: !_creating,
+                style: AppTypography.body2,
+                decoration: InputDecoration(
+                  hintText: 'https://… (PNG/JPG)',
+                  prefixIcon: const Icon(Icons.landscape_rounded),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(AppBorderRadius.medium),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                      horizontal: AppSpacing.md, vertical: AppSpacing.sm),
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppSpacing.xxxl),
+      ],
+    );
+  }
+
+
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final extra = GoRouterState.of(context).extra;
@@ -1569,6 +2791,10 @@ class _AIConfigurationScreenState extends State<AIConfigurationScreen> with Sing
                     _tabChip(label: 'Style', index: 2, icon: Icons.palette_rounded),
                     const SizedBox(width: 10),
                     _tabChip(label: 'Advanced', index: 3, icon: Icons.settings_suggest_rounded),
+                    const SizedBox(width: 10),
+                    _tabChip(label: 'Assets', index: 4, icon: Icons.photo_library_rounded),
+                    const SizedBox(width: 10),
+                    _tabChip(label: 'World', index: 5, icon: Icons.public_rounded),
                   ],
                 ),
               ),
@@ -1577,7 +2803,7 @@ class _AIConfigurationScreenState extends State<AIConfigurationScreen> with Sing
 
           Expanded(
             child: SingleChildScrollView(
-              padding: AppSpacing.paddingLarge,
+              padding: const EdgeInsets.fromLTRB(24, 24, 24, 140),
               child: AnimatedSwitcher(
                 duration: const Duration(milliseconds: 240),
                 switchInCurve: Curves.easeOutCubic,
@@ -1597,7 +2823,9 @@ class _AIConfigurationScreenState extends State<AIConfigurationScreen> with Sing
                     if (_tabIndex == 0) return _buildPromptTab(templateId: templateId, templateName: templateName);
                     if (_tabIndex == 1) return _buildTuningTab();
                     if (_tabIndex == 2) return _buildStyleTab();
-                    return _buildAdvancedTab();
+                    if (_tabIndex == 3) return _buildAdvancedTab();
+                    if (_tabIndex == 4) return _buildAssetsTab();
+                    return _buildWorldTab();
                   }(),
                 ),
               ),

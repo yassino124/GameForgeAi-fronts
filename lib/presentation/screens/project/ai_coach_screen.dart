@@ -22,11 +22,13 @@ import '../../../core/services/templates_service.dart';
 class AiCoachScreen extends StatefulWidget {
   final String? projectId;
   final String? projectName;
+  final Map<String, dynamic>? sessionContext;
 
   const AiCoachScreen({
     super.key,
     this.projectId,
     this.projectName,
+    this.sessionContext,
   });
 
   @override
@@ -152,7 +154,7 @@ class _AiCoachScreenState extends State<AiCoachScreen> with SingleTickerProvider
 
   io.Socket? _socket;
 
-  String _lang = 'tn';
+  String _lang = 'en';
 
   late final AnimationController _pulse;
 
@@ -176,6 +178,9 @@ class _AiCoachScreenState extends State<AiCoachScreen> with SingleTickerProvider
 
   List<_CoachAction> _nextActions = const [];
 
+  Map<String, dynamic>? _playerDna;
+  Map<String, dynamic>? _tuningPreset;
+
   Timer? _projectPoll;
   String? _projectStatus;
   String? _projectBuildTarget;
@@ -184,6 +189,8 @@ class _AiCoachScreenState extends State<AiCoachScreen> with SingleTickerProvider
   String? _previewUrl;
 
   Timer? _silenceTimer;
+
+  List<stt.LocaleName>? _locales;
 
   Timer? _streamSpeakDebounce;
   int _spokenIdx = 0;
@@ -208,6 +215,20 @@ class _AiCoachScreenState extends State<AiCoachScreen> with SingleTickerProvider
     _initTts();
     _connectSocket();
     _refreshProject();
+
+    final sc = widget.sessionContext;
+    if (sc != null) {
+      try {
+        final dna = sc['playerDna'];
+        final preset = sc['suggestedPreset'];
+        if (dna is Map) _playerDna = Map<String, dynamic>.from(dna);
+        if (preset is Map) _tuningPreset = Map<String, dynamic>.from(preset);
+      } catch (_) {}
+    }
+
+    Future.microtask(() async {
+      await _loadMyPlayerDnaIfNeeded();
+    });
     _handsFree = true;
     Future.microtask(() async {
       if (!mounted) return;
@@ -218,6 +239,142 @@ class _AiCoachScreenState extends State<AiCoachScreen> with SingleTickerProvider
     _projectPoll = Timer.periodic(const Duration(seconds: 6), (_) {
       _refreshProject();
     });
+  }
+
+  Future<void> _loadMyPlayerDnaIfNeeded() async {
+    if (_playerDna != null) return;
+    final token = context.read<AuthProvider>().token;
+    if (token == null || token.isEmpty) return;
+    try {
+      final res = await ApiService.get('/users/me/dna', token: token);
+      if (!mounted) return;
+      final data = res['data'];
+      if (res['success'] != true || data is! Map) return;
+      final dna = (data)['playerDna'];
+      if (dna is! Map) return;
+      setState(() {
+        _playerDna = Map<String, dynamic>.from(dna);
+      });
+    } catch (_) {}
+  }
+
+  Widget _chipMini(BuildContext context, String k, String v) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+      decoration: BoxDecoration(
+        color: cs.surface.withOpacity(0.72),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: cs.outlineVariant.withOpacity(0.55)),
+      ),
+      child: Text('$k: $v', style: AppTypography.caption.copyWith(fontWeight: FontWeight.w900)),
+    );
+  }
+
+  Widget _playerDnaPanel(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final dna = _playerDna;
+    final preset = _tuningPreset;
+    final hasDna = dna != null && dna.isNotEmpty;
+    final hasPreset = preset != null && preset.isNotEmpty;
+    if (!hasDna && !hasPreset) return const SizedBox.shrink();
+
+    String fmtNum(dynamic v) {
+      if (v is num) {
+        final x = v.toDouble();
+        if ((x - x.round()).abs() < 0.0001) return x.round().toString();
+        return x.toStringAsFixed(2);
+      }
+      return (v ?? '').toString();
+    }
+
+    final difficulty = hasPreset ? preset!['difficulty'] : null;
+    final speed = hasPreset ? preset!['speed'] : null;
+    final timeScale = hasPreset ? preset!['timeScale'] : null;
+
+    final strengths = hasDna && dna!['strengths'] is List
+        ? List<String>.from((dna['strengths'] as List).map((e) => e.toString()))
+        : const <String>[];
+    final weaknesses = hasDna && dna!['weaknesses'] is List
+        ? List<String>.from((dna['weaknesses'] as List).map((e) => e.toString()))
+        : const <String>[];
+    final style = hasDna ? (dna!['style'] ?? dna['playerStyle'] ?? dna['archetype'])?.toString() : null;
+
+    return _glassPill(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.psychology_alt_rounded, size: 18),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text('Player DNA', style: AppTypography.subtitle2.copyWith(fontWeight: FontWeight.w900)),
+              ),
+              if (!hasDna)
+                Text(
+                  'Building…',
+                  style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w800),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          if (style != null && style.trim().isNotEmpty)
+            Text('Style: ${style.trim()}', style: AppTypography.body2.copyWith(fontWeight: FontWeight.w800)),
+          if (strengths.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Strengths',
+              style: AppTypography.caption.copyWith(fontWeight: FontWeight.w900, color: cs.onSurfaceVariant),
+            ),
+            const SizedBox(height: 6),
+            for (final s in strengths.take(4))
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Text('- ${s.trim()}', style: AppTypography.body2),
+              ),
+          ],
+          if (weaknesses.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(
+              'Weaknesses',
+              style: AppTypography.caption.copyWith(fontWeight: FontWeight.w900, color: cs.onSurfaceVariant),
+            ),
+            const SizedBox(height: 6),
+            for (final w in weaknesses.take(4))
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Text('- ${w.trim()}', style: AppTypography.body2),
+              ),
+          ],
+          if (hasPreset) ...[
+            const SizedBox(height: 10),
+            Text(
+              'Recommended Tuning',
+              style: AppTypography.caption.copyWith(fontWeight: FontWeight.w900, color: cs.onSurfaceVariant),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                if (speed != null) _chipMini(context, 'Vitesse', fmtNum(speed)),
+                if (difficulty != null) _chipMini(context, 'Difficulté', fmtNum(difficulty)),
+                if (timeScale != null) _chipMini(context, 'TimeScale', fmtNum(timeScale)),
+                _chipMini(
+                  context,
+                  'Enemies',
+                  (difficulty is num && difficulty > 0.7)
+                      ? 'More'
+                      : ((difficulty is num && difficulty < 0.4) ? 'Less' : 'Normal'),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
   }
 
   Future<void> _loadTemplateSuggestions(String q) async {
@@ -616,6 +773,15 @@ class _AiCoachScreenState extends State<AiCoachScreen> with SingleTickerProvider
     if (aPreset != null) {
       items.add(bigBtn(icon: Icons.bolt_rounded, label: 'Apply: Arcade Fast', onPressed: () => _runCoachAction(aPreset)));
     }
+    items.add(
+      bigBtn(
+        icon: Icons.lightbulb_circle_rounded,
+        label: 'Generate New Ideas',
+        onPressed: _waitingReply
+            ? null
+            : () => _sendQuick('Based on my Player DNA and project status, generate 3 fresh game ideas or mechanics I should try next.'),
+      ),
+    );
     items.add(
       bigBtn(
         icon: Icons.auto_awesome_rounded,
@@ -1422,8 +1588,6 @@ class _AiCoachScreenState extends State<AiCoachScreen> with SingleTickerProvider
         await _tts.setLanguage('fr-FR');
       } else if (_lang == 'en') {
         await _tts.setLanguage('en-US');
-      } else {
-        await _tts.setLanguage('ar-SA');
       }
     } catch (_) {
       // ignore
@@ -1440,6 +1604,8 @@ class _AiCoachScreenState extends State<AiCoachScreen> with SingleTickerProvider
     try {
       await _tts.stop();
     } catch (_) {}
+
+    await Future.delayed(const Duration(milliseconds: 180));
 
     final available = await _speech.initialize(
       onError: (_) {
@@ -1464,11 +1630,42 @@ class _AiCoachScreenState extends State<AiCoachScreen> with SingleTickerProvider
       _draftUser = '';
     });
 
-    final localeId = _lang == 'fr'
-        ? 'fr_FR'
-        : _lang == 'en'
-            ? 'en_US'
-            : 'ar_SA';
+    Future<void> ensureLocales() async {
+      if (_locales != null) return;
+      try {
+        _locales = await _speech.locales();
+      } catch (_) {
+        _locales = const [];
+      }
+    }
+
+    String pickLocaleId() {
+      final locs = _locales ?? const <stt.LocaleName>[];
+      final preferred = _lang == 'fr' ? const ['fr_', 'fr-'] : const ['en_', 'en-'];
+
+      bool matchPrefix(String id, List<String> prefixes) {
+        for (final p in prefixes) {
+          if (id.toLowerCase().startsWith(p.toLowerCase())) return true;
+        }
+        return false;
+      }
+
+      final hit = locs.where((l) => matchPrefix(l.localeId, preferred)).toList();
+      if (hit.isNotEmpty) {
+        if (_lang == 'en') {
+          final us = hit.where((l) => l.localeId.toLowerCase().contains('us')).toList();
+          return (us.isNotEmpty ? us.first.localeId : hit.first.localeId);
+        }
+        final fr = hit.where((l) => l.localeId.toLowerCase().contains('fr')).toList();
+        return (fr.isNotEmpty ? fr.first.localeId : hit.first.localeId);
+      }
+
+      return _lang == 'fr' ? 'fr_FR' : 'en_US';
+    }
+
+    await ensureLocales();
+
+    final localeId = pickLocaleId();
 
     _silenceTimer?.cancel();
 
@@ -1477,7 +1674,7 @@ class _AiCoachScreenState extends State<AiCoachScreen> with SingleTickerProvider
       listenMode: stt.ListenMode.dictation,
       partialResults: true,
       listenFor: const Duration(seconds: 30),
-      pauseFor: const Duration(milliseconds: 900),
+      pauseFor: const Duration(milliseconds: 1200),
       onResult: (r) {
         if (!mounted) return;
         if (_waitingReply) return;
@@ -1485,8 +1682,10 @@ class _AiCoachScreenState extends State<AiCoachScreen> with SingleTickerProvider
         _silenceTimer?.cancel();
 
         final text = r.recognizedWords.trim();
+        if (text.isEmpty && !r.finalResult) return;
+
         final fast = r.finalResult && text.isNotEmpty;
-        final delayMs = fast ? 150 : 600;
+        final delayMs = fast ? 120 : 1200;
 
         _silenceTimer = Timer(Duration(milliseconds: delayMs), () {
           if (!mounted) return;
@@ -1786,8 +1985,6 @@ class _AiCoachScreenState extends State<AiCoachScreen> with SingleTickerProvider
                         _statusPill(context),
                         const SizedBox(width: 10),
                         _handsFreeChip(context),
-                        const SizedBox(width: 8),
-                        _langChip(context, value: 'tn', label: 'TN'),
                         const SizedBox(width: 8),
                         _langChip(context, value: 'fr', label: 'FR'),
                         const SizedBox(width: 8),
@@ -2245,6 +2442,9 @@ class _AiCoachScreenState extends State<AiCoachScreen> with SingleTickerProvider
                                 ),
                                 const SizedBox(height: 14),
                               ],
+                              _playerDnaPanel(context),
+                              if ((_playerDna != null && _playerDna!.isNotEmpty) || (_tuningPreset != null && _tuningPreset!.isNotEmpty))
+                                const SizedBox(height: 14),
                               ...list,
                               _insightsCard(context),
                               _powerActionsPanel(context),
@@ -2276,8 +2476,6 @@ class _AiCoachScreenState extends State<AiCoachScreen> with SingleTickerProvider
                         _handsFreeChip(context),
                         const SizedBox(width: 8),
                         _focusChip(context),
-                        const SizedBox(width: 8),
-                        _langChip(context, value: 'tn', label: 'TN'),
                         const SizedBox(width: 8),
                         _langChip(context, value: 'fr', label: 'FR'),
                         const SizedBox(width: 8),

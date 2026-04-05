@@ -83,8 +83,13 @@ class AppBarBackButton extends StatelessWidget {
 
     return IconButton(
       onPressed: onPressed ?? () {
-        if (context.canPop()) {
+        final nav = Navigator.of(context);
+        if (nav.canPop()) {
+          nav.pop();
+        } else if (context.canPop()) {
           context.pop();
+        } else {
+          context.go('/dashboard?tab=home');
         }
       },
       icon: Container(

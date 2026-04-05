@@ -1,0 +1,12 @@
+{
+  "scripts": {
+    "admin:dev": "npm --prefix gameforge-admin-web run dev",
+    "admin:dev:turbo": "npm --prefix gameforge-admin-web run dev:turbo",
+    "admin:build": "npm --prefix gameforge-admin-web run build",
+    "admin:start": "npm --prefix gameforge-admin-web run start"
+  },
+  "dependencies": {
+    "jspdf": "^4.2.0",
+    "jspdf-autotable": "^5.0.7"
+  }
+}

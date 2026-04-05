@@ -9,6 +9,7 @@ import 'core/services/billing_service.dart';
 import 'core/services/app_notifier.dart';
 import 'core/services/coach_overlay_controller.dart';
 import 'core/services/local_notifications_service.dart';
+import 'core/services/push_notifications_service.dart';
 import 'core/themes/app_theme.dart';
 import 'core/providers/auth_provider.dart';
 import 'core/providers/build_monitor_provider.dart';
@@ -18,10 +19,25 @@ import 'presentation/widgets/coach_global_overlay.dart';
 void main() async {
   FlutterError.onError = (details) {
     FlutterError.presentError(details);
+
+    final msg = details.exceptionAsString();
+    final isOverflow = msg.contains('A RenderFlex overflowed by');
+    final isImage404 = msg.contains('HTTP request failed, statusCode: 404') || msg.contains('NetworkImageLoadException');
+    if (isOverflow || isImage404) {
+      return;
+    }
+
     Zone.current.handleUncaughtError(details.exception, details.stack ?? StackTrace.current);
   };
 
   PlatformDispatcher.instance.onError = (error, stack) {
+    final msg = error.toString();
+    final isOverflow = msg.contains('A RenderFlex overflowed by');
+    final isImage404 = msg.contains('HTTP request failed, statusCode: 404') || msg.contains('NetworkImageLoadException');
+    if (isOverflow || isImage404) {
+      return true;
+    }
+
     Zone.current.handleUncaughtError(error, stack);
     return true;
   };
@@ -57,6 +73,10 @@ void main() async {
     try {
       await LocalNotificationsService.init();
       await LocalNotificationsService.bootstrapDailyQuizReminder();
+    } catch (_) {}
+
+    try {
+      await PushNotificationsService.init();
     } catch (_) {}
 
     runApp(
@@ -95,6 +115,8 @@ class _GameForgeApp extends StatefulWidget {
 
 class _GameForgeAppState extends State<_GameForgeApp> {
   StreamSubscription<String>? _notifSub;
+  StreamSubscription<String>? _pushTapSub;
+  String? _lastSyncedAuthToken;
 
   @override
   void initState() {
@@ -108,6 +130,19 @@ class _GameForgeAppState extends State<_GameForgeApp> {
         final pid = p.substring('build_results:'.length).trim();
         if (pid.isEmpty) return;
         AppRouter.router.go('/build-results?projectId=$pid');
+        return;
+      }
+
+      if (p == 'creator_wallet') {
+        AppRouter.router.go('/creator-wallet');
+        return;
+      }
+
+      if (p.startsWith('template:')) {
+        final tid = p.substring('template:'.length).trim();
+        if (tid.isEmpty) return;
+        AppRouter.router.go('/template/$tid');
+        return;
       }
     }
 
@@ -119,12 +154,15 @@ class _GameForgeAppState extends State<_GameForgeApp> {
     }
 
     _notifSub = LocalNotificationsService.onNotificationTap.listen(handlePayload);
+    _pushTapSub = PushNotificationsService.onNotificationTap.listen(handlePayload);
   }
 
   @override
   void dispose() {
     _notifSub?.cancel();
     _notifSub = null;
+    _pushTapSub?.cancel();
+    _pushTapSub = null;
     super.dispose();
   }
 
@@ -132,6 +170,14 @@ class _GameForgeAppState extends State<_GameForgeApp> {
   Widget build(BuildContext context) {
     return Consumer2<AuthProvider, ThemeProvider>(
       builder: (context, _authProvider, themeProvider, child) {
+        final t = _authProvider.token;
+        if (t != _lastSyncedAuthToken) {
+          _lastSyncedAuthToken = t;
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            PushNotificationsService.syncWithBackend(authToken: t);
+          });
+        }
+
         return MaterialApp.router(
           title: 'GameForge AI',
           debugShowCheckedModeBanner: false,

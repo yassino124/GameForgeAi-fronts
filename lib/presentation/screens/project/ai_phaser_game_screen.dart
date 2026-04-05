@@ -19,6 +19,20 @@ class AiPhaserGameScreen extends StatefulWidget {
 class _AiPhaserGameScreenState extends State<AiPhaserGameScreen> with TickerProviderStateMixin {
   final _promptCtrl = TextEditingController();
 
+  // ─── Prompt suggestions ──────────────────────────────────────────────────
+  static const _suggestions = [
+    '🚀 A space shooter — destroy alien invaders and collect power-ups',
+    '🧟 A zombie survival — dodge zombie hordes at night in a neon city',
+    '🏃 A dog runner — cute dog jumps over obstacles and collects bones',
+    '⚔️ A knight platformer — collect gems and stomp enemies on platforms',
+    '🐍 A neon snake game — eat glowing fruits and grow longer',
+    '🧱 A brick breaker — destroy all bricks with power-up paddles',
+    '🌑 An asteroids shooter — rotate your ship and blast space rocks',
+    '🐦 A flappy bird in space — dodge meteor pipes',
+    '🏎️ A racing game — dodge traffic in 3 lanes at high speed',
+    '🏓 A neon pong — face an AI opponent in a glowing arena',
+  ];
+
   bool _creating = false;
   String? _error;
 
@@ -44,6 +58,58 @@ class _AiPhaserGameScreenState extends State<AiPhaserGameScreen> with TickerProv
     _promptCtrl.dispose();
     _pulseCtrl.dispose();
     super.dispose();
+  }
+
+  // ─── Suggestions widget ───────────────────────────────────────────────────
+
+  Widget _buildSuggestions(ColorScheme cs) {
+    final isRunning = _status == 'queued' || _status == 'running';
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.lightbulb_outline_rounded, size: 16, color: cs.primary),
+            const SizedBox(width: 6),
+            Text('Quick Game Types', style: AppTypography.subtitle2),
+          ],
+        ),
+        const SizedBox(height: AppSpacing.sm),
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          children: _suggestions
+              .map((s) => GestureDetector(
+                    onTap: isRunning
+                        ? null
+                        : () => setState(() {
+                              _promptCtrl.text = s
+                                  .replaceAll(
+                                    RegExp(r'^[\p{Emoji}\s]+', unicode: true),
+                                    '',
+                                  )
+                                  .trim();
+                            }),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: cs.surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                            color: cs.outlineVariant.withOpacity(0.4)),
+                      ),
+                      child: Text(
+                        s,
+                        style:
+                            AppTypography.caption.copyWith(color: cs.onSurface),
+                      ),
+                    ),
+                  ))
+              .toList(),
+        ),
+      ],
+    );
   }
 
   Future<void> _startPoll() async {
@@ -203,6 +269,8 @@ class _AiPhaserGameScreenState extends State<AiPhaserGameScreen> with TickerProv
                 hintText: 'Describe the HTML5 game you want (Phaser.js)…',
               ),
             ),
+            const SizedBox(height: AppSpacing.lg),
+            _buildSuggestions(cs),
             const SizedBox(height: AppSpacing.xl),
             CustomButton(
               text: _creating ? 'Starting…' : 'Generate (Phaser)',

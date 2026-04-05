@@ -354,7 +354,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
               child: ShaderMask(
                 shaderCallback: (bounds) => AppColors.primaryGradient.createShader(bounds),
                 child: Text(
-                  'Welcome to\nGameFrog AI',
+                  'Welcome to\nGameForge AI',
                   textAlign: TextAlign.center,
                   style: AppTypography.display(Colors.white).copyWith(
                     fontSize: 52,

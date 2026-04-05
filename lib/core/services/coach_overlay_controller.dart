@@ -47,12 +47,14 @@ class CoachOverlayController extends ChangeNotifier {
     notifyListeners();
   }
 
-  Future<void> hideOverlay() async {
+  Future<void> hideOverlay({bool stopAudio = true}) async {
     if (!_overlayEnabled) return;
     _overlayEnabled = false;
     _handsFree = false;
     notifyListeners();
-    await stopAllAudio();
+    if (stopAudio) {
+      await stopAllAudio();
+    }
   }
 
   String? _lastToken;

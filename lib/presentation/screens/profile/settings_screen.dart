@@ -5,10 +5,30 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/themes/app_theme.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/providers/theme_provider.dart';
+import '../../../core/services/reward_sfx_service.dart';
 import '../../widgets/widgets.dart';
 
-class SettingsScreen extends StatelessWidget {
+class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
+
+  @override
+  State<SettingsScreen> createState() => _SettingsScreenState();
+}
+
+class _SettingsScreenState extends State<SettingsScreen> {
+  bool _rewardSfxEnabled = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final v = await RewardSfxService.isEnabled();
+    if (!mounted) return;
+    setState(() => _rewardSfxEnabled = v);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -151,6 +171,13 @@ class SettingsScreen extends StatelessWidget {
               [
                 _buildSettingsItem(
                   context,
+                  'Creator Wallet',
+                  'Earnings, donations and payouts',
+                  Icons.account_balance_wallet_outlined,
+                  () => context.push('/creator-wallet'),
+                ),
+                _buildSettingsItem(
+                  context,
                   'Current Plan',
                   'Pro Plan - \$9.99/month',
                   Icons.workspace_premium,
@@ -179,6 +206,23 @@ class SettingsScreen extends StatelessWidget {
               context,
               'App Settings',
               [
+                SwitchListTile(
+                  secondary: Icon(Icons.music_note_rounded, color: Theme.of(context).colorScheme.primary),
+                  title: Text('Reward sounds', style: AppTypography.body2.copyWith(color: Theme.of(context).colorScheme.onSurface)),
+                  subtitle: Text(
+                    'Play sound effects when you win rewards',
+                    style: AppTypography.caption.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+                  ),
+                  value: _rewardSfxEnabled,
+                  onChanged: (value) async {
+                    setState(() => _rewardSfxEnabled = value);
+                    await RewardSfxService.setEnabled(value);
+                    if (!mounted) return;
+                    if (value) {
+                      await RewardSfxService.playWin();
+                    }
+                  },
+                ),
                 _buildSettingsItem(
                   context,
                   'Notifications',

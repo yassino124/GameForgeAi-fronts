@@ -15,7 +15,8 @@ import '../../../core/providers/auth_provider.dart';
 import '../../widgets/widgets.dart';
 
 class TemplateMarketplaceScreen extends StatefulWidget {
-  const TemplateMarketplaceScreen({super.key});
+  final bool autoOpenAiFinder;
+  const TemplateMarketplaceScreen({super.key, this.autoOpenAiFinder = false});
 
   @override
   State<TemplateMarketplaceScreen> createState() => _TemplateMarketplaceScreenState();
@@ -220,6 +221,47 @@ class _AiFinderSheetState extends State<_AiFinderSheet> {
   }
 }
 
+class _FeaturedBadge extends StatelessWidget {
+  const _FeaturedBadge();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF7C3AED), Color(0xFF22D3EE)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(999),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF7C3AED).withOpacity(0.25),
+            blurRadius: 18,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.auto_awesome_rounded, size: 14, color: Colors.white),
+          const SizedBox(width: 6),
+          Text(
+            'FEATURED',
+            style: AppTypography.caption.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.8,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class InlineAutoplayVideo extends StatefulWidget {
   final String url;
   final String? fallbackImageUrl;
@@ -321,273 +363,103 @@ class _InlineAutoplayVideoState extends State<InlineAutoplayVideo> {
   }
 }
 
-class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> {
+class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> with TickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
+  late final AnimationController _introAnim;
+  late final AnimationController _neonCtrl;
+  
   String _selectedCategory = 'All';
-  String _sortBy = 'Popular';
-  bool _isGridView = true;
-
   String _proFilter = 'All';
-
-  static const String _kPrefSavedTemplateIds = 'marketplace_saved_template_ids_v1';
-  final Set<String> _savedTemplateIds = {};
+  String _sortBy = 'Popular';
+  bool _loading = false;
+  bool _isGridView = true;
   bool _showSavedOnly = false;
-
+  String? _error;
+  Timer? _debounce;
+  List<GameTemplate> _templates = [];
   final List<GameTemplate> _compareSelection = [];
-  bool _compareTrayVisible = false;
+  final List<String> _savedTemplateIds = [];
+
+  final List<String> _categories = ['All', 'Action', 'RPG', 'Puzzle', 'Strategy', 'Adventure'];
+  final List<String> _sortOptions = ['Popular', 'Newest', 'Rating', 'Price: Low', 'Price: High'];
+  final List<String> _proFilters = ['All', 'Featured', 'Mobile-ready', 'Free', 'Paid', '2D', '3D'];
 
   final stt.SpeechToText _speech = stt.SpeechToText();
   bool _speechAvailable = false;
   bool _isListening = false;
+  Timer? _voiceStopTimer;
 
-  Timer? _debounce;
-  bool _loading = false;
-  String? _error;
-  List<GameTemplate> _templates = [];
-
-  late final VoidCallback _refreshListener;
-
-  final List<String> _categories = [
-    'All',
-    'Action',
-    'Puzzle',
-    'RPG',
-    'Strategy',
-    'Casual',
-    'Simulation',
-    'Educational',
-  ];
-
-  final List<String> _sortOptions = [
-    'Popular',
-    'Newest',
-    'Rating',
-    'Downloads',
-    'Price',
-  ];
-
-  final List<String> _proFilters = const [
-    'All',
-    'Featured',
-    'Mobile-ready',
-    'Free',
-    'Paid',
-    '2D',
-    '3D',
-  ];
-
-  bool _hasTag(GameTemplate t, String tag) {
-    final q = tag.trim().toLowerCase();
-    if (q.isEmpty) return false;
-    return t.tags.any((x) => x.trim().toLowerCase() == q);
-  }
-
-  List<_CompatBadge> _compatBadges(GameTemplate t) {
-    final out = <_CompatBadge>[];
-    final tags = t.tags.map((e) => e.trim().toLowerCase()).toList();
-
-    bool hasAny(Set<String> values) => tags.any(values.contains);
-
-    final is2d = hasAny({'2d', '2d-ready', '2d_only'});
-    final is3d = hasAny({'3d', '3d-ready', '3d_only'});
-    final mobile = hasAny({'mobile', 'mobile-ready', 'android', 'ios'});
-
-    if (is2d) out.add(const _CompatBadge(label: '2D', icon: Icons.layers_outlined));
-    if (is3d) out.add(const _CompatBadge(label: '3D', icon: Icons.view_in_ar));
-    if (mobile) out.add(const _CompatBadge(label: 'Mobile', icon: Icons.phone_iphone));
-
-    return out;
-  }
+  bool _compactGrid = false;
 
   @override
   void initState() {
     super.initState();
-    _searchController.addListener(_onSearchChanged);
-    _loadSavedTemplates();
+    _introAnim = AnimationController(vsync: this, duration: const Duration(milliseconds: 1000))..forward();
+    _neonCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 2000))..repeat();
+    
     _initSpeech();
     _loadTemplates();
-
-    _refreshListener = () {
-      _loadTemplates();
-    };
+    _loadSaved();
+    
     TemplatesService.refreshNotifier.addListener(_refreshListener);
-  }
+    _searchController.addListener(_onSearchChanged);
 
-  Future<void> _loadSavedTemplates() async {
-    try {
-      final p = await SharedPreferences.getInstance();
-      final list = p.getStringList(_kPrefSavedTemplateIds) ?? <String>[];
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      setState(() {
-        _savedTemplateIds
-          ..clear()
-          ..addAll(list.where((e) => e.trim().isNotEmpty));
-      });
-    } catch (_) {}
-  }
-
-  Future<void> _persistSavedTemplates() async {
-    try {
-      final p = await SharedPreferences.getInstance();
-      await p.setStringList(_kPrefSavedTemplateIds, _savedTemplateIds.toList());
-    } catch (_) {}
-  }
-
-  void _toggleSaved(GameTemplate t) {
-    setState(() {
-      if (_savedTemplateIds.contains(t.id)) {
-        _savedTemplateIds.remove(t.id);
-      } else {
-        _savedTemplateIds.add(t.id);
+      if (widget.autoOpenAiFinder) {
+        _openAiFinder();
       }
     });
-    _persistSavedTemplates();
-  }
-
-  void _toggleCompare(GameTemplate t) {
-    setState(() {
-      final idx = _compareSelection.indexWhere((x) => x.id == t.id);
-      if (idx >= 0) {
-        _compareSelection.removeAt(idx);
-      } else {
-        if (_compareSelection.length >= 3) {
-          _compareSelection.removeAt(0);
-        }
-        _compareSelection.add(t);
-      }
-      _compareTrayVisible = _compareSelection.isNotEmpty;
-    });
-  }
-
-  void _clearCompare() {
-    setState(() {
-      _compareSelection.clear();
-      _compareTrayVisible = false;
-    });
-  }
-
-  Future<void> _initSpeech() async {
-    try {
-      final ok = await _speech.initialize(
-        onError: (e) {
-          if (!mounted) return;
-          setState(() {
-            _isListening = false;
-            _speechAvailable = false;
-            _error = e.errorMsg;
-          });
-        },
-        onStatus: (status) {
-          if (!mounted) return;
-          if (status == 'notListening' || status == 'done') {
-            setState(() {
-              _isListening = false;
-            });
-          }
-        },
-      );
-      if (!mounted) return;
-      setState(() {
-        _speechAvailable = ok;
-      });
-    } catch (e) {
-      if (!mounted) return;
-      setState(() {
-        _speechAvailable = false;
-      });
-    }
-  }
-
-  Future<void> _toggleVoiceSearch() async {
-    final cs = Theme.of(context).colorScheme;
-
-    if (_isListening) {
-      await _speech.stop();
-      if (!mounted) return;
-      setState(() {
-        _isListening = false;
-      });
-      return;
-    }
-
-    if (!_speechAvailable) {
-      await _initSpeech();
-    }
-    if (!_speechAvailable) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Voice search not available. Please allow microphone permission.'),
-          backgroundColor: cs.error,
-        ),
-      );
-      return;
-    }
-
-    if (!mounted) return;
-    setState(() {
-      _isListening = true;
-      _error = null;
-    });
-
-    await _speech.listen(
-      listenMode: stt.ListenMode.search,
-      onResult: (result) {
-        if (!mounted) return;
-        final words = result.recognizedWords;
-        if (words.trim().isEmpty) return;
-        _searchController.value = TextEditingValue(
-          text: words,
-          selection: TextSelection.collapsed(offset: words.length),
-        );
-        if (result.finalResult) {
-          setState(() {
-            _isListening = false;
-          });
-        }
-      },
-    );
-  }
-
-  String? _resolveMediaUrl(String? url) {
-    if (url == null) return null;
-    final raw = url.trim();
-    if (raw.isEmpty) return null;
-
-    try {
-      final base = Uri.parse(ApiService.baseUrl);
-      final baseOrigin = Uri(scheme: base.scheme, host: base.host, port: base.hasPort ? base.port : null);
-
-      if (raw.startsWith('/')) {
-        return baseOrigin.resolve(raw).toString();
-      }
-
-      final u = Uri.parse(raw);
-      if (!u.hasScheme) {
-        return baseOrigin.resolve('/$raw').toString();
-      }
-
-      // If backend stored an absolute URL using another host (e.g., 10.0.2.2),
-      // keep the path/query but use the current API origin.
-      return baseOrigin.replace(path: u.path, query: u.query).toString();
-    } catch (_) {
-      return raw;
-    }
   }
 
   @override
   void dispose() {
-    _debounce?.cancel();
-    TemplatesService.refreshNotifier.removeListener(_refreshListener);
-    _searchController.removeListener(_onSearchChanged);
-    _searchController.dispose();
-    _speech.stop();
+    try {
+      TemplatesService.refreshNotifier.removeListener(_refreshListener);
+    } catch (_) {}
+    try {
+      _searchController.removeListener(_onSearchChanged);
+    } catch (_) {}
+    try {
+      _debounce?.cancel();
+    } catch (_) {}
+    try {
+      _voiceStopTimer?.cancel();
+    } catch (_) {}
+    try {
+      _speech.stop();
+    } catch (_) {}
+    try {
+      _introAnim.dispose();
+    } catch (_) {}
+    try {
+      _neonCtrl.dispose();
+    } catch (_) {}
+    try {
+      _searchController.dispose();
+    } catch (_) {}
     super.dispose();
   }
 
+  void _resetFilters() {
+    setState(() {
+      _selectedCategory = 'All';
+      _proFilter = 'All';
+      _sortBy = 'Popular';
+      _showSavedOnly = false;
+      _isGridView = true;
+      _compactGrid = false;
+      _searchController.clear();
+      _error = null;
+    });
+    _loadTemplates();
+  }
+
+  void _refreshListener() => _loadTemplates();
+
   void _onSearchChanged() {
-    _debounce?.cancel();
-    _debounce = Timer(const Duration(milliseconds: 350), () {
+    if (_debounce?.isActive ?? false) _debounce!.cancel();
+    _debounce = Timer(const Duration(milliseconds: 500), () {
       _loadTemplates();
     });
   }
@@ -602,612 +474,606 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> {
     try {
       final res = await TemplatesService.listPublicTemplates(
         q: _searchController.text,
-        category: _selectedCategory,
+        category: _selectedCategory == 'All' ? null : _selectedCategory,
       );
-      final raw = (res['success'] == true && res['data'] is List) ? (res['data'] as List) : const [];
-      final parsed = raw.map((e) {
-        if (e is! Map) return null;
-        final id = (e['_id'] ?? e['id'])?.toString() ?? '';
-        if (id.isEmpty) return null;
-
-        final tagsRaw = e['tags'];
-        final tags = (tagsRaw is List) ? tagsRaw.map((t) => t.toString()).toList() : const <String>[];
-
-        return GameTemplate(
-          id: id,
-          name: e['name']?.toString() ?? 'Template',
-          category: e['category']?.toString() ?? 'General',
-          description: e['description']?.toString() ?? '',
-          rating: (e['rating'] is num) ? (e['rating'] as num).toDouble() : 4.7,
-          downloads: (e['downloads'] is num) ? (e['downloads'] as num).toInt() : 0,
-          price: (e['price'] is num) ? (e['price'] as num).toDouble() : 0.0,
-          imageUrl: _resolveMediaUrl(e['previewImageUrl']?.toString()),
-          previewVideoUrl: _resolveMediaUrl(e['previewVideoUrl']?.toString()),
-          tags: tags,
-          isFeatured: e['isFeatured'] == true,
-          creator: e['ownerId']?.toString() ?? 'Creator',
-          createdAt: DateTime.tryParse(e['createdAt']?.toString() ?? '') ?? DateTime.now(),
-        );
-      }).whereType<GameTemplate>().toList();
 
       if (!mounted) return;
-      setState(() {
-        _templates = parsed;
-      });
+
+      if (res['success'] == true) {
+        final List<dynamic> data = res['data'] is List ? res['data'] : [];
+        setState(() {
+          _templates = data.map((e) => GameTemplate.fromMap(Map<String, dynamic>.from(e))).toList();
+          _loading = false;
+        });
+      } else {
+        setState(() {
+          _error = res['message']?.toString() ?? 'Failed to load templates';
+          _loading = false;
+        });
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
         _error = e.toString();
-      });
-    } finally {
-      if (!mounted) return;
-      setState(() {
         _loading = false;
       });
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final featured = _getFeaturedTemplates();
-    final bottomNavPad = MediaQuery.of(context).padding.bottom;
+  Future<void> _initSpeech() async {
+    try {
+      _speechAvailable = await _speech.initialize();
+      if (mounted) setState(() {});
+    } catch (_) {}
+  }
 
-    return Container(
-      decoration: BoxDecoration(
-        gradient: Theme.of(context).brightness == Brightness.dark
-            ? AppColors.backgroundGradient
-            : AppTheme.backgroundGradientLight,
-      ),
-      child: Scaffold(
-        backgroundColor: Colors.transparent,
-        appBar: PreferredSize(
-          preferredSize: const Size.fromHeight(kToolbarHeight + 8),
-          child: ClipRRect(
-            child: BackdropFilter(
-              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: cs.surface.withOpacity(isDark ? 0.72 : 0.82),
-                  border: Border(
-                    bottom: BorderSide(color: cs.outlineVariant.withOpacity(0.4)),
-                  ),
-                ),
-                child: AppBar(
-                  backgroundColor: Colors.transparent,
-                  elevation: 0,
-                  scrolledUnderElevation: 0,
-                  title: Text(
-                    'Marketplace',
-                    style: AppTypography.subtitle1.copyWith(
-                      color: cs.onSurface,
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                  actions: [
-                    IconButton(
-                      tooltip: 'Saved templates',
-                      onPressed: _openSaved,
-                      icon: Icon(
-                        (_showSavedOnly || _savedTemplateIds.isNotEmpty) ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                        color: (_showSavedOnly || _savedTemplateIds.isNotEmpty) ? Colors.redAccent : null,
-                      ),
-                    ),
-                    IconButton(
-                      tooltip: 'AI Finder',
-                      onPressed: _openAiFinder,
-                      icon: const Icon(Icons.auto_awesome_rounded),
-                    ),
-                    IconButton(
-                      tooltip: _isGridView ? 'List view' : 'Grid view',
-                      onPressed: () {
-                        setState(() {
-                          _isGridView = !_isGridView;
-                        });
-                      },
-                      icon: Icon(_isGridView ? Icons.view_agenda_rounded : Icons.grid_view_rounded),
-                    ),
-                    IconButton(
-                      tooltip: 'Compare',
-                      onPressed: _compareSelection.isEmpty ? null : _openCompareSheet,
-                      icon: const Icon(Icons.compare_arrows_rounded),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-        body: Column(
-          children: [
-            AnimatedContainer(
-              duration: const Duration(milliseconds: 300),
-              padding: AppSpacing.paddingLarge,
-              decoration: BoxDecoration(
-                color: cs.surface.withOpacity(isDark ? 0.35 : 0.55),
-                border: Border(
-                  bottom: BorderSide(color: cs.outlineVariant.withOpacity(0.3)),
-                ),
-              ),
-              child: Column(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(AppSpacing.lg),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(AppBorderRadius.large),
-                      gradient: LinearGradient(
-                        colors: [
-                          cs.surface.withOpacity(isDark ? 0.50 : 0.72),
-                          cs.surfaceContainerHighest.withOpacity(isDark ? 0.22 : 0.52),
-                        ],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      border: Border.all(color: cs.outlineVariant.withOpacity(0.55)),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(isDark ? 0.26 : 0.12),
-                          blurRadius: 26,
-                          offset: const Offset(0, 14),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: CustomSearchField(
-                                controller: _searchController,
-                                hint: 'Search templates...',
-                                onChanged: (_) {},
-                                onClear: () {
-                                  _searchController.clear();
-                                  _loadTemplates();
-                                },
-                              ),
-                            ),
-                            const SizedBox(width: AppSpacing.md),
-                            _PressableGlow(
-                              onTap: _toggleVoiceSearch,
-                              onLongPress: null,
-                              child: Container(
-                                width: 48,
-                                height: 48,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(AppBorderRadius.medium),
-                                  gradient: _isListening
-                                      ? LinearGradient(
-                                          colors: [AppColors.accent, cs.primary],
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
-                                        )
-                                      : LinearGradient(
-                                          colors: [cs.primary, cs.secondary],
-                                          begin: Alignment.topLeft,
-                                          end: Alignment.bottomRight,
-                                        ),
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: (_isListening ? AppColors.accent : cs.primary).withOpacity(0.28),
-                                      blurRadius: 18,
-                                      offset: const Offset(0, 10),
-                                    ),
-                                  ],
-                                ),
-                                child: Icon(
-                                  _isListening ? Icons.graphic_eq_rounded : Icons.mic_rounded,
-                                  color: cs.onPrimary,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: AppSpacing.lg),
-                        Row(
-                          children: [
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12),
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(AppBorderRadius.medium),
-                                gradient: LinearGradient(
-                                  colors: [
-                                    cs.surfaceContainerHighest.withOpacity(isDark ? 0.28 : 0.62),
-                                    cs.surface.withOpacity(isDark ? 0.22 : 0.52),
-                                  ],
-                                  begin: Alignment.topLeft,
-                                  end: Alignment.bottomRight,
-                                ),
-                                border: Border.all(color: cs.outlineVariant.withOpacity(0.55)),
-                              ),
-                              child: DropdownButtonHideUnderline(
-                                child: DropdownButton<String>(
-                                  value: _sortBy,
-                                  onChanged: (value) {
-                                    if (value == null) return;
-                                    setState(() {
-                                      _sortBy = value;
-                                    });
-                                  },
-                                  style: AppTypography.caption.copyWith(fontWeight: FontWeight.w800),
-                                  underline: const SizedBox(),
-                                  icon: Icon(Icons.keyboard_arrow_down, color: cs.onSurfaceVariant),
-                                  items: _sortOptions
-                                      .map((option) => DropdownMenuItem(value: option, child: Text(option)))
-                                      .toList(),
-                                ),
-                              ),
-                            ),
-                            const SizedBox(width: AppSpacing.lg),
+  Future<void> _loadSaved() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() {
+        _savedTemplateIds.clear();
+        _savedTemplateIds.addAll(prefs.getStringList('saved_templates') ?? []);
+      });
+    }
+  }
 
-                            Expanded(
-                              child: SizedBox(
-                                height: 40,
-                                child: ListView.builder(
-                                  scrollDirection: Axis.horizontal,
-                                  itemCount: _categories.length,
-                                  itemBuilder: (context, index) {
-                                    final category = _categories[index];
-                                    final isSelected = category == _selectedCategory;
+  Future<void> _toggleSaved(GameTemplate t) async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      if (_savedTemplateIds.contains(t.id)) {
+        _savedTemplateIds.remove(t.id);
+      } else {
+        _savedTemplateIds.add(t.id);
+      }
+    });
+    await prefs.setStringList('saved_templates', _savedTemplateIds);
+  }
 
-                                    return Padding(
-                                      padding: const EdgeInsets.only(right: AppSpacing.sm),
-                                      child: _AnimatedChoiceChip(
-                                        label: category,
-                                        selected: isSelected,
-                                        onTap: () {
-                                          setState(() {
-                                            _selectedCategory = category;
-                                          });
-                                          _loadTemplates();
-                                        },
-                                      ),
-                                    );
-                                  },
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: AppSpacing.md),
-                        SizedBox(
-                          height: 40,
-                          child: ListView.separated(
-                            scrollDirection: Axis.horizontal,
-                            itemCount: _proFilters.length,
-                            separatorBuilder: (_, __) => const SizedBox(width: 8),
-                            itemBuilder: (context, i) {
-                              final f = _proFilters[i];
-                              final selected = f == _proFilter;
-                              return _AnimatedChoiceChip(
-                                label: f,
-                                selected: selected,
-                                densePill: true,
-                                onTap: () {
-                                  setState(() => _proFilter = f);
-                                },
-                              );
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
+  void _toggleCompare(GameTemplate t) {
+    setState(() {
+      if (_compareSelection.any((x) => x.id == t.id)) {
+        _compareSelection.removeWhere((x) => x.id == t.id);
+      } else {
+        if (_compareSelection.length < 3) {
+          _compareSelection.add(t);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Maximum 3 templates for comparison')),
+          );
+        }
+      }
+    });
+  }
 
-            // Content
-            Expanded(
-              child: SingleChildScrollView(
-                padding: EdgeInsets.fromLTRB(
-                  AppSpacing.lg,
-                  AppSpacing.lg,
-                  AppSpacing.lg,
-                  bottomNavPad + 16,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (_loading) ...[
-                      _MarketplaceSkeleton(isGrid: _isGridView),
-                      const SizedBox(height: AppSpacing.lg),
-                    ],
-                    if (_error != null) ...[
-                      Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.all(AppSpacing.md),
-                        decoration: BoxDecoration(
-                          color: AppColors.error.withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(AppBorderRadius.large),
-                          border: Border.all(color: AppColors.error.withOpacity(0.35)),
-                        ),
-                        child: Text(
-                          _error!,
-                          style: AppTypography.body2.copyWith(color: cs.onSurface),
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.lg),
-                    ],
+  void _clearCompare() => setState(() => _compareSelection.clear());
 
-                    // Featured carousel
-                    if (featured.isNotEmpty) ...[
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        decoration: BoxDecoration(
-                          color: cs.surface.withOpacity(Theme.of(context).brightness == Brightness.dark ? 0.18 : 0.55),
-                          borderRadius: BorderRadius.circular(AppBorderRadius.large),
-                          border: Border.all(color: cs.outlineVariant.withOpacity(0.45)),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(Icons.local_fire_department_rounded, size: 18, color: cs.primary),
-                            const SizedBox(width: 8),
-                            Expanded(child: Text('Featured Templates', style: AppTypography.subtitle2)),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.lg),
-                      SizedBox(
-                        height: 220,
-                        child: ListView.builder(
-                          scrollDirection: Axis.horizontal,
-                          padding: const EdgeInsets.only(left: 2, right: 2),
-                          itemCount: featured.length,
-                          itemBuilder: (context, index) {
-                            return _buildFeaturedCard(featured[index]);
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: AppSpacing.xxxl),
-                    ],
+  bool get _compareTrayVisible => _compareSelection.isNotEmpty;
 
-                    // All templates
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                      decoration: BoxDecoration(
-                        color: cs.surface.withOpacity(Theme.of(context).brightness == Brightness.dark ? 0.18 : 0.55),
-                        borderRadius: BorderRadius.circular(AppBorderRadius.large),
-                        border: Border.all(color: cs.outlineVariant.withOpacity(0.45)),
-                      ),
-                      child: Row(
-                        children: [
-                          Icon(Icons.grid_view_rounded, size: 18, color: cs.primary),
-                          const SizedBox(width: 8),
-                          Expanded(child: Text('All Templates', style: AppTypography.subtitle2)),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: AppSpacing.lg),
+  void _openSaved() => setState(() => _showSavedOnly = !_showSavedOnly);
 
-                    // Templates grid/list
-                    if (!_loading) _isGridView ? _buildTemplatesGrid() : _buildTemplatesList(),
-                  ],
-                ),
-              ),
-            ),
-            _buildCompareTray(cs),
-          ],
-        ),
-      ),
+  List<_CompatBadgeData> _compatBadges(GameTemplate t) {
+    final b = <_CompatBadgeData>[];
+    if (t.category.contains('Mobile')) b.add(_CompatBadgeData('Mobile', Icons.smartphone));
+    if (t.tags.contains('2D')) b.add(_CompatBadgeData('2D', Icons.layers));
+    if (t.tags.contains('3D')) b.add(_CompatBadgeData('3D', Icons.view_in_ar));
+    return b;
+  }
+
+  IconData _getCategoryIcon(String category) {
+    switch (category) {
+      case 'Action': return Icons.flash_on;
+      case 'RPG': return Icons.fort;
+      case 'Puzzle': return Icons.extension;
+      case 'Strategy': return Icons.map;
+      case 'Adventure': return Icons.explore;
+      default: return Icons.videogame_asset;
+    }
+  }
+
+  Future<void> _toggleVoiceSearch() async {
+    if (_isListening) {
+      try {
+        _voiceStopTimer?.cancel();
+      } catch (_) {}
+      await _speech.stop();
+      if (!mounted) return;
+      setState(() => _isListening = false);
+      return;
+    }
+
+    if (!_speechAvailable) await _initSpeech();
+    if (!_speechAvailable) {
+      if (!mounted) return;
+      return;
+    }
+
+    setState(() {
+      _isListening = true;
+      _error = null;
+    });
+
+    try {
+      _voiceStopTimer?.cancel();
+      _voiceStopTimer = Timer(const Duration(seconds: 8), () async {
+        if (!mounted) return;
+        if (!_isListening) return;
+        try {
+          await _speech.stop();
+        } catch (_) {}
+        if (mounted) setState(() => _isListening = false);
+      });
+    } catch (_) {}
+
+    await _speech.listen(
+      onResult: (result) {
+        if (!mounted) return;
+        final text = result.recognizedWords;
+        _searchController.value = _searchController.value.copyWith(
+          text: text,
+          selection: TextSelection.collapsed(offset: text.length),
+          composing: TextRange.empty,
+        );
+        if (result.finalResult) {
+          try {
+            _voiceStopTimer?.cancel();
+          } catch (_) {}
+          setState(() => _isListening = false);
+          _loadTemplates();
+        }
+      },
+      listenMode: stt.ListenMode.confirmation,
+      partialResults: true,
+      cancelOnError: true,
     );
   }
 
-  Widget _buildCompareTray(ColorScheme cs) {
-    final visible = _compareTrayVisible;
-    if (!visible) return const SizedBox.shrink();
-    return AnimatedSlide(
-      duration: const Duration(milliseconds: 260),
-      curve: Curves.easeOutCubic,
-      offset: visible ? Offset.zero : const Offset(0, 1.2),
-      child: AnimatedOpacity(
-        duration: const Duration(milliseconds: 220),
-        opacity: visible ? 1 : 0,
-        child: IgnorePointer(
-          ignoring: !visible,
-          child: Container(
-            padding: EdgeInsets.only(
-              left: AppSpacing.lg,
-              right: AppSpacing.lg,
-              top: AppSpacing.md,
-              bottom: MediaQuery.of(context).padding.bottom + AppSpacing.md,
-            ),
-            decoration: BoxDecoration(
-              color: cs.surface,
-              border: Border(top: BorderSide(color: cs.outlineVariant.withOpacity(0.65))),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.10),
-                  blurRadius: 24,
-                  offset: const Offset(0, -14),
-                ),
-              ],
-            ),
-            child: Row(
+  void _openFiltersSheet() {
+    final cs = Theme.of(context).colorScheme;
+    showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.62,
+          minChildSize: 0.42,
+          maxChildSize: 0.92,
+          builder: (context, scrollController) {
+            return Container(
+              decoration: BoxDecoration(
+                color: cs.surface,
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(AppBorderRadius.xlarge)),
+                border: Border.all(color: cs.outlineVariant.withOpacity(0.6)),
+              ),
+              child: ListView(
+                controller: scrollController,
+                padding: const EdgeInsets.all(AppSpacing.lg),
+                children: [
+                  Row(
+                    children: [
+                      Text('Filters', style: AppTypography.subtitle1.copyWith(fontWeight: FontWeight.w900)),
+                      const Spacer(),
+                      IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  Text('Pro', style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant)),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: _proFilters.map((f) {
+                      return _AnimatedChoiceChip(
+                        label: f,
+                        selected: f == _proFilter,
+                        onTap: () => setState(() => _proFilter = f),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  Text('Sort', style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant)),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: _sortOptions.map((o) {
+                      return _AnimatedChoiceChip(
+                        label: o,
+                        selected: o == _sortBy,
+                        onTap: () => setState(() => _sortBy = o),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: AppSpacing.lg),
+                  SwitchListTile.adaptive(
+                    value: _showSavedOnly,
+                    onChanged: (v) => setState(() => _showSavedOnly = v),
+                    title: const Text('Saved only'),
+                  ),
+                  SwitchListTile.adaptive(
+                    value: _compactGrid,
+                    onChanged: (v) => setState(() => _compactGrid = v),
+                    title: const Text('Compact grid'),
+                  ),
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () {
+                            _resetFilters();
+                            Navigator.of(context).pop();
+                          },
+                          child: const Text('Reset all'),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: FilledButton(
+                          onPressed: () => Navigator.of(context).pop(),
+                          child: const Text('Done'),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  String? _resolveMediaUrl(String? url) => ApiService.normalizeImageUrl(url);
+
+  List<GameTemplate> _getFilteredTemplates() {
+    var list = _templates;
+    if (_showSavedOnly) list = list.where((t) => _savedTemplateIds.contains(t.id)).toList();
+    if (_selectedCategory != 'All') list = list.where((t) => t.category == _selectedCategory).toList();
+    
+    // Apply pro filters
+    if (_proFilter != 'All') {
+      switch (_proFilter) {
+        case 'Featured':
+          list = list.where((t) => t.isFeatured).toList();
+          break;
+        case 'Mobile-ready':
+          list = list.where((t) => t.category.contains('Mobile')).toList();
+          break;
+        case 'Free':
+          list = list.where((t) => t.price <= 0).toList();
+          break;
+        case 'Paid':
+          list = list.where((t) => t.price > 0).toList();
+          break;
+        case '2D':
+          list = list.where((t) => t.tags.contains('2D')).toList();
+          break;
+        case '3D':
+          list = list.where((t) => t.tags.contains('3D')).toList();
+          break;
+      }
+    }
+
+    // Apply sorting
+    switch (_sortBy) {
+      case 'Popular':
+        list.sort((a, b) => b.downloads.compareTo(a.downloads));
+        break;
+      case 'Newest':
+        list.sort((a, b) => b.createdAt.compareTo(a.createdAt));
+        break;
+      case 'Rating':
+        list.sort((a, b) => b.rating.compareTo(a.rating));
+        break;
+      case 'Price: Low':
+        list.sort((a, b) => a.price.compareTo(b.price));
+        break;
+      case 'Price: High':
+        list.sort((a, b) => b.price.compareTo(a.price));
+        break;
+    }
+
+    return list;
+  }
+
+  List<GameTemplate> _getTopTemplates() {
+    final list = List<GameTemplate>.from(_getFilteredTemplates());
+    list.sort((a, b) {
+      final byRating = b.rating.compareTo(a.rating);
+      if (byRating != 0) return byRating;
+      return b.downloads.compareTo(a.downloads);
+    });
+    return list.take(5).toList();
+  }
+
+  Widget _buildTopTemplatesCarousel() {
+    final list = _getTopTemplates();
+    if (_loading || list.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
+
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 18, 24, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                Expanded(
-                  child: SizedBox(
-                    height: 42,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: _compareSelection.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 8),
-                      itemBuilder: (context, i) {
-                        final t = _compareSelection[i];
-                        return Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: cs.primary.withOpacity(0.10),
-                            borderRadius: BorderRadius.circular(999),
-                            border: Border.all(color: cs.primary.withOpacity(0.18)),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Text(
-                                t.name,
-                                style: AppTypography.caption.copyWith(color: cs.primary, fontWeight: FontWeight.w800),
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                              const SizedBox(width: 8),
-                              InkWell(
-                                borderRadius: BorderRadius.circular(999),
-                                onTap: () => _toggleCompare(t),
-                                child: Icon(Icons.close_rounded, size: 16, color: cs.primary),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
+                Text(
+                  'Top Templates',
+                  style: AppTypography.subtitle2.copyWith(
+                    color: Theme.of(context).brightness == Brightness.dark ? Colors.white : Theme.of(context).colorScheme.onSurface,
+                    fontWeight: FontWeight.w900,
                   ),
                 ),
-                const SizedBox(width: 12),
-                CustomButton(
-                  text: 'Compare',
-                  onPressed: _compareSelection.length >= 2 ? _openCompareSheet : null,
-                  type: ButtonType.primary,
-                  size: ButtonSize.small,
-                  icon: const Icon(Icons.compare_arrows_rounded),
-                ),
-                const SizedBox(width: 10),
-                CustomButton(
-                  text: 'Clear',
-                  onPressed: _clearCompare,
-                  type: ButtonType.secondary,
-                  size: ButtonSize.small,
+                const Spacer(),
+                Text(
+                  'Top 5',
+                  style: AppTypography.caption.copyWith(
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.white.withOpacity(0.7)
+                        : Theme.of(context).colorScheme.onSurfaceVariant,
+                    fontWeight: FontWeight.w800,
+                  ),
                 ),
               ],
             ),
-          ),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 190,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: list.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 14),
+                itemBuilder: (context, i) {
+                  final cs = Theme.of(context).colorScheme;
+                  final isDark = Theme.of(context).brightness == Brightness.dark;
+                  final t = list[i];
+                  final coverUrl = _resolveMediaUrl(t.imageUrl);
+                  return SizedBox(
+                    width: 300,
+                    child: _PressableGlow(
+                      onTap: () => context.push('/template/${t.id}'),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(22),
+                        child: Stack(
+                          children: [
+                            Positioned.fill(
+                              child: coverUrl != null && coverUrl.isNotEmpty
+                                  ? Image.network(
+                                      coverUrl,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) {
+                                        return Container(color: AppColors.primary.withOpacity(0.18));
+                                      },
+                                    )
+                                  : Container(color: AppColors.primary.withOpacity(0.18)),
+                            ),
+                            Positioned.fill(
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      (isDark ? Colors.black : Colors.white).withOpacity(isDark ? 0.05 : 0.0),
+                                      (isDark ? Colors.black : Colors.white).withOpacity(isDark ? 0.55 : 0.45),
+                                      (isDark ? Colors.black : Colors.white).withOpacity(isDark ? 0.85 : 0.92),
+                                    ],
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            if (t.isFeatured)
+                              const Positioned(top: 10, left: 10, child: _FeaturedBadge()),
+                            if (t.isDevOwner)
+                              const Positioned(top: 10, right: 10, child: _DevBadge.compact()),
+                            Positioned(
+                              bottom: 12,
+                              left: 12,
+                              right: 12,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    t.name,
+                                    style: AppTypography.subtitle2.copyWith(
+                                      color: isDark ? Colors.white : cs.onSurface,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    t.category,
+                                    style: AppTypography.caption.copyWith(
+                                      color: isDark ? Colors.white70 : cs.onSurfaceVariant,
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Positioned(
+                              left: 12,
+                              right: 12,
+                              top: 12,
+                              child: Row(
+                                children: [
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: (isDark ? Colors.black : cs.surfaceContainerHighest).withOpacity(isDark ? 0.35 : 0.75),
+                                      borderRadius: BorderRadius.circular(999),
+                                      border: Border.all(
+                                        color: isDark ? Colors.white.withOpacity(0.12) : cs.outlineVariant.withOpacity(0.85),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        const Icon(Icons.star_rounded, size: 14, color: Colors.amber),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          t.rating.toStringAsFixed(1),
+                                          style: AppTypography.caption.copyWith(
+                                            color: isDark ? Colors.white : cs.onSurface,
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      color: (isDark ? Colors.black : cs.surfaceContainerHighest).withOpacity(isDark ? 0.30 : 0.70),
+                                      borderRadius: BorderRadius.circular(999),
+                                      border: Border.all(
+                                        color: isDark ? Colors.white.withOpacity(0.10) : cs.outlineVariant.withOpacity(0.80),
+                                      ),
+                                    ),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(
+                                          Icons.download_rounded,
+                                          size: 14,
+                                          color: isDark ? Colors.white.withOpacity(0.85) : cs.onSurfaceVariant,
+                                        ),
+                                        const SizedBox(width: 4),
+                                        Text(
+                                          '${t.downloads}',
+                                          style: AppTypography.caption.copyWith(
+                                            color: isDark ? Colors.white.withOpacity(0.95) : cs.onSurface,
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
         ),
       ),
     );
   }
 
   List<GameTemplate> _getFeaturedTemplates() {
-    final copy = [..._templates];
-    copy.sort((a, b) => b.rating.compareTo(a.rating));
-    return copy.take(6).toList();
+    return _templates.where((t) => t.isFeatured).toList();
   }
 
-  Widget _buildFeaturedCard(GameTemplate template) {
-    final cs = Theme.of(context).colorScheme;
-    final coverUrl = _resolveMediaUrl(template.imageUrl);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+  Widget _buildFeaturedCarousel() {
+    final featured = _getFeaturedTemplates();
+    if (_loading || featured.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
 
-    return Container(
-      width: 280,
-      margin: const EdgeInsets.only(right: 16),
-      decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(24),
-        boxShadow: [
-          BoxShadow(
-            color: cs.primary.withOpacity(0.12),
-            blurRadius: 16,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(24),
-        child: Stack(
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 18, 24, 8),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Positioned.fill(
-              child: coverUrl != null
-                  ? Image.network(coverUrl, fit: BoxFit.cover)
-                  : Container(
-                      decoration: BoxDecoration(
-                        gradient: LinearGradient(
-                          colors: [cs.primaryContainer, cs.surface],
-                          begin: Alignment.topLeft,
-                          end: Alignment.bottomRight,
-                        ),
-                      ),
-                      child: Icon(Icons.videogame_asset_rounded, size: 48, color: cs.primary.withOpacity(0.2)),
-                    ),
-            ),
-            Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    colors: [
-                      Colors.black.withOpacity(0.0),
-                      Colors.black.withOpacity(0.85),
-                    ],
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                  ),
-                ),
+            Text(
+              'Featured',
+              style: AppTypography.subtitle2.copyWith(
+                color: Theme.of(context).brightness == Brightness.dark ? Colors.white : Theme.of(context).colorScheme.onSurface,
+                fontWeight: FontWeight.w900,
               ),
             ),
-            Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: cs.primary,
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          'FEATURED',
-                          style: AppTypography.caption.copyWith(
-                            color: cs.onPrimary,
-                            fontWeight: FontWeight.w900,
-                            fontSize: 10,
-                          ),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: 160,
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                itemCount: featured.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 14),
+                itemBuilder: (context, i) {
+                  final cs = Theme.of(context).colorScheme;
+                  final isDark = Theme.of(context).brightness == Brightness.dark;
+                  final t = featured[i];
+                  final coverUrl = _resolveMediaUrl(t.imageUrl);
+                  return SizedBox(
+                    width: 260,
+                    child: _PressableGlow(
+                      onTap: () => context.push('/template/${t.id}'),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(22),
+                        child: Stack(
+                          children: [
+                            Positioned.fill(
+                              child: coverUrl != null && coverUrl.isNotEmpty
+                                  ? Image.network(
+                                      coverUrl,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (context, error, stackTrace) {
+                                        return Container(color: AppColors.primary.withOpacity(0.18));
+                                      },
+                                    )
+                                  : Container(color: AppColors.primary.withOpacity(0.18)),
+                            ),
+                            Positioned.fill(
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      Colors.transparent,
+                                      (isDark ? Colors.black : Colors.white).withOpacity(isDark ? 0.78 : 0.92),
+                                    ],
+                                    begin: Alignment.topCenter,
+                                    end: Alignment.bottomCenter,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const Positioned(top: 10, left: 10, child: _FeaturedBadge()),
+                            if (t.isDevOwner)
+                              const Positioned(top: 10, right: 10, child: _DevBadge.compact()),
+                            Positioned(
+                              left: 12,
+                              right: 12,
+                              bottom: 12,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    t.name,
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: AppTypography.subtitle1.copyWith(
+                                      color: isDark ? Colors.white : cs.onSurface,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  _buildMetaRow(t),
+                                ],
+                              ),
+                            ),
+                          ],
                         ),
                       ),
-                      const Spacer(),
-                      if (template.price <= 0)
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: Colors.greenAccent.withOpacity(0.9),
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                          child: const Text(
-                            'FREE',
-                            style: TextStyle(color: Colors.black, fontWeight: FontWeight.w900, fontSize: 10),
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    template.name,
-                    style: AppTypography.subtitle1.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w900,
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    template.description,
-                    style: AppTypography.caption.copyWith(
-                      color: Colors.white.withOpacity(0.8),
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ],
-              ),
-            ),
-            Positioned.fill(
-              child: Material(
-                color: Colors.transparent,
-                child: InkWell(
-                  onTap: () => context.push('/template/${template.id}'),
-                ),
+                  );
+                },
               ),
             ),
           ],
@@ -1216,171 +1082,259 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> {
     );
   }
 
-  Widget _buildTemplatesGrid() {
-    final filteredTemplates = _getFilteredTemplates();
-    
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        childAspectRatio: 0.68,
-        crossAxisSpacing: AppSpacing.lg,
-        mainAxisSpacing: AppSpacing.lg,
-      ),
-      itemCount: filteredTemplates.length,
-      itemBuilder: (context, index) {
-        final t = filteredTemplates[index];
-        return TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0.0, end: 1.0),
-          duration: Duration(milliseconds: 320 + (index.clamp(0, 8) * 40)),
-          curve: Curves.easeOutCubic,
-          builder: (context, v, child) {
-            return Opacity(
-              opacity: v,
-              child: Transform.translate(
-                offset: Offset(0, (1 - v) * 14),
-                child: Transform.scale(
-                  scale: 0.98 + (v * 0.02),
-                  child: child,
-                ),
-              ),
-            );
-          },
-          child: _buildTemplateCard(t),
-        );
-      },
-    );
-  }
-
-  Widget _buildTemplateListItem(GameTemplate template) {
+  Widget _buildEmptyState() {
     final cs = Theme.of(context).colorScheme;
-    final coverUrl = _resolveMediaUrl(template.imageUrl);
-    final videoUrl = _resolveMediaUrl(template.previewVideoUrl);
-    final badges = _compatBadges(template);
-    final saved = _savedTemplateIds.contains(template.id);
-    final compared = _compareSelection.any((t) => t.id == template.id);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: cs.surfaceContainerHighest.withOpacity(isDark ? 0.18 : 0.20),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: cs.outlineVariant.withOpacity(0.2)),
-      ),
-      child: InkWell(
-        onTap: () => context.push('/template/${template.id}'),
-        onLongPress: () => _toggleCompare(template),
-        borderRadius: BorderRadius.circular(20),
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            ClipRRect(
-              borderRadius: BorderRadius.circular(14),
-              child: SizedBox(
-                width: 100,
-                height: 75,
-                child: Stack(
-                  children: [
-                    Positioned.fill(
-                      child: (videoUrl != null && videoUrl.trim().isNotEmpty)
-                          ? InlineAutoplayVideo(
-                              url: videoUrl,
-                              fallbackImageUrl: coverUrl,
-                              fallbackIcon: _getCategoryIcon(template.category),
-                            )
-                          : (coverUrl != null && coverUrl.trim().isNotEmpty)
-                              ? Image.network(coverUrl, fit: BoxFit.cover)
-                              : Container(
-                                  color: cs.primaryContainer.withOpacity(0.3),
-                                  child: Icon(_getCategoryIcon(template.category), color: cs.primary, size: 24),
-                                ),
-                    ),
-                    if (template.isFeatured)
-                      Positioned(
-                        top: 4,
-                        left: 4,
-                        child: Container(
-                          padding: const EdgeInsets.all(2),
-                          decoration: const BoxDecoration(color: Colors.amber, shape: BoxShape.circle),
-                          child: const Icon(Icons.star, size: 8, color: Colors.white),
-                        ),
-                      ),
-                  ],
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(26),
+          child: BackdropFilter(
+            filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+            child: Container(
+              padding: const EdgeInsets.all(18),
+              decoration: BoxDecoration(
+                color: (isDark ? Colors.white : cs.surfaceContainerHighest).withOpacity(isDark ? 0.05 : 0.55),
+                borderRadius: BorderRadius.circular(26),
+                border: Border.all(
+                  color: isDark ? Colors.white.withOpacity(0.10) : cs.outlineVariant.withOpacity(0.85),
                 ),
               ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  Text(
+                    'No templates found',
+                    style: AppTypography.subtitle1.copyWith(
+                      color: isDark ? Colors.white : cs.onSurface,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Try clearing filters or searching with voice.',
+                    style: AppTypography.body2.copyWith(
+                      color: isDark ? Colors.white.withOpacity(0.75) : cs.onSurfaceVariant,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
                   Row(
                     children: [
                       Expanded(
-                        child: Text(
-                          template.name,
-                          style: AppTypography.subtitle2.copyWith(fontWeight: FontWeight.w900, color: cs.onSurface),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
+                        child: OutlinedButton(
+                          onPressed: _resetFilters,
+                          child: const Text('Clear filters'),
                         ),
                       ),
-                      Text(
-                        template.price > 0 ? '\$${template.price.toStringAsFixed(0)}' : 'FREE',
-                        style: AppTypography.caption.copyWith(color: cs.primary, fontWeight: FontWeight.w900),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    template.category,
-                    style: AppTypography.caption.copyWith(fontSize: 10, color: cs.onSurfaceVariant),
-                  ),
-                  const SizedBox(height: 6),
-                  Row(
-                    children: [
-                      Icon(Icons.star_rounded, size: 14, color: Colors.amber[700]),
-                      const SizedBox(width: 4),
-                      Text(
-                        template.rating.toStringAsFixed(1),
-                        style: AppTypography.caption.copyWith(fontWeight: FontWeight.bold),
-                      ),
                       const SizedBox(width: 12),
-                      Icon(Icons.download_rounded, size: 14, color: cs.onSurfaceVariant),
-                      const SizedBox(width: 4),
-                      Text(
-                        '${template.downloads}',
-                        style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant),
+                      Expanded(
+                        child: FilledButton.icon(
+                          onPressed: () => _toggleVoiceSearch(),
+                          icon: const Icon(Icons.mic_rounded, size: 18),
+                          label: const Text('Try voice'),
+                        ),
                       ),
                     ],
                   ),
                 ],
               ),
             ),
-            Column(
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final hasResults = _getFilteredTemplates().isNotEmpty;
+    return Scaffold(
+      backgroundColor: isDark ? const Color(0xFF05060A) : cs.surface,
+      body: Stack(
+        children: [
+          Positioned.fill(
+            child: AnimatedBuilder(
+              animation: _introAnim,
+              builder: (context, _) => CustomPaint(
+                painter: _MarketplaceMeshPainter(
+                  color1: AppColors.primary.withOpacity(isDark ? 0.10 : 0.08),
+                  color2: AppColors.secondary.withOpacity(isDark ? 0.05 : 0.04),
+                  progress: _introAnim.value,
+                ),
+              ),
+            ),
+          ),
+          CustomScrollView(
+            physics: const BouncingScrollPhysics(),
+            slivers: [
+              _buildHeader(),
+              _buildSearchSection(),
+              _buildTopTemplatesCarousel(),
+              _buildFeaturedCarousel(),
+              if (!_loading && !hasResults) _buildEmptyState(),
+              if (_loading || hasResults) (_isGridView ? _buildTemplateGrid() : _buildTemplatesList()),
+              const SliverToBoxAdapter(child: SizedBox(height: 120)),
+            ],
+          ),
+          _buildCompareTray(cs),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeader() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cs = Theme.of(context).colorScheme;
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 60, 24, 24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.primary.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: AppColors.primary.withOpacity(0.2)),
+              ),
+              child: Text(
+                'NEURAL REPOSITORY',
+                style: AppTypography.labelSmall.copyWith(
+                  color: AppColors.primary,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 2,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'GAME\nSTACKS.',
+              style: AppTypography.displayLarge.copyWith(
+                color: isDark ? Colors.white : cs.onSurface,
+                height: 0.9,
+                letterSpacing: -2,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSearchSection() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cs = Theme.of(context).colorScheme;
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
-                IconButton(
-                  onPressed: () => _toggleSaved(template),
-                  icon: Icon(
-                    saved ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                    color: saved ? Colors.redAccent : cs.onSurfaceVariant,
-                    size: 20,
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(24),
+                    child: BackdropFilter(
+                      filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                      child: Container(
+                        padding: const EdgeInsets.all(4),
+                        decoration: BoxDecoration(
+                          color: (isDark ? Colors.white : cs.surfaceContainerHighest).withOpacity(isDark ? 0.05 : 0.55),
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(
+                            color: _isListening
+                                ? AppColors.primary.withOpacity(0.55)
+                                : (isDark ? Colors.white.withOpacity(0.1) : cs.outlineVariant.withOpacity(0.85)),
+                            width: _isListening ? 1.6 : 1.0,
+                          ),
+                          boxShadow: _isListening
+                              ? [
+                                  BoxShadow(
+                                    color: AppColors.primary.withOpacity(0.35),
+                                    blurRadius: 26,
+                                    spreadRadius: 1,
+                                    offset: const Offset(0, 14),
+                                  ),
+                                ]
+                              : const [],
+                        ),
+                        child: TextField(
+                          controller: _searchController,
+                          style: TextStyle(color: isDark ? Colors.white : cs.onSurface),
+                          decoration: InputDecoration(
+                            hintText: 'Search Neural Templates...',
+                            hintStyle: TextStyle(
+                              color: isDark ? Colors.white.withOpacity(0.3) : cs.onSurfaceVariant,
+                            ),
+                            prefixIcon: Icon(Icons.search_rounded, color: AppColors.primary.withOpacity(0.7)),
+                            suffixIcon: Tooltip(
+                              message: _speechAvailable ? '' : 'Voice search not available',
+                              child: IconButton(
+                                onPressed: _speechAvailable ? () => _toggleVoiceSearch() : () => _initSpeech(),
+                                icon: AnimatedSwitcher(
+                                  duration: const Duration(milliseconds: 180),
+                                  child: Icon(
+                                    _isListening ? Icons.mic_rounded : Icons.mic_none_rounded,
+                                    key: ValueKey(_isListening),
+                                    color: _isListening ? AppColors.primary : (isDark ? Colors.white70 : cs.onSurfaceVariant),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
                 ),
-                const SizedBox(height: 8),
-                IconButton(
-                  onPressed: () => _toggleCompare(template),
-                  icon: Icon(
-                    compared ? Icons.check_circle_rounded : Icons.compare_arrows_rounded,
-                    color: compared ? cs.primary : cs.onSurfaceVariant,
-                    size: 20,
-                  ),
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(),
+                const SizedBox(width: 8),
+                _compactIconButton(
+                  onPressed: _openFiltersSheet,
+                  icon: Icons.tune_rounded,
+                  color: Colors.white,
                 ),
+                _compactIconButton(
+                  onPressed: () => setState(() => _isGridView = !_isGridView),
+                  icon: _isGridView ? Icons.grid_view_rounded : Icons.view_list_rounded,
+                  color: Colors.white,
+                ),
+                _compactIconButton(
+                  onPressed: _openAiFinder,
+                  icon: Icons.auto_awesome_rounded,
+                  color: Colors.white,
+                ),
+                _compactIconButton(
+                  onPressed: _openSaved,
+                  icon: _showSavedOnly ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                  color: _showSavedOnly ? Colors.redAccent : Colors.white,
+                ),
+              ],
+            ),
+            if (_isListening) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Listening…',
+                style: AppTypography.caption.copyWith(
+                  color: AppColors.primary.withOpacity(0.95),
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            _buildCategoryChips(),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Expanded(child: _buildProFilterChips()),
+                const SizedBox(width: 8),
+                _buildSortDropdown(),
               ],
             ),
           ],
@@ -1389,252 +1343,330 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> {
     );
   }
 
-  Widget _buildTemplatesList() {
-    final filteredTemplates = _getFilteredTemplates();
-    
-    return Column(
-      children: filteredTemplates.map((template) {
-        return Padding(
-          padding: const EdgeInsets.only(bottom: AppSpacing.lg),
-          child: _buildTemplateListItem(template),
-        );
-      }).toList(),
+  Widget _compactIconButton({
+    required VoidCallback onPressed,
+    required IconData icon,
+    required Color color,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return IconButton(
+      onPressed: onPressed,
+      icon: Icon(icon, color: isDark ? color : cs.onSurface),
+      padding: EdgeInsets.zero,
+      constraints: const BoxConstraints.tightFor(width: 40, height: 40),
+      splashRadius: 20,
+      iconSize: 22,
+      visualDensity: VisualDensity.compact,
     );
   }
 
-  Widget _buildTemplateCard(GameTemplate template) {
-    final cs = Theme.of(context).colorScheme;
-    final coverUrl = _resolveMediaUrl(template.imageUrl);
-    final videoUrl = _resolveMediaUrl(template.previewVideoUrl);
-    final badges = _compatBadges(template);
-    final saved = _savedTemplateIds.contains(template.id);
-    final compared = _compareSelection.any((t) => t.id == template.id);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final priceText = template.price > 0 ? '\$${template.price.toStringAsFixed(0)}' : 'FREE';
+  Widget _buildCategoryChips() {
+    return SizedBox(
+      height: 38,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: _categories.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (context, i) {
+          final c = _categories[i];
+          final selected = c == _selectedCategory;
+          return _AnimatedChoiceChip(
+            label: c,
+            selected: selected,
+            onTap: () {
+              if (_selectedCategory == c) return;
+              setState(() => _selectedCategory = c);
+              _loadTemplates();
+            },
+          );
+        },
+      ),
+    );
+  }
 
-    return _PressableGlow(
-      onTap: () => context.go('/template/${template.id}'),
-      onLongPress: () => _toggleCompare(template),
-      child: Container(
-        decoration: BoxDecoration(
-          borderRadius: BorderRadius.circular(22),
-          color: cs.surface.withOpacity(isDark ? 0.36 : 0.72),
-          border: Border.all(color: cs.outlineVariant.withOpacity(0.26)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(isDark ? 0.22 : 0.10),
-              blurRadius: 22,
-              offset: const Offset(0, 12),
+  Widget _buildProFilterChips() {
+    return SizedBox(
+      height: 38,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: _proFilters.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 10),
+        itemBuilder: (context, i) {
+          final f = _proFilters[i];
+          final selected = f == _proFilter;
+          return _AnimatedChoiceChip(
+            label: f,
+            selected: selected,
+            onTap: () {
+              if (_proFilter == f) return;
+              setState(() => _proFilter = f);
+            },
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildSortDropdown() {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(16),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+          decoration: BoxDecoration(
+            color: (isDark ? Colors.white : cs.surfaceContainerHighest).withOpacity(isDark ? 0.05 : 0.55),
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(
+              color: isDark ? Colors.white.withOpacity(0.10) : cs.outlineVariant.withOpacity(0.85),
             ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(22),
-          child: Stack(
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  AspectRatio(
-                    aspectRatio: 16 / 10,
-                    child: Stack(
-                      children: [
-                        Positioned.fill(
-                          child: (videoUrl != null && videoUrl.trim().isNotEmpty)
-                              ? InlineAutoplayVideo(
-                                  url: videoUrl,
-                                  fallbackImageUrl: coverUrl,
-                                  fallbackIcon: _getCategoryIcon(template.category),
-                                )
-                              : (coverUrl != null && coverUrl.trim().isNotEmpty)
-                                  ? Image.network(
-                                      coverUrl,
-                                      fit: BoxFit.cover,
-                                      errorBuilder: (context, error, stackTrace) {
-                                        return Container(
-                                          decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
-                                          child: Center(
-                                            child: Icon(
-                                              _getCategoryIcon(template.category),
-                                              size: 34,
-                                              color: cs.onPrimary.withOpacity(0.82),
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                    )
-                                  : Container(
-                                      decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
-                                      child: Center(
-                                        child: Icon(
-                                          _getCategoryIcon(template.category),
-                                          size: 34,
-                                          color: cs.onPrimary.withOpacity(0.82),
-                                        ),
-                                      ),
-                                    ),
-                        ),
-                        Positioned.fill(
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  Colors.black.withOpacity(0.00),
-                                  Colors.black.withOpacity(0.22),
-                                  Colors.black.withOpacity(0.62),
-                                ],
-                                begin: Alignment.topCenter,
-                                end: Alignment.bottomCenter,
-                              ),
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          left: 10,
-                          bottom: 10,
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (template.isFeatured)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    gradient: LinearGradient(colors: [cs.primary, cs.secondary]),
-                                    borderRadius: BorderRadius.circular(999),
-                                  ),
-                                  child: Text(
-                                    'FEATURED',
-                                    style: AppTypography.caption.copyWith(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w900,
-                                      fontSize: 10,
-                                    ),
-                                  ),
-                                ),
-                              if (template.isFeatured) const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: Colors.black.withOpacity(0.34),
-                                  borderRadius: BorderRadius.circular(999),
-                                  border: Border.all(color: Colors.white.withOpacity(0.18)),
-                                ),
-                                child: Text(
-                                  priceText,
-                                  style: AppTypography.caption.copyWith(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w900,
-                                    fontSize: 10,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          template.name,
-                          style: AppTypography.subtitle2.copyWith(fontWeight: FontWeight.w900, color: cs.onSurface),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                template.category,
-                                style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                            Icon(Icons.star_rounded, size: 14, color: Colors.amber[700]),
-                            const SizedBox(width: 4),
-                            Text(
-                              template.rating.toStringAsFixed(1),
-                              style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w800),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 8),
-                        Row(
-                          children: [
-                            if (badges.isNotEmpty)
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: cs.primary.withOpacity(0.10),
-                                  borderRadius: BorderRadius.circular(999),
-                                  border: Border.all(color: cs.primary.withOpacity(0.16)),
-                                ),
-                                child: Text(
-                                  badges.first.label,
-                                  style: AppTypography.caption.copyWith(color: cs.primary, fontWeight: FontWeight.w900, fontSize: 10),
-                                ),
-                              ),
-                            if (badges.isNotEmpty) const SizedBox(width: 8),
-                            Icon(Icons.download_rounded, size: 14, color: cs.onSurfaceVariant),
-                            const SizedBox(width: 4),
-                            Expanded(
-                              child: Text(
-                                '${template.downloads}',
-                                style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w800),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<String>(
+              dropdownColor: isDark ? const Color(0xFF0B0D14) : cs.surface,
+              value: _sortBy,
+              items: _sortOptions.map((o) {
+                return DropdownMenuItem(
+                  value: o,
+                  child: Text(o),
+                );
+              }).toList(),
+              onChanged: (v) {
+                if (v == null) return;
+                setState(() => _sortBy = v);
+              },
+              style: AppTypography.caption.copyWith(
+                color: isDark ? Colors.white : cs.onSurface,
+                fontWeight: FontWeight.w900,
               ),
-              Positioned(
-                top: 10,
-                right: 10,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    GestureDetector(
-                      onTap: () => _toggleCompare(template),
-                      child: Container(
-                        padding: const EdgeInsets.all(7),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.34),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white.withOpacity(0.18)),
+              iconEnabledColor: isDark ? Colors.white70 : cs.onSurfaceVariant,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _formatPrice(double price) {
+    if (price <= 0) return 'FREE';
+    final p = price.toStringAsFixed(price == price.roundToDouble() ? 0 : 2);
+    return '\$$p';
+  }
+
+  Widget _buildMetaRow(GameTemplate t) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: (isDark ? Colors.black : cs.surfaceContainerHighest).withOpacity(isDark ? 0.28 : 0.70),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: isDark ? Colors.white.withOpacity(0.12) : cs.outlineVariant.withOpacity(0.85),
+            ),
+          ),
+          child: Text(
+            _formatPrice(t.price),
+            style: AppTypography.caption.copyWith(
+              color: isDark ? Colors.white : cs.onSurface,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 0.2,
+            ),
+          ),
+        ),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+          decoration: BoxDecoration(
+            color: (isDark ? Colors.black : cs.surfaceContainerHighest).withOpacity(isDark ? 0.22 : 0.65),
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(
+              color: isDark ? Colors.white.withOpacity(0.10) : cs.outlineVariant.withOpacity(0.80),
+            ),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Icon(Icons.star_rounded, size: 14, color: Colors.amber),
+              const SizedBox(width: 4),
+              Text(
+                t.rating.toStringAsFixed(1),
+                style: AppTypography.caption.copyWith(
+                  color: isDark ? Colors.white : cs.onSurface,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Icon(
+                Icons.download_rounded,
+                size: 14,
+                color: isDark ? Colors.white.withOpacity(0.8) : cs.onSurfaceVariant,
+              ),
+              const SizedBox(width: 4),
+              Text(
+                '${t.downloads}',
+                style: AppTypography.caption.copyWith(
+                  color: isDark ? Colors.white.withOpacity(0.9) : cs.onSurface,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTemplateGrid() {
+    if (_loading) {
+      return const SliverToBoxAdapter(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: _MarketplaceSkeleton(isGrid: true),
+        ),
+      );
+    }
+    final list = _getFilteredTemplates();
+    return SliverPadding(
+      padding: EdgeInsets.all(_compactGrid ? 16 : 24),
+      sliver: SliverGrid(
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          mainAxisSpacing: _compactGrid ? 14 : 20,
+          crossAxisSpacing: _compactGrid ? 14 : 20,
+          childAspectRatio: _compactGrid ? 0.86 : 0.75,
+        ),
+        delegate: SliverChildBuilderDelegate(
+          (context, index) => _buildTemplateCard(list[index]),
+          childCount: list.length,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTemplateCard(GameTemplate t) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final saved = _savedTemplateIds.contains(t.id);
+    final compared = _compareSelection.any((x) => x.id == t.id);
+    final coverUrl = _resolveMediaUrl(t.imageUrl);
+    return AnimatedCard(
+      child: GestureDetector(
+        onTap: () => context.push('/template/${t.id}'),
+        child: Container(
+          decoration: BoxDecoration(
+            color: (isDark ? Colors.white : cs.onSurface).withOpacity(isDark ? 0.03 : 0.05),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(
+              color: isDark ? Colors.white.withOpacity(0.05) : cs.outlineVariant.withOpacity(0.8),
+            ),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(24),
+                  child: Stack(
+                    children: [
+                      Positioned.fill(
+                        child: coverUrl != null && coverUrl.isNotEmpty
+                            ? Image.network(
+                                coverUrl,
+                                fit: BoxFit.cover,
+                                errorBuilder: (context, error, stackTrace) {
+                                  return Container(color: AppColors.primary.withOpacity(0.2));
+                                },
+                              )
+                            : Container(color: AppColors.primary.withOpacity(0.2)),
+                      ),
+                      if (t.isDevOwner)
+                        const Positioned(
+                          top: 8,
+                          left: 8,
+                          child: _DevBadge.compact(),
                         ),
-                        child: Icon(
-                          compared ? Icons.check_circle_rounded : Icons.compare_arrows_rounded,
-                          color: compared ? cs.primary : Colors.white,
-                          size: 18,
+                      if (t.isFeatured)
+                        const Positioned(
+                          top: 8,
+                          left: 72,
+                          child: _FeaturedBadge(),
+                        ),
+                      Positioned(
+                        left: 10,
+                        right: 10,
+                        bottom: 10,
+                        child: _buildMetaRow(t),
+                      ),
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: Row(
+                          children: [
+                            GestureDetector(
+                              onTap: () => _toggleCompare(t),
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: (isDark ? Colors.black : cs.surface).withOpacity(isDark ? 0.26 : 0.7),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  compared ? Icons.check_circle : Icons.compare_arrows,
+                                  size: 16,
+                                  color: compared ? AppColors.primary : (isDark ? Colors.white : cs.onSurface),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            GestureDetector(
+                              onTap: () => _toggleSaved(t),
+                              child: Container(
+                                padding: const EdgeInsets.all(4),
+                                decoration: BoxDecoration(
+                                  color: (isDark ? Colors.black : cs.surface).withOpacity(isDark ? 0.26 : 0.7),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Icon(
+                                  saved ? Icons.favorite : Icons.favorite_border,
+                                  size: 16,
+                                  color: saved ? Colors.redAccent : (isDark ? Colors.white : cs.onSurface),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ),
+                    ],
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      t.name.toUpperCase(),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.labelLarge.copyWith(
+                        color: isDark ? Colors.white : cs.onSurface,
+                        fontSize: 11,
+                      ),
                     ),
-                    const SizedBox(width: 8),
-                    GestureDetector(
-                      onTap: () => _toggleSaved(template),
-                      child: Container(
-                        padding: const EdgeInsets.all(7),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.34),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.white.withOpacity(0.18)),
-                        ),
-                        child: Icon(
-                          saved ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                          color: saved ? Colors.redAccent : Colors.white,
-                          size: 18,
-                        ),
+                    const SizedBox(height: 2),
+                    Text(
+                      t.category.toUpperCase(),
+                      style: AppTypography.labelSmall.copyWith(
+                        color: isDark ? AppColors.primary : cs.primary,
+                        fontSize: 8,
                       ),
                     ),
                   ],
@@ -1647,78 +1679,33 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> {
     );
   }
 
-  List<GameTemplate> _getFilteredTemplates() {
-    List<GameTemplate> templates = _templates;
-
-    if (_showSavedOnly) {
-      templates = templates.where((t) => _savedTemplateIds.contains(t.id)).toList();
-    }
-
-    if (_selectedCategory != 'All') {
-      templates = templates.where((t) => t.category == _selectedCategory).toList();
-    }
-
-    if (_proFilter != 'All') {
-      switch (_proFilter) {
-        case 'Featured':
-          templates = templates.where((t) => t.isFeatured).toList();
-          break;
-        case 'Mobile-ready':
-          templates = templates.where((t) => _compatBadges(t).any((b) => b.label == 'Mobile')).toList();
-          break;
-        case 'Free':
-          templates = templates.where((t) => t.price <= 0.0).toList();
-          break;
-        case 'Paid':
-          templates = templates.where((t) => t.price > 0.0).toList();
-          break;
-        case '2D':
-          templates = templates.where((t) => _compatBadges(t).any((b) => b.label == '2D')).toList();
-          break;
-        case '3D':
-          templates = templates.where((t) => _compatBadges(t).any((b) => b.label == '3D')).toList();
-          break;
-      }
-    }
-
-    final searchQuery = _searchController.text.trim().toLowerCase();
-    if (searchQuery.isNotEmpty) {
-      final tokens = searchQuery.split(RegExp(r'\s+')).where((t) => t.isNotEmpty).toList();
-      int score(GameTemplate t) {
-        final hay = '${t.name} ${t.description} ${t.category} ${t.tags.join(' ')} ${t.creator}'.toLowerCase();
-        int s = 0;
-        for (final tok in tokens) {
-          if (t.name.toLowerCase().contains(tok)) s += 6;
-          if (t.tags.any((x) => x.toLowerCase().contains(tok))) s += 4;
-          if (t.description.toLowerCase().contains(tok)) s += 2;
-          if (hay.contains(tok)) s += 1;
-        }
-        return s;
-      }
-
-      templates = templates.where((t) => score(t) > 0).toList();
-      templates.sort((a, b) => score(b).compareTo(score(a)));
-    }
-
-    switch (_sortBy) {
-      case 'Popular':
-        templates.sort((a, b) => b.downloads.compareTo(a.downloads));
-        break;
-      case 'Newest':
-        templates.sort((a, b) => b.createdAt.compareTo(a.createdAt));
-        break;
-      case 'Rating':
-        templates.sort((a, b) => b.rating.compareTo(a.rating));
-        break;
-      case 'Downloads':
-        templates.sort((a, b) => b.downloads.compareTo(a.downloads));
-        break;
-      case 'Price':
-        templates.sort((a, b) => a.price.compareTo(b.price));
-        break;
-    }
-
-    return templates;
+  Widget _buildCompareTray(ColorScheme cs) {
+    if (!_compareTrayVisible) return const SizedBox.shrink();
+    return Positioned(
+      left: 0,
+      right: 0,
+      bottom: 0,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: cs.surface.withOpacity(0.95),
+          border: Border(top: BorderSide(color: cs.outlineVariant)),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Text(
+                '${_compareSelection.length} selected for comparison',
+                style: AppTypography.body2,
+              ),
+            ),
+            TextButton(onPressed: _clearCompare, child: const Text('Clear')),
+            const SizedBox(width: 8),
+            ElevatedButton(onPressed: _openCompareSheet, child: const Text('Compare')),
+          ],
+        ),
+      ),
+    );
   }
 
   Future<void> _openCompareSheet() async {
@@ -1731,322 +1718,36 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> {
         return StatefulBuilder(
           builder: (context, setSheetState) {
             var compared = List<GameTemplate>.from(_compareSelection);
-
             return DraggableScrollableSheet(
               initialChildSize: 0.78,
               minChildSize: 0.50,
               maxChildSize: 0.94,
               builder: (context, scrollController) {
-                final isDark = Theme.of(context).brightness == Brightness.dark;
-
-                Widget compareCard(GameTemplate t, int index) {
-                  final badges = _compatBadges(t);
-                  final coverUrl = _resolveMediaUrl(t.imageUrl);
-                  return AnimatedCard(
-                    delay: Duration(milliseconds: 40 + (index.clamp(0, 10) * 35)),
-                    child: Container(
-                      padding: const EdgeInsets.all(AppSpacing.lg),
-                      decoration: BoxDecoration(
-                        color: cs.surfaceContainerHighest.withOpacity(isDark ? 0.18 : 0.22),
-                        borderRadius: BorderRadius.circular(22),
-                        border: Border.all(color: cs.outlineVariant.withOpacity(0.22)),
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(16),
-                                child: SizedBox(
-                                  width: 88,
-                                  height: 68,
-                                  child: Stack(
-                                    children: [
-                                      Positioned.fill(
-                                        child: (coverUrl != null && coverUrl.trim().isNotEmpty)
-                                            ? Image.network(coverUrl, fit: BoxFit.cover)
-                                            : Container(
-                                                decoration: BoxDecoration(
-                                                  gradient: LinearGradient(
-                                                    colors: [cs.primary.withOpacity(0.35), cs.secondary.withOpacity(0.20)],
-                                                    begin: Alignment.topLeft,
-                                                    end: Alignment.bottomRight,
-                                                  ),
-                                                ),
-                                                child: Center(
-                                                  child: Icon(_getCategoryIcon(t.category), color: cs.primary, size: 22),
-                                                ),
-                                              ),
-                                      ),
-                                      Positioned.fill(
-                                        child: DecoratedBox(
-                                          decoration: BoxDecoration(
-                                            gradient: LinearGradient(
-                                              colors: [
-                                                Colors.black.withOpacity(0.0),
-                                                Colors.black.withOpacity(0.40),
-                                              ],
-                                              begin: Alignment.topCenter,
-                                              end: Alignment.bottomCenter,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      if (t.isFeatured)
-                                        Positioned(
-                                          top: 6,
-                                          left: 6,
-                                          child: Container(
-                                            padding: const EdgeInsets.all(4),
-                                            decoration: const BoxDecoration(color: Colors.amber, shape: BoxShape.circle),
-                                            child: const Icon(Icons.star_rounded, size: 10, color: Colors.white),
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            t.name,
-                                            style: AppTypography.subtitle2.copyWith(fontWeight: FontWeight.w900),
-                                            maxLines: 2,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                        const SizedBox(width: 10),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                          decoration: BoxDecoration(
-                                            color: t.price > 0
-                                                ? cs.primary.withOpacity(0.14)
-                                                : AppColors.success.withOpacity(0.14),
-                                            borderRadius: BorderRadius.circular(999),
-                                            border: Border.all(color: cs.outlineVariant.withOpacity(0.35)),
-                                          ),
-                                          child: Text(
-                                            t.price > 0 ? '\$${t.price.toStringAsFixed(0)}' : 'FREE',
-                                            style: AppTypography.caption.copyWith(fontWeight: FontWeight.w900, color: cs.onSurface),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      t.category,
-                                      style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              IconButton(
-                                tooltip: 'Remove',
-                                onPressed: () {
-                                  _toggleCompare(t);
-                                  setSheetState(() {
-                                    compared = List<GameTemplate>.from(_compareSelection);
-                                  });
-                                  if (_compareSelection.isEmpty && context.mounted) {
-                                    Navigator.of(context).pop();
-                                  }
-                                },
-                                icon: Icon(Icons.close_rounded, color: cs.onSurfaceVariant),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          Wrap(
-                            spacing: 8,
-                            runSpacing: 8,
-                            children: [
-                              ...badges.take(3).map(
-                                (b) => Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                  decoration: BoxDecoration(
-                                    color: cs.primary.withOpacity(0.10),
-                                    borderRadius: BorderRadius.circular(999),
-                                    border: Border.all(color: cs.primary.withOpacity(0.18)),
-                                  ),
-                                  child: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Icon(b.icon, size: 14, color: cs.primary),
-                                      const SizedBox(width: 6),
-                                      Text(b.label, style: AppTypography.caption.copyWith(color: cs.primary, fontWeight: FontWeight.w800)),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                decoration: BoxDecoration(
-                                  color: cs.surfaceContainerHighest.withOpacity(0.35),
-                                  borderRadius: BorderRadius.circular(999),
-                                  border: Border.all(color: cs.outlineVariant.withOpacity(0.45)),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    const Icon(Icons.star_rounded, size: 14, color: AppColors.warning),
-                                    const SizedBox(width: 6),
-                                    Text(t.rating.toStringAsFixed(1), style: AppTypography.caption.copyWith(fontWeight: FontWeight.w900)),
-                                    const SizedBox(width: 12),
-                                    Icon(Icons.download_rounded, size: 14, color: cs.onSurfaceVariant),
-                                    const SizedBox(width: 6),
-                                    Text('${t.downloads}', style: AppTypography.caption.copyWith(fontWeight: FontWeight.w800)),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          Text(
-                            t.description,
-                            style: AppTypography.body2.copyWith(color: cs.onSurfaceVariant, height: 1.3),
-                            maxLines: 3,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: CustomButton(
-                                  text: 'View details',
-                                  onPressed: () {
-                                    Navigator.of(context).pop();
-                                    context.go('/template/${t.id}');
-                                  },
-                                  type: ButtonType.primary,
-                                  size: ButtonSize.small,
-                                  icon: const Icon(Icons.open_in_new_rounded),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                  );
-                }
-
                 return Container(
                   decoration: BoxDecoration(
                     borderRadius: const BorderRadius.vertical(top: Radius.circular(AppBorderRadius.xlarge)),
-                    gradient: LinearGradient(
-                      colors: [
-                        cs.surface.withOpacity(0.96),
-                        cs.surfaceContainerHighest.withOpacity(0.92),
-                      ],
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                    ),
-                    border: Border(top: BorderSide(color: cs.outlineVariant.withOpacity(0.6))),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.18),
-                        blurRadius: 26,
-                        offset: const Offset(0, -10),
-                      ),
-                    ],
+                    color: cs.surface,
+                    border: Border(top: BorderSide(color: cs.outlineVariant)),
                   ),
                   child: Column(
                     children: [
-                      const SizedBox(height: 10),
-                      Container(
-                        width: 44,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: cs.onSurfaceVariant.withOpacity(0.35),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                      ),
                       const SizedBox(height: 12),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 38,
-                              height: 38,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(14),
-                                gradient: LinearGradient(colors: [cs.primary, cs.secondary]),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: cs.primary.withOpacity(0.22),
-                                    blurRadius: 18,
-                                    offset: const Offset(0, 10),
-                                  ),
-                                ],
-                              ),
-                              child: const Icon(Icons.compare_arrows_rounded, color: Colors.white, size: 18),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Compare',
-                                    style: AppTypography.subtitle1.copyWith(fontWeight: FontWeight.w900),
-                                  ),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    '${_compareSelection.length}/3 selected',
-                                    style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            TextButton(
-                              onPressed: () => Navigator.of(context).pop(),
-                              child: const Text('Close'),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 10),
+                      Text('Compare', style: AppTypography.subtitle1),
                       Expanded(
-                        child: ListView.separated(
+                        child: ListView.builder(
                           controller: scrollController,
-                          padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.lg),
                           itemCount: compared.length,
-                          separatorBuilder: (_, __) => const SizedBox(height: 12),
-                          itemBuilder: (context, i) => compareCard(compared[i], i),
-                        ),
-                      ),
-                      Padding(
-                        padding: EdgeInsets.only(
-                          left: AppSpacing.lg,
-                          right: AppSpacing.lg,
-                          bottom: MediaQuery.of(context).padding.bottom + AppSpacing.lg,
-                        ),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: CustomButton(
-                                text: 'Clear all',
-                                onPressed: () {
-                                  Navigator.of(context).pop();
-                                  _clearCompare();
-                                },
-                                type: ButtonType.secondary,
-                                size: ButtonSize.small,
-                                icon: const Icon(Icons.delete_sweep_rounded),
-                              ),
+                          itemBuilder: (context, i) => ListTile(
+                            title: Text(compared[i].name),
+                            trailing: IconButton(
+                              icon: const Icon(Icons.close),
+                              onPressed: () {
+                                _toggleCompare(compared[i]);
+                                setSheetState(() => compared = List<GameTemplate>.from(_compareSelection));
+                                if (compared.isEmpty) Navigator.pop(context);
+                              },
                             ),
-                          ],
+                          ),
                         ),
                       ),
                     ],
@@ -2061,567 +1762,137 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> {
   }
 
   Future<void> _openAiFinder() async {
-    final promptController = TextEditingController();
-
-    await showModalBottomSheet<void>(
+    showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) {
-        return Padding(
-          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-          child: _AiFinderSheet(
-            controller: promptController,
-            onPick: (t) {
-              Navigator.of(context).pop();
-              context.go('/template/${t.id}');
-            },
-            onSearch: (prompt) async {
-              final token = context.read<AuthProvider>().token;
-
-              String? derivedCategory;
-              final derivedTags = <String>[];
-              if (token != null && token.trim().isNotEmpty) {
-                try {
-                  final res = await AiService.generateTemplateDraft(token: token, description: prompt);
-                  if (res['success'] == true && res['data'] is Map) {
-                    final data = Map<String, dynamic>.from(res['data'] as Map);
-                    derivedCategory = data['category']?.toString();
-                    final tagsRaw = data['tags'];
-                    if (tagsRaw is List) {
-                      derivedTags.addAll(tagsRaw.map((e) => e?.toString() ?? '').where((e) => e.trim().isNotEmpty));
-                    }
-                  }
-                } catch (_) {}
-              }
-
-              List<GameTemplate> ranked = [..._templates];
-
-              int score(GameTemplate t) {
-                int s = 0;
-                final hay = '${t.name} ${t.description} ${t.category} ${t.tags.join(' ')} ${t.creator}'.toLowerCase();
-                final tokens = prompt.toLowerCase().split(RegExp(r'\s+')).where((x) => x.isNotEmpty).toList();
-                for (final tok in tokens) {
-                  if (t.name.toLowerCase().contains(tok)) s += 6;
-                  if (t.tags.any((x) => x.toLowerCase().contains(tok))) s += 4;
-                  if (t.description.toLowerCase().contains(tok)) s += 2;
-                  if (hay.contains(tok)) s += 1;
-                }
-                if (derivedCategory != null && derivedCategory!.trim().isNotEmpty) {
-                  if (t.category.toLowerCase() == derivedCategory!.trim().toLowerCase()) s += 10;
-                }
-                for (final dt in derivedTags) {
-                  if (t.tags.any((x) => x.toLowerCase() == dt.toLowerCase())) s += 6;
-                }
-                if (t.isFeatured) s += 1;
-                return s;
-              }
-
-              ranked.sort((a, b) => score(b).compareTo(score(a)));
-              return ranked.take(10).toList();
-            },
-          ),
-        );
-      },
-    );
-
-    promptController.dispose();
-  }
-
-  Future<void> _openSaved() async {
-    final cs = Theme.of(context).colorScheme;
-    var saved = _templates.where((t) => _savedTemplateIds.contains(t.id)).toList();
-
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            return DraggableScrollableSheet(
-              initialChildSize: 0.72,
-              minChildSize: 0.4,
-              maxChildSize: 0.92,
-              builder: (context, scrollController) {
-                Widget savedTile(GameTemplate t, int index) {
-                  final coverUrl = _resolveMediaUrl(t.imageUrl);
-                  final isDark = Theme.of(context).brightness == Brightness.dark;
-                  return AnimatedCard(
-                    delay: Duration(milliseconds: 40 + (index.clamp(0, 10) * 35)),
-                    child: Container(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(20),
-                        color: cs.surfaceContainerHighest.withOpacity(isDark ? 0.18 : 0.22),
-                        border: Border.all(color: cs.outlineVariant.withOpacity(0.22)),
-                      ),
-                      child: InkWell(
-                        onTap: () {
-                          Navigator.of(context).pop();
-                          context.go('/template/${t.id}');
-                        },
-                        borderRadius: BorderRadius.circular(20),
-                        child: Padding(
-                          padding: const EdgeInsets.all(12),
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(14),
-                                child: SizedBox(
-                                  width: 96,
-                                  height: 72,
-                                  child: Stack(
-                                    children: [
-                                      Positioned.fill(
-                                        child: (coverUrl != null && coverUrl.trim().isNotEmpty)
-                                            ? Image.network(coverUrl, fit: BoxFit.cover)
-                                            : Container(
-                                                decoration: BoxDecoration(
-                                                  gradient: LinearGradient(
-                                                    colors: [cs.primary.withOpacity(0.35), cs.secondary.withOpacity(0.20)],
-                                                    begin: Alignment.topLeft,
-                                                    end: Alignment.bottomRight,
-                                                  ),
-                                                ),
-                                                child: Center(
-                                                  child: Icon(_getCategoryIcon(t.category), color: cs.primary, size: 22),
-                                                ),
-                                              ),
-                                      ),
-                                      Positioned.fill(
-                                        child: DecoratedBox(
-                                          decoration: BoxDecoration(
-                                            gradient: LinearGradient(
-                                              colors: [
-                                                Colors.black.withOpacity(0.0),
-                                                Colors.black.withOpacity(0.35),
-                                              ],
-                                              begin: Alignment.topCenter,
-                                              end: Alignment.bottomCenter,
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                      if (t.isFeatured)
-                                        Positioned(
-                                          top: 6,
-                                          left: 6,
-                                          child: Container(
-                                            padding: const EdgeInsets.all(4),
-                                            decoration: const BoxDecoration(color: Colors.amber, shape: BoxShape.circle),
-                                            child: const Icon(Icons.star_rounded, size: 10, color: Colors.white),
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Row(
-                                      children: [
-                                        Expanded(
-                                          child: Text(
-                                            t.name,
-                                            style: AppTypography.subtitle2.copyWith(fontWeight: FontWeight.w900),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                        ),
-                                        Container(
-                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                          decoration: BoxDecoration(
-                                            color: cs.surfaceContainerHighest.withOpacity(0.35),
-                                            borderRadius: BorderRadius.circular(999),
-                                            border: Border.all(color: cs.outlineVariant.withOpacity(0.45)),
-                                          ),
-                                          child: Text(
-                                            t.price > 0 ? '\$${t.price.toStringAsFixed(0)}' : 'FREE',
-                                            style: AppTypography.caption.copyWith(fontWeight: FontWeight.w900),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      t.category,
-                                      style: AppTypography.caption.copyWith(fontSize: 10, color: cs.onSurfaceVariant),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                    ),
-                                    const SizedBox(height: 8),
-                                    Row(
-                                      children: [
-                                        Icon(Icons.star_rounded, size: 14, color: Colors.amber[700]),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          t.rating.toStringAsFixed(1),
-                                          style: AppTypography.caption.copyWith(fontWeight: FontWeight.bold),
-                                        ),
-                                        const SizedBox(width: 12),
-                                        Icon(Icons.download_rounded, size: 14, color: cs.onSurfaceVariant),
-                                        const SizedBox(width: 4),
-                                        Text(
-                                          '${t.downloads}',
-                                          style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              IconButton(
-                                tooltip: 'Remove',
-                                onPressed: () {
-                                  _toggleSaved(t);
-                                  setSheetState(() {
-                                    saved = _templates.where((x) => _savedTemplateIds.contains(x.id)).toList();
-                                  });
-                                },
-                                icon: Icon(Icons.bookmark_remove_rounded, color: cs.onSurfaceVariant),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ),
-                  );
-                }
-
-                return Container(
-                  decoration: BoxDecoration(
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(AppBorderRadius.xlarge)),
-                    gradient: LinearGradient(
-                      colors: [
-                        cs.surface.withOpacity(0.96),
-                        cs.surfaceContainerHighest.withOpacity(0.92),
-                      ],
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                    ),
-                    border: Border(top: BorderSide(color: cs.outlineVariant.withOpacity(0.6))),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.18),
-                        blurRadius: 26,
-                        offset: const Offset(0, -10),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    children: [
-                      const SizedBox(height: 10),
-                      Container(
-                        width: 44,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: cs.onSurfaceVariant.withOpacity(0.35),
-                          borderRadius: BorderRadius.circular(999),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
-                        child: Row(
-                          children: [
-                            Container(
-                              width: 38,
-                              height: 38,
-                              decoration: BoxDecoration(
-                                borderRadius: BorderRadius.circular(14),
-                                gradient: LinearGradient(colors: [cs.primary, cs.secondary]),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: cs.primary.withOpacity(0.22),
-                                    blurRadius: 18,
-                                    offset: const Offset(0, 10),
-                                  ),
-                                ],
-                              ),
-                              child: const Icon(Icons.bookmarks_rounded, color: Colors.white, size: 18),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text('Saved templates', style: AppTypography.subtitle1.copyWith(fontWeight: FontWeight.w900)),
-                                  const SizedBox(height: 2),
-                                  Text(
-                                    '${saved.length} saved',
-                                    style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            TextButton(
-                              onPressed: () => Navigator.of(context).pop(),
-                              child: const Text('Close'),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      Expanded(
-                        child: saved.isEmpty
-                            ? Center(
-                                child: Padding(
-                                  padding: const EdgeInsets.all(AppSpacing.xl),
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      Container(
-                                        width: 74,
-                                        height: 74,
-                                        decoration: BoxDecoration(
-                                          shape: BoxShape.circle,
-                                          gradient: LinearGradient(
-                                            colors: [cs.primary.withOpacity(0.18), cs.secondary.withOpacity(0.10)],
-                                          ),
-                                          border: Border.all(color: cs.outlineVariant.withOpacity(0.4)),
-                                        ),
-                                        child: Icon(Icons.bookmark_add_rounded, color: cs.primary, size: 30),
-                                      ),
-                                      const SizedBox(height: 14),
-                                      Text(
-                                        'No saved templates yet',
-                                        style: AppTypography.subtitle2.copyWith(fontWeight: FontWeight.w900),
-                                        textAlign: TextAlign.center,
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        'Tap the heart icon in Marketplace to save your favorite templates here.',
-                                        style: AppTypography.body2.copyWith(color: cs.onSurfaceVariant, height: 1.35),
-                                        textAlign: TextAlign.center,
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              )
-                            : ListView.separated(
-                                controller: scrollController,
-                                padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.lg),
-                                itemCount: saved.length,
-                                separatorBuilder: (_, __) => const SizedBox(height: 10),
-                                itemBuilder: (context, i) => savedTile(saved[i], i),
-                              ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            );
-          },
-        );
-      },
-    );
-  }
-
-  IconData _getCategoryIcon(String category) {
-    switch (category) {
-      case 'Action':
-        return Icons.flash_on;
-      case 'Puzzle':
-        return Icons.extension;
-      case 'RPG':
-        return Icons.psychology;
-      case 'Strategy':
-        return Icons.lightbulb;
-      case 'Casual':
-        return Icons.casino;
-      case 'Simulation':
-        return Icons.sim_card;
-      case 'Educational':
-        return Icons.school;
-      default:
-        return Icons.games;
-    }
-  }
-}
-
-class _PressableGlow extends StatefulWidget {
-  final Widget child;
-  final VoidCallback? onTap;
-  final VoidCallback? onLongPress;
-
-  const _PressableGlow({
-    required this.child,
-    required this.onTap,
-    required this.onLongPress,
-  });
-
-  @override
-  State<_PressableGlow> createState() => _PressableGlowState();
-}
-
-class _PressableGlowState extends State<_PressableGlow> {
-  bool _down = false;
-
-  void _set(bool v) {
-    if (_down == v) return;
-    setState(() => _down = v);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    return GestureDetector(
-      onTap: widget.onTap,
-      onLongPress: widget.onLongPress,
-      onTapDown: (_) => _set(true),
-      onTapCancel: () => _set(false),
-      onTapUp: (_) => _set(false),
-      child: AnimatedScale(
-        duration: const Duration(milliseconds: 120),
-        curve: Curves.easeOut,
-        scale: _down ? 0.985 : 1,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 160),
-          curve: Curves.easeOut,
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(AppBorderRadius.large),
-            boxShadow: _down
-                ? [
-                    BoxShadow(
-                      color: cs.primary.withOpacity(0.22),
-                      blurRadius: 22,
-                      spreadRadius: 1,
-                      offset: const Offset(0, 14),
-                    ),
-                  ]
-                : const [],
-          ),
-          child: widget.child,
-        ),
+      builder: (context) => _AiFinderSheet(
+        controller: TextEditingController(),
+        onSearch: (p) async => _templates,
+        onPick: (t) {
+          Navigator.pop(context);
+          context.push('/template/${t.id}');
+        },
       ),
     );
   }
-}
 
-class _AnimatedChoiceChip extends StatefulWidget {
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-  final bool densePill;
-
-  const _AnimatedChoiceChip({
-    required this.label,
-    required this.selected,
-    required this.onTap,
-    this.densePill = false,
-  });
-
-  @override
-  State<_AnimatedChoiceChip> createState() => _AnimatedChoiceChipState();
-}
-
-class _AnimatedChoiceChipState extends State<_AnimatedChoiceChip> {
-  bool _down = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final cs = Theme.of(context).colorScheme;
-    final sel = widget.selected;
-    final br = widget.densePill ? 999.0 : AppBorderRadius.medium.toDouble();
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final fg = sel ? Colors.white : cs.onSurfaceVariant;
-    final fw = sel ? FontWeight.w900 : FontWeight.w700;
-
-    return GestureDetector(
-      onTap: widget.onTap,
-      onTapDown: (_) => setState(() => _down = true),
-      onTapCancel: () => setState(() => _down = false),
-      onTapUp: (_) => setState(() => _down = false),
-      child: AnimatedScale(
-        duration: const Duration(milliseconds: 120),
-        curve: Curves.easeOut,
-        scale: _down ? 0.97 : 1,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOutCubic,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          decoration: BoxDecoration(
-            gradient: sel
-                ? LinearGradient(
-                    colors: [cs.primary, cs.secondary],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  )
-                : LinearGradient(
-                    colors: [
-                      cs.surfaceContainerHighest.withOpacity(isDark ? 0.22 : 0.55),
-                      cs.surface.withOpacity(isDark ? 0.16 : 0.45),
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-            borderRadius: BorderRadius.circular(br),
-            border: Border.all(color: sel ? cs.primary.withOpacity(0.38) : cs.outlineVariant.withOpacity(0.55)),
-            boxShadow: sel
-                ? [
-                    BoxShadow(
-                      color: cs.primary.withOpacity(0.22),
-                      blurRadius: 18,
-                      offset: const Offset(0, 10),
-                    ),
-                  ]
-                : const [],
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (sel) ...[
-                Icon(Icons.check_rounded, size: 16, color: fg),
-                const SizedBox(width: 6),
-              ],
-              Text(
-                widget.label,
-                style: AppTypography.caption.copyWith(color: fg, fontWeight: fw),
-              ),
-            ],
-          ),
+  Widget _buildTemplatesList() {
+    if (_loading) {
+      return const SliverToBoxAdapter(
+        child: Padding(
+          padding: EdgeInsets.all(24),
+          child: _MarketplaceSkeleton(isGrid: false),
         ),
-      ),
-    );
-  }
-}
-
-class _MarketplaceSkeleton extends StatelessWidget {
-  final bool isGrid;
-  const _MarketplaceSkeleton({required this.isGrid});
-
-  @override
-  Widget build(BuildContext context) {
-    if (isGrid) {
-      return GridView.builder(
-        shrinkWrap: true,
-        physics: const NeverScrollableScrollPhysics(),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-          crossAxisCount: 2,
-          childAspectRatio: 0.68,
-          crossAxisSpacing: AppSpacing.lg,
-          mainAxisSpacing: AppSpacing.lg,
-        ),
-        itemCount: 6,
-        itemBuilder: (_, __) => const _SkeletonTemplateCard(),
       );
     }
-
-    return Column(
-      children: List.generate(
-        5,
-        (i) => const Padding(
-          padding: EdgeInsets.only(bottom: AppSpacing.lg),
-          child: _SkeletonTemplateRow(),
+    final list = _getFilteredTemplates();
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24),
+        child: Column(
+          children: list.map((t) => Padding(
+            padding: const EdgeInsets.only(bottom: 16),
+            child: _buildTemplateListItem(t),
+          )).toList(),
         ),
       ),
     );
   }
+
+  Widget _buildTemplateListItem(GameTemplate t) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final saved = _savedTemplateIds.contains(t.id);
+    final compared = _compareSelection.any((x) => x.id == t.id);
+    final coverUrl = _resolveMediaUrl(t.imageUrl);
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: (isDark ? Colors.white : cs.onSurface).withOpacity(isDark ? 0.03 : 0.05),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(
+          color: isDark ? Colors.white.withOpacity(0.05) : cs.outlineVariant.withOpacity(0.8),
+        ),
+      ),
+      child: Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: SizedBox(
+              width: 80,
+              height: 60,
+              child: coverUrl != null && coverUrl.isNotEmpty
+                  ? Image.network(
+                      coverUrl,
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Container(color: AppColors.primary.withOpacity(0.2));
+                      },
+                    )
+                  : Container(color: AppColors.primary.withOpacity(0.2)),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  t.name,
+                  style: AppTypography.subtitle2.copyWith(
+                    color: isDark ? Colors.white : cs.onSurface,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  t.category,
+                  style: AppTypography.caption.copyWith(
+                    color: isDark ? AppColors.primary : cs.primary,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                _buildMetaRow(t),
+                if (t.isFeatured) ...[
+                  const SizedBox(height: 6),
+                  const _FeaturedBadge(),
+                ],
+                if (t.isDevOwner) ...[
+                  const SizedBox(height: 6),
+                  const _DevBadge.compact(),
+                ],
+              ],
+            ),
+          ),
+          IconButton(
+            onPressed: () => _toggleCompare(t),
+            icon: Icon(
+              compared ? Icons.check_circle : Icons.compare_arrows,
+              color: compared 
+                  ? AppColors.primary 
+                  : (isDark ? Colors.white54 : cs.onSurface.withOpacity(0.54)),
+            ),
+          ),
+          IconButton(
+            onPressed: () => _toggleSaved(t),
+            icon: Icon(
+              saved ? Icons.favorite : Icons.favorite_border,
+              color: saved 
+                  ? Colors.redAccent 
+                  : (isDark ? Colors.white54 : cs.onSurface.withOpacity(0.54)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CompatBadgeData {
+  final String label;
+  final IconData icon;
+  _CompatBadgeData(this.label, this.icon);
 }
 
 class _Shimmer extends StatefulWidget {
@@ -2776,14 +2047,242 @@ class _SkeletonTemplateRow extends StatelessWidget {
   }
 }
 
-class _CompatBadge {
-  final String label;
-  final IconData icon;
+class _MarketplaceSkeleton extends StatelessWidget {
+  final bool isGrid;
+  const _MarketplaceSkeleton({required this.isGrid});
 
-  const _CompatBadge({
-    required this.label,
-    required this.icon,
+  @override
+  Widget build(BuildContext context) {
+    if (isGrid) {
+      return GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 2,
+          childAspectRatio: 0.68,
+          crossAxisSpacing: AppSpacing.lg,
+          mainAxisSpacing: AppSpacing.lg,
+        ),
+        itemCount: 6,
+        itemBuilder: (_, __) => const _SkeletonTemplateCard(),
+      );
+    }
+
+    return Column(
+      children: List.generate(
+        5,
+        (i) => const Padding(
+          padding: EdgeInsets.only(bottom: AppSpacing.lg),
+          child: _SkeletonTemplateRow(),
+        ),
+      ),
+    );
+  }
+}
+
+class _DevBadge extends StatelessWidget {
+  final bool compact;
+
+  const _DevBadge({this.compact = false});
+
+  const _DevBadge.compact() : compact = true;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final pad = compact
+        ? const EdgeInsets.symmetric(horizontal: 8, vertical: 4)
+        : const EdgeInsets.symmetric(horizontal: 10, vertical: 6);
+
+    final iconSize = compact ? 12.0 : 14.0;
+    final fontSize = compact ? 9.0 : 10.0;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [cs.primary.withOpacity(0.95), cs.secondary.withOpacity(0.90)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withOpacity(0.22)),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.22),
+            blurRadius: 10,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: pad,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.verified_rounded, size: iconSize, color: cs.onPrimary),
+            const SizedBox(width: 6),
+            Text(
+              'DEV',
+              style: AppTypography.caption.copyWith(
+                color: cs.onPrimary,
+                fontWeight: FontWeight.w900,
+                fontSize: fontSize,
+                letterSpacing: 0.8,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _PressableGlow extends StatefulWidget {
+  final Widget child;
+  final VoidCallback? onTap;
+  final VoidCallback? onLongPress;
+
+  const _PressableGlow({
+    super.key,
+    required this.child,
+    this.onTap,
+    this.onLongPress,
   });
+
+  @override
+  State<_PressableGlow> createState() => _PressableGlowState();
+}
+
+class _PressableGlowState extends State<_PressableGlow> {
+  bool _down = false;
+
+  void _set(bool v) {
+    if (_down == v) return;
+    setState(() => _down = v);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return GestureDetector(
+      onTap: widget.onTap,
+      onLongPress: widget.onLongPress,
+      onTapDown: (_) => _set(true),
+      onTapCancel: () => _set(false),
+      onTapUp: (_) => _set(false),
+      child: AnimatedScale(
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        scale: _down ? 0.985 : 1,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOut,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(AppBorderRadius.large),
+            boxShadow: _down
+                ? [
+                    BoxShadow(
+                      color: cs.primary.withOpacity(0.22),
+                      blurRadius: 22,
+                      spreadRadius: 1,
+                      offset: const Offset(0, 14),
+                    ),
+                  ]
+                : const [],
+          ),
+          child: widget.child,
+        ),
+      ),
+    );
+  }
+}
+
+class _AnimatedChoiceChip extends StatefulWidget {
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+  final bool densePill;
+
+  const _AnimatedChoiceChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+    this.densePill = false,
+  });
+
+  @override
+  State<_AnimatedChoiceChip> createState() => _AnimatedChoiceChipState();
+}
+
+class _AnimatedChoiceChipState extends State<_AnimatedChoiceChip> {
+  bool _down = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final sel = widget.selected;
+    final br = widget.densePill ? 999.0 : AppBorderRadius.medium.toDouble();
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final fg = sel ? Colors.white : cs.onSurfaceVariant;
+    final fw = sel ? FontWeight.w900 : FontWeight.w700;
+
+    return GestureDetector(
+      onTap: widget.onTap,
+      onTapDown: (_) => setState(() => _down = true),
+      onTapCancel: () => setState(() => _down = false),
+      onTapUp: (_) => setState(() => _down = false),
+      child: AnimatedScale(
+        duration: const Duration(milliseconds: 120),
+        curve: Curves.easeOut,
+        scale: _down ? 0.97 : 1,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOutCubic,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            gradient: sel
+                ? LinearGradient(
+                    colors: [cs.primary, cs.secondary],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  )
+                : LinearGradient(
+                    colors: [
+                      cs.surfaceContainerHighest.withOpacity(isDark ? 0.22 : 0.55),
+                      cs.surface.withOpacity(isDark ? 0.16 : 0.45),
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+            borderRadius: BorderRadius.circular(br),
+            border: Border.all(color: sel ? cs.primary.withOpacity(0.38) : cs.outlineVariant.withOpacity(0.55)),
+            boxShadow: sel
+                ? [
+                    BoxShadow(
+                      color: cs.primary.withOpacity(0.22),
+                      blurRadius: 18,
+                      offset: const Offset(0, 10),
+                    ),
+                  ]
+                : const [],
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (sel) ...[
+                Icon(Icons.check_rounded, size: 16, color: fg),
+                const SizedBox(width: 6),
+              ],
+              Text(
+                widget.label,
+                style: AppTypography.caption.copyWith(color: fg, fontWeight: fw),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class GameTemplate {
@@ -2799,7 +2298,15 @@ class GameTemplate {
   final List<String> tags;
   final bool isFeatured;
   final String creator;
+  final String? ownerRole;
+  final String? ownerUsername;
+  final String? ownerAvatar;
   final DateTime createdAt;
+
+  bool get isDevOwner {
+    final r = (ownerRole ?? '').trim().toLowerCase();
+    return r == 'dev' || r == 'devl';
+  }
 
   GameTemplate({
     required this.id,
@@ -2814,8 +2321,44 @@ class GameTemplate {
     required this.tags,
     required this.isFeatured,
     required this.creator,
+    this.ownerRole,
+    this.ownerUsername,
+    this.ownerAvatar,
     required this.createdAt,
   });
+
+  factory GameTemplate.fromMap(Map<String, dynamic> map) {
+    final rawImage = (map['imageUrl'] ??
+            map['previewImageUrl'] ??
+            map['previewImage'] ??
+            map['thumbnailUrl'] ??
+            map['thumbnail'] ??
+            map['coverUrl'])
+        ?.toString();
+
+    final rawVideo = (map['previewVideoUrl'] ?? map['previewVideo'])?.toString();
+
+    return GameTemplate(
+      id: map['_id']?.toString() ?? map['id']?.toString() ?? '',
+      name: map['name']?.toString() ?? '',
+      category: map['category']?.toString() ?? 'Other',
+      description: map['description']?.toString() ?? '',
+      rating: double.tryParse(map['rating']?.toString() ?? '') ?? 0.0,
+      downloads: int.tryParse(map['downloads']?.toString() ?? '') ?? 0,
+      price: double.tryParse(map['price']?.toString() ?? '') ?? 0.0,
+      imageUrl: ApiService.normalizeImageUrl(rawImage),
+      previewVideoUrl: ApiService.normalizeImageUrl(rawVideo),
+      tags: (map['tags'] is List) 
+          ? List<String>.from(map['tags'].map((e) => e.toString()))
+          : (map['tags']?.toString() ?? '').split(',').where((s) => s.trim().isNotEmpty).toList(),
+      isFeatured: map['isFeatured'] == true,
+      creator: map['creator']?.toString() ?? 'Anonymous',
+      ownerRole: map['ownerRole']?.toString(),
+      ownerUsername: map['ownerUsername']?.toString(),
+      ownerAvatar: map['ownerAvatar']?.toString(),
+      createdAt: DateTime.tryParse(map['createdAt']?.toString() ?? '') ?? DateTime.now(),
+    );
+  }
 }
 
 class _VideoPlayerDialog extends StatefulWidget {
@@ -2896,4 +2439,36 @@ class _VideoPlayerDialogState extends State<_VideoPlayerDialog> {
       ),
     );
   }
+}
+
+class _MarketplaceMeshPainter extends CustomPainter {
+  final Color color1;
+  final Color color2;
+  final double progress;
+
+  _MarketplaceMeshPainter({
+    required this.color1,
+    required this.color2,
+    required this.progress,
+  });
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final paint = Paint()..maskFilter = const MaskFilter.blur(BlurStyle.normal, 60);
+    paint.color = color1;
+    canvas.drawCircle(
+      Offset(size.width * 0.1, size.height * (0.1 + 0.1 * progress)),
+      size.width * 0.6 * progress,
+      paint,
+    );
+    paint.color = color2;
+    canvas.drawCircle(
+      Offset(size.width * 0.9, size.height * (0.4 - 0.05 * progress)),
+      size.width * 0.4 * progress,
+      paint,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _MarketplaceMeshPainter oldDelegate) => true;
 }

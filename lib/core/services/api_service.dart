@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
@@ -23,9 +24,31 @@ class ApiService {
     if (Platform.isAndroid) {
       return 'http://10.0.2.2:3000/api';
     }
+    // Handle iOS Simulator localhost access
+    if (Platform.isIOS) {
+      return 'http://localhost:3000/api';
+    }
     return _configuredBaseUrl;
   }
-  static const Duration _timeout = Duration(seconds: 30);
+
+  static String normalizeImageUrl(String? url) {
+    if (url == null || url.trim().isEmpty) return '';
+    final raw = url.trim();
+    if (raw.startsWith('http://') || raw.startsWith('https://')) {
+      // If it contains 127.0.0.1 or localhost, replace it with the correct host for the platform
+      if (raw.contains('127.0.0.1:3000') || raw.contains('localhost:3000')) {
+        final host = Platform.isAndroid ? '10.0.2.2:3000' : 'localhost:3000';
+        return raw.replaceAll('127.0.0.1:3000', host).replaceAll('localhost:3000', host);
+      }
+      return raw;
+    }
+    
+    // Relative path, prepend base origin (not /api)
+    final base = baseUrl.replaceAll('/api', '');
+    if (raw.startsWith('/')) return '$base$raw';
+    return '$base/$raw';
+  }
+  static const Duration _timeout = Duration(seconds: 60);
 
   static Duration _resolveTimeout(Duration? timeout) => timeout ?? _timeout;
 
@@ -39,6 +62,7 @@ class ApiService {
     Map<String, String>? headers,
     Duration? timeout,
   }) async {
+    final effectiveTimeout = timeout ?? const Duration(seconds: 120);
     try {
       final request = http.MultipartRequest(
         method,
@@ -98,9 +122,13 @@ class ApiService {
         }
       }
 
-      final streamed = await request.send().timeout(_resolveTimeout(timeout));
+      final streamed = await request.send().timeout(effectiveTimeout);
       final response = await http.Response.fromStream(streamed);
       return _handleResponse(response);
+    } on TimeoutException {
+      return _errorResponse(
+        'Request timed out after ${effectiveTimeout.inSeconds}s\nURL: $baseUrl$endpoint',
+      );
     } on SocketException catch (e) {
       return _errorResponse('Connection failed: ${e.message}\nURL: $baseUrl$endpoint');
     } on HttpException {
@@ -141,6 +169,10 @@ class ApiService {
       }
 
       return _handleResponse(response);
+    } on TimeoutException {
+      return _errorResponse(
+        'Request timed out after ${_resolveTimeout(timeout).inSeconds}s\nURL: $baseUrl$endpoint',
+      );
     } on SocketException catch (e) {
       return _errorResponse('Connection failed: ${e.message}\nURL: $baseUrl$endpoint');
     } on HttpException {
@@ -197,6 +229,7 @@ class ApiService {
     Map<String, String>? headers,
     Duration? timeout,
   }) async {
+    final effectiveTimeout = timeout ?? const Duration(seconds: 120);
     try {
       final request = http.MultipartRequest(
         method,
@@ -241,9 +274,13 @@ class ApiService {
         ),
       );
 
-      final streamed = await request.send().timeout(_timeout);
+      final streamed = await request.send().timeout(effectiveTimeout);
       final response = await http.Response.fromStream(streamed);
       return _handleResponse(response);
+    } on TimeoutException {
+      return _errorResponse(
+        'Request timed out after ${effectiveTimeout.inSeconds}s\nURL: $baseUrl$endpoint',
+      );
     } on SocketException catch (e) {
       return _errorResponse('Connection failed: ${e.message}\nURL: $baseUrl$endpoint');
     } on HttpException {
@@ -281,6 +318,10 @@ class ApiService {
       }
 
       return _handleResponse(response);
+    } on TimeoutException {
+      return _errorResponse(
+        'Request timed out after ${_resolveTimeout(timeout).inSeconds}s\nURL: $baseUrl$endpoint',
+      );
     } on SocketException catch (e) {
       return _errorResponse('Connection failed: ${e.message}\nURL: $baseUrl$endpoint');
     } on HttpException {
@@ -321,6 +362,10 @@ class ApiService {
       }
 
       return _handleResponse(response);
+    } on TimeoutException {
+      return _errorResponse(
+        'Request timed out after ${_resolveTimeout(timeout).inSeconds}s\nURL: $baseUrl$endpoint',
+      );
     } on SocketException catch (e) {
       return _errorResponse('Connection failed: ${e.message}\nURL: $baseUrl$endpoint');
     } on HttpException {
@@ -361,6 +406,10 @@ class ApiService {
       }
 
       return _handleResponse(response);
+    } on TimeoutException {
+      return _errorResponse(
+        'Request timed out after ${_resolveTimeout(timeout).inSeconds}s\nURL: $baseUrl$endpoint',
+      );
     } on SocketException catch (e) {
       return _errorResponse('Connection failed: ${e.message}\nURL: $baseUrl$endpoint');
     } on HttpException {
@@ -398,6 +447,10 @@ class ApiService {
       }
 
       return _handleResponse(response);
+    } on TimeoutException {
+      return _errorResponse(
+        'Request timed out after ${_resolveTimeout(timeout).inSeconds}s\nURL: $baseUrl$endpoint',
+      );
     } on SocketException catch (e) {
       return _errorResponse('Connection failed: ${e.message}\nURL: $baseUrl$endpoint');
     } on HttpException {

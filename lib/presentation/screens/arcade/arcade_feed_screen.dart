@@ -1,7 +1,6 @@
 import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
-import 'dart:typed_data';
 
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
@@ -19,13 +18,19 @@ import 'package:record/record.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:url_launcher/url_launcher.dart';
+import 'package:video_player/video_player.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:flutter_stripe/flutter_stripe.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/providers/auth_provider.dart';
+import '../../../core/services/api_service.dart';
 import '../../../core/services/app_notifier.dart';
 import '../../../core/services/game_feed_service.dart';
-import '../../../core/themes/app_theme.dart';
+import '../../../core/services/live_service.dart';
+import '../../../core/services/projects_service.dart';
+import '../../../core/services/creator_monetization_service.dart';
+import '../../../core/services/ads_service.dart';
 import '../../widgets/widgets.dart';
 
 class ArcadeFeedScreen extends StatefulWidget {
@@ -53,6 +58,14 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
   WebViewController? _activeWeb;
   String? _activePostId;
 
+  VideoPlayerController? _adVideo;
+  String? _adVideoCampaignId;
+  bool _adMuted = true;
+
+  VideoPlayerController? _reelVideo;
+  String? _reelPostId;
+  bool _reelMuted = true;
+
   String? _burstPostId;
   double _burstT = 0;
   Timer? _burstTimer;
@@ -60,6 +73,12 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
   bool _paging = false;
   Timer? _playDebounce;
   late final AnimationController _neonCtrl;
+
+  // Live state
+  List<Map<String, dynamic>> _liveSessions = const [];
+  bool _loadingLive = false;
+
+  final Set<String> _seenAdImpressions = <String>{};
 
   final Map<String, List<Map<String, dynamic>>> _localComments = <String, List<Map<String, dynamic>>>{};
   final Map<String, String?> _commentsCursor = <String, String?>{};
@@ -72,6 +91,7 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
     super.initState();
     _neonCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1800))..repeat();
     _loadFirst();
+    _loadLiveSessions();
   }
 
   Future<void> _installDoubleTapHook(WebViewController ctrl) async {
@@ -203,7 +223,114 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
     _burstTimer?.cancel();
     _neonCtrl.dispose();
     _pageController.dispose();
+    _adVideo?.dispose();
+    _reelVideo?.dispose();
     super.dispose();
+  }
+
+  Future<void> _ensureReelVideo({
+    required String postId,
+    required String url,
+    required bool play,
+  }) async {
+    final nextUrl = url.trim();
+    final nextPostId = postId.trim();
+    if (nextUrl.isEmpty || nextPostId.isEmpty) return;
+
+    if (_reelVideo != null && _reelPostId == nextPostId) {
+      try {
+        if (play) {
+          await _reelVideo!.play();
+        } else {
+          await _reelVideo!.pause();
+        }
+      } catch (_) {}
+      return;
+    }
+
+    try {
+      await _reelVideo?.pause();
+    } catch (_) {}
+    await _reelVideo?.dispose();
+
+    _reelPostId = nextPostId;
+    _reelVideo = VideoPlayerController.networkUrl(Uri.parse(nextUrl));
+    try {
+      await _reelVideo!.setLooping(true);
+      await _reelVideo!.setVolume(_reelMuted ? 0.0 : 1.0);
+      await _reelVideo!.initialize();
+      if (play) {
+        await _reelVideo!.play();
+      }
+      if (mounted) setState(() {});
+    } catch (_) {
+      await _reelVideo?.dispose();
+      _reelVideo = null;
+      _reelPostId = null;
+    }
+  }
+
+  Future<void> _stopReelVideo() async {
+    try {
+      await _reelVideo?.pause();
+    } catch (_) {}
+    await _reelVideo?.dispose();
+    _reelVideo = null;
+    _reelPostId = null;
+  }
+
+  Future<void> _toggleReelMuted() async {
+    _reelMuted = !_reelMuted;
+    try {
+      await _reelVideo?.setVolume(_reelMuted ? 0.0 : 1.0);
+    } catch (_) {}
+    if (mounted) setState(() {});
+  }
+
+  Future<void> _ensureAdVideo({required String campaignId, required String url, required bool play}) async {
+    final nextUrl = url.trim();
+    final nextCampaignId = campaignId.trim();
+    if (nextUrl.isEmpty || nextCampaignId.isEmpty) return;
+
+    if (_adVideo != null && _adVideoCampaignId == nextCampaignId) {
+      try {
+        if (play) {
+          await _adVideo!.play();
+        } else {
+          await _adVideo!.pause();
+        }
+      } catch (_) {}
+      return;
+    }
+
+    try {
+      await _adVideo?.pause();
+    } catch (_) {}
+    await _adVideo?.dispose();
+
+    _adVideoCampaignId = nextCampaignId;
+    _adVideo = VideoPlayerController.networkUrl(Uri.parse(nextUrl));
+    try {
+      await _adVideo!.setLooping(true);
+      await _adVideo!.setVolume(_adMuted ? 0.0 : 1.0);
+      await _adVideo!.initialize();
+      if (play) {
+        await _adVideo!.play();
+      }
+      if (mounted) setState(() {});
+    } catch (_) {
+      await _adVideo?.dispose();
+      _adVideo = null;
+      _adVideoCampaignId = null;
+    }
+  }
+
+  Future<void> _toggleAdMuted() async {
+    _adMuted = !_adMuted;
+    try {
+      await _adVideo?.setVolume(_adMuted ? 0.0 : 1.0);
+    } catch (_) {}
+    if (mounted) setState(() {});
   }
 
   void _goBack() {
@@ -228,12 +355,13 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
 
   Widget _buildTopBar() {
     final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final i = (_posts.isEmpty) ? 0 : (_activeIndex.clamp(0, _posts.length - 1));
     final total = _posts.length;
     return SafeArea(
       bottom: false,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
         child: Row(
           children: [
             Material(
@@ -241,63 +369,101 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
               child: InkWell(
                 borderRadius: BorderRadius.circular(18),
                 onTap: _goBack,
-                child: _glass(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  child: Icon(Icons.arrow_back_rounded, color: Colors.white.withOpacity(0.92), size: 20),
+                child: _glass(context, child: Icon(Icons.arrow_back_ios_new_rounded, color: isDark ? Colors.white : cs.onSurface, size: 20)),
+              ),
+            ),
+            const SizedBox(width: 12),
+            _glass(
+              context,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              child: Text(
+                'ARCADE',
+                style: AppTypography.labelLarge.copyWith(
+                  color: isDark ? Colors.white : cs.onSurface,
+                  letterSpacing: 2,
+                  fontWeight: FontWeight.w900,
                 ),
               ),
             ),
-            const SizedBox(width: 10),
-            _glass(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.sports_esports_rounded, color: Colors.white.withOpacity(0.92), size: 18),
-                  const SizedBox(width: 10),
-                  GestureDetector(
-                    behavior: HitTestBehavior.opaque,
-                    onLongPress: _openQuickNav,
-                    child: Text(
-                      'Arcade',
-                      style: AppTypography.caption.copyWith(
-                        color: Colors.white.withOpacity(0.95),
-                        fontWeight: FontWeight.w900,
-                        letterSpacing: 0.2,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
             const Spacer(),
-            _glass(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 7,
-                    height: 7,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      color: (total > 0) ? Colors.white.withOpacity(0.85) : cs.onSurface.withOpacity(0.25),
-                    ),
+            Material(
+              type: MaterialType.transparency,
+              child: InkWell(
+                borderRadius: BorderRadius.circular(18),
+                onTap: () => context.push('/live'),
+                child: _glass(
+                  context,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Stack(
+                        alignment: Alignment.center,
+                        children: [
+                          Container(
+                            width: 10,
+                            height: 10,
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFFF0000),
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          AnimatedBuilder(
+                            animation: _neonCtrl,
+                            builder: (context, _) {
+                              return Container(
+                                width: 18,
+                                height: 18,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  border: Border.all(
+                                    color: const Color(0xFFFF0000).withOpacity(0.4 * (1 - _neonCtrl.value)),
+                                    width: 2 * _neonCtrl.value,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(width: 10),
+                      Icon(Icons.sensors_rounded, color: isDark ? Colors.white : cs.onSurface, size: 20),
+                    ],
                   ),
-                  const SizedBox(width: 8),
-                  Text(
-                    (total > 0) ? '${i + 1}/$total' : '0/0',
-                    style: AppTypography.caption.copyWith(
-                      color: Colors.white.withOpacity(0.92),
-                      fontWeight: FontWeight.w900,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
+            const SizedBox(width: 12),
+            if (total > 0)
+              _glass(
+                context,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: Text(
+                  '${i + 1} / $total',
+                  style: AppTypography.caption.copyWith(
+                    color: isDark ? Colors.white70 : cs.onSurfaceVariant,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _glass(BuildContext context, {required Widget child, EdgeInsets padding = const EdgeInsets.symmetric(horizontal: 12, vertical: 10)}) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      padding: padding,
+      decoration: BoxDecoration(
+        color: (isDark ? Colors.black : cs.surface).withOpacity(isDark ? 0.35 : 0.78),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(
+          color: isDark ? Colors.white.withOpacity(0.12) : cs.outlineVariant.withOpacity(0.75),
+        ),
+      ),
+      child: child,
     );
   }
 
@@ -418,7 +584,64 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
 
   String _postPreview(Map<String, dynamic> p) => (p['previewImageUrl'] ?? p['previewImage'] ?? '').toString();
 
+  String _postReelUrl(Map<String, dynamic> p) {
+    final raw = (p['previewVideoUrl'] ??
+            p['trailerVideoUrl'] ??
+            p['videoUrl'] ??
+            (p['reel'] is Map ? (p['reel'] as Map)['previewVideoUrl'] : null) ??
+            (p['reel'] is Map ? (p['reel'] as Map)['videoUrl'] : null))
+        ?.toString();
+    return ApiService.normalizeImageUrl(raw);
+  }
+
+  bool _isReel(Map<String, dynamic> p) {
+    if (p['isReel'] == true) return true;
+    return _postReelUrl(p).trim().isNotEmpty;
+  }
+
+  String _postReelPromoText(Map<String, dynamic> p) {
+    return (p['reelPromoText'] ??
+            (p['reel'] is Map ? (p['reel'] as Map)['promoText'] : null) ??
+            '')
+        .toString()
+        .trim();
+  }
+
+  String _postReelMusicCue(Map<String, dynamic> p) {
+    return (p['reelMusicCue'] ??
+            (p['reel'] is Map ? (p['reel'] as Map)['musicCue'] : null) ??
+            '')
+        .toString()
+        .trim();
+  }
+
+  List<String> _postReelCaptionLines(Map<String, dynamic> p) {
+    final dynamic value = p['reelCaptionLines'] ??
+        (p['reel'] is Map ? (p['reel'] as Map)['captionLines'] : null);
+    if (value is! List) return const <String>[];
+    return value
+        .map((e) => (e ?? '').toString().trim())
+        .where((e) => e.isNotEmpty)
+        .take(4)
+        .toList(growable: false);
+  }
+
+  String _postReelCaptionStyle(Map<String, dynamic> p) {
+    return (p['reelCaptionStyle'] ??
+            (p['reel'] is Map ? (p['reel'] as Map)['captionStyle'] : null) ??
+            '')
+        .toString()
+        .trim()
+        .toLowerCase();
+  }
+
   String _postProjectId(Map<String, dynamic> p) => (p['projectId'] ?? '').toString();
+
+  String _postCreatorId(Map<String, dynamic> p) => (p['creatorId'] ?? p['creatorUserId'] ?? p['creator'] ?? '').toString();
+
+  bool _isAd(Map<String, dynamic> p) => (p['kind']?.toString() ?? '').toLowerCase() == 'ad';
+
+  String _adCampaignId(Map<String, dynamic> p) => (p['campaignId'] ?? p['id'] ?? '').toString();
 
   int _postLikeCount(Map<String, dynamic> p) {
     final v = p['likeCount'];
@@ -428,11 +651,244 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
 
   bool _postLikedByMe(Map<String, dynamic> p) => p['likedByMe'] == true;
 
+  Future<void> _loadLiveSessions() async {
+    final token = context.read<AuthProvider>().token;
+    if (token == null || token.trim().isEmpty) return;
+
+    setState(() => _loadingLive = true);
+    try {
+      final res = await LiveService.feed(token: token, limit: 5);
+      if (mounted && res['success'] == true) {
+        final data = res['data'];
+        if (data is List) {
+          setState(() {
+            _liveSessions = data.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+          });
+        }
+      }
+    } catch (_) {}
+    if (mounted) setState(() => _loadingLive = false);
+  }
+
+  Widget _buildLiveHorizontalList() {
+    if (_liveSessions.isEmpty && !_loadingLive) return const SizedBox.shrink();
+
+    return Container(
+      height: 105, // Increased height from 90 to 105 to fix 7px overflow
+      margin: const EdgeInsets.only(bottom: 12),
+      child: ListView.builder(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: AppSpacing.lg),
+        itemCount: _loadingLive ? 3 : _liveSessions.length,
+        itemBuilder: (context, index) {
+          if (_loadingLive) {
+            return _buildLiveCircleSkeleton();
+          }
+          final live = _liveSessions[index];
+          return _buildLiveCircleItem(live);
+        },
+      ),
+    );
+  }
+
+  Widget _buildLiveCircleSkeleton() {
+    return Padding(
+      padding: const EdgeInsets.only(right: 16),
+      child: Column(
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: Colors.white.withOpacity(0.05),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Container(width: 40, height: 8, color: Colors.white.withOpacity(0.05)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLiveCircleItem(Map<String, dynamic> live) {
+    final id = (live['id'] ?? live['_id'] ?? '').toString();
+    final username = (live['creatorUsername'] ?? 'Creator').toString();
+    final avatarUrl = (live['creatorAvatar'] ?? '').toString().trim();
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    return GestureDetector(
+      onTap: () => context.push('/live/watch/$id'),
+      child: Padding(
+        padding: const EdgeInsets.only(right: 20),
+        child: Column(
+          children: [
+            Stack(
+              alignment: Alignment.center,
+              children: [
+                AnimatedBuilder(
+                  animation: _neonCtrl,
+                  builder: (context, child) {
+                    return Container(
+                      width: 76,
+                      height: 76,
+                      padding: const EdgeInsets.all(2.5),
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        gradient: SweepGradient(
+                          colors: [
+                            AppColors.primary,
+                            AppColors.accent,
+                            AppColors.primary.withOpacity(0.2),
+                            AppColors.primary,
+                          ],
+                          stops: const [0.0, 0.4, 0.6, 1.0],
+                          transform: GradientRotation(_neonCtrl.value * 2 * math.pi),
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primary.withOpacity(isDark ? 0.3 * _neonCtrl.value : 0.15 * _neonCtrl.value),
+                            blurRadius: 12,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                      child: child,
+                    );
+                  },
+                  child: Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: isDark ? const Color(0xFF05060A) : cs.surface,
+                    ),
+                    padding: const EdgeInsets.all(2),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(34),
+                      child: Container(
+                        color: isDark ? Colors.white.withOpacity(0.05) : cs.surfaceContainerHighest.withOpacity(0.3),
+                        child: Container(
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            border: Border.all(color: isDark ? Colors.white.withOpacity(0.08) : cs.outlineVariant.withOpacity(0.5)),
+                          ),
+                          child: avatarUrl.isEmpty
+                              ? Center(
+                                  child: Icon(Icons.person_rounded, color: isDark ? Colors.white24 : cs.onSurfaceVariant.withOpacity(0.3), size: 34),
+                                )
+                              : CachedNetworkImage(
+                                  imageUrl: avatarUrl,
+                                  fit: BoxFit.cover,
+                                  fadeInDuration: const Duration(milliseconds: 120),
+                                  placeholder: (context, _) {
+                                    return Center(
+                                      child: Icon(Icons.person_rounded, color: isDark ? Colors.white24 : cs.onSurfaceVariant.withOpacity(0.3), size: 34),
+                                    );
+                                  },
+                                  errorWidget: (context, _, __) {
+                                    return Center(
+                                      child: Icon(Icons.person_rounded, color: isDark ? Colors.white24 : cs.onSurfaceVariant.withOpacity(0.3), size: 34),
+                                    );
+                                  },
+                                ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  bottom: 0,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFFFF0000), Color(0xFFFF4D4D)],
+                      ),
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.red.withOpacity(0.5),
+                          blurRadius: 10,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
+                      border: Border.all(color: isDark ? Colors.black : Colors.white, width: 1.5),
+                    ),
+                    child: Text(
+                      'LIVE',
+                      style: AppTypography.labelLarge.copyWith(
+                        fontSize: 8,
+                        color: Colors.white,
+                        fontWeight: FontWeight.w900,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 8),
+            SizedBox(
+              width: 76,
+              child: Text(
+                username.toUpperCase(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                textAlign: TextAlign.center,
+                style: AppTypography.labelLarge.copyWith(
+                  color: isDark ? Colors.white : cs.onSurface,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.5,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<void> _ensureActiveWebView() async {
     final p = _postAt(_activeIndex);
     if (p == null) return;
 
+    if (_isAd(p)) {
+      if (_activeWeb != null || _activePostId != null) {
+        setState(() {
+          _activeWeb = null;
+          _activePostId = null;
+        });
+      }
+
+      final campaignId = _adCampaignId(p).trim();
+      final videoUrl = (p['videoUrl'] ?? '').toString().trim();
+      await _ensureAdVideo(campaignId: campaignId, url: videoUrl, play: true);
+      await _stopReelVideo();
+      return;
+    }
+
+    // Pause ad video when viewing a normal post.
+    try {
+      await _adVideo?.pause();
+    } catch (_) {}
+
+    final reelUrl = _postReelUrl(p).trim();
     final postId = _postId(p);
+    if (reelUrl.isNotEmpty && postId.isNotEmpty) {
+      if (_activeWeb != null || _activePostId != postId) {
+        setState(() {
+          _activeWeb = null;
+          _activePostId = postId;
+        });
+      }
+      await _ensureReelVideo(postId: postId, url: reelUrl, play: true);
+      _debouncedPlay(postId);
+      return;
+    }
+
+    await _stopReelVideo();
+
     if (postId.isEmpty) return;
 
     final url = _postWebglUrl(p).trim();
@@ -496,6 +952,13 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
 
     final liked = _postLikedByMe(p);
     final before = _postLikeCount(p);
+
+    if (!liked) {
+      try {
+        await HapticFeedback.selectionClick();
+      } catch (_) {}
+      _heartBurst(postId);
+    }
 
     setState(() {
       p['likedByMe'] = !liked;
@@ -579,6 +1042,23 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
     final url = _postWebglUrl(p).trim();
     final preview = _postPreview(p).trim();
     if (url.isEmpty) return;
+
+    final projectId = _postProjectId(p).trim();
+    String apkUrl = '';
+    if (projectId.isNotEmpty) {
+      try {
+        final res = await ProjectsService.getProjectDownloadUrl(
+          token: token,
+          projectId: projectId,
+          target: 'android_apk',
+        );
+        final data = res['data'];
+        final candidate = (data is Map) ? data['url']?.toString() : null;
+        if (res['success'] == true && candidate != null && candidate.trim().isNotEmpty) {
+          apkUrl = candidate.trim();
+        }
+      } catch (_) {}
+    }
 
     final shareCardKey = GlobalKey();
     final cs = Theme.of(context).colorScheme;
@@ -674,336 +1154,414 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
             }
 
             Widget actionChip({required IconData icon, required String label, required VoidCallback onTap}) {
-          return GestureDetector(
-            onTap: onTap,
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(999),
-                color: cs.surfaceContainerHighest.withOpacity(0.55),
-                border: Border.all(color: cs.outlineVariant.withOpacity(0.5)),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(icon, size: 18, color: cs.onSurface),
-                  const SizedBox(width: 8),
-                  Text(label, style: AppTypography.caption.copyWith(fontWeight: FontWeight.w900)),
-                ],
-              ),
-            ),
-          );
-        }
+              return GestureDetector(
+                onTap: onTap,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(999),
+                    color: cs.surfaceContainerHighest.withOpacity(0.55),
+                    border: Border.all(color: cs.outlineVariant.withOpacity(0.5)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(icon, size: 18, color: cs.onSurface),
+                      const SizedBox(width: 8),
+                      Text(label, style: AppTypography.caption.copyWith(fontWeight: FontWeight.w900)),
+                    ],
+                  ),
+                ),
+              );
+            }
 
             Widget shareCardWidget() {
-          return RepaintBoundary(
-            key: shareCardKey,
-            child: AspectRatio(
-              aspectRatio: 1,
-              child: Container(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(22),
-                  boxShadow: [
-                    BoxShadow(color: cs.primary.withOpacity(0.22), blurRadius: 26, offset: const Offset(0, 18)),
-                  ],
-                ),
-                child: _NeonFrame(
-                  animation: _neonCtrl,
-                  radius: 22,
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(22),
-                    child: Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        if (preview.isNotEmpty)
-                          Image.network(preview, fit: BoxFit.cover)
-                        else
-                          Container(
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [cs.primary.withOpacity(0.95), AppColors.accent.withOpacity(0.85)],
-                                begin: Alignment.topLeft,
-                                end: Alignment.bottomRight,
-                              ),
-                            ),
-                            child: Center(
-                              child: Icon(Icons.sports_esports_rounded, color: Colors.white.withOpacity(0.92), size: 56),
-                            ),
-                          ),
-                        DecoratedBox(
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              colors: [
-                                Colors.black.withOpacity(0.58),
-                                Colors.transparent,
-                                Colors.black.withOpacity(0.72),
-                              ],
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              stops: const [0.0, 0.55, 1.0],
-                            ),
-                          ),
-                        ),
-                        Positioned.fill(
-                          child: DecoratedBox(
-                            decoration: BoxDecoration(
-                              gradient: RadialGradient(
-                                colors: [AppColors.accent.withOpacity(0.28), Colors.transparent],
-                                radius: 1.2,
-                                center: const Alignment(0.65, -0.75),
-                              ),
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          top: 14,
-                          left: 14,
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            decoration: BoxDecoration(
-                              borderRadius: BorderRadius.circular(999),
-                              color: Colors.black.withOpacity(0.22),
-                              border: Border.all(color: Colors.white.withOpacity(0.18)),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Container(
-                                  width: 8,
-                                  height: 8,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    color: Colors.white.withOpacity(0.92),
-                                    boxShadow: [BoxShadow(color: Colors.white.withOpacity(0.45), blurRadius: 12)],
-                                  ),
-                                ),
-                                const SizedBox(width: 10),
-                                Text(
-                                  'ARCADE',
-                                  style: AppTypography.caption.copyWith(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w900,
-                                    letterSpacing: 0.3,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                        Positioned(
-                          left: 14,
-                          right: 14,
-                          bottom: 14,
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Text(
-                                      title.isEmpty ? 'Game' : title,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: AppTypography.h4.copyWith(
-                                        color: Colors.white,
-                                        fontWeight: FontWeight.w900,
-                                        height: 1.05,
+              return RepaintBoundary(
+                key: shareCardKey,
+                child: AspectRatio(
+                  aspectRatio: 1,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(22),
+                      boxShadow: [
+                        BoxShadow(color: cs.primary.withOpacity(0.22), blurRadius: 26, offset: const Offset(0, 18)),
+                      ],
+                    ),
+                    child: _NeonFrame(
+                      animation: _neonCtrl,
+                      radius: 22,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(22),
+                        child: Stack(
+                          fit: StackFit.expand,
+                          children: [
+                            if (preview.isNotEmpty && (preview.startsWith('http://') || preview.startsWith('https://')))
+                              Image.network(
+                                preview,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) {
+                                  return Container(
+                                    decoration: BoxDecoration(
+                                      gradient: LinearGradient(
+                                        colors: [cs.primary.withOpacity(0.95), AppColors.accent.withOpacity(0.85)],
+                                        begin: Alignment.topLeft,
+                                        end: Alignment.bottomRight,
                                       ),
                                     ),
-                                    const SizedBox(height: 8),
-                                    Text(
-                                      'Built with GameForge',
-                                      style: AppTypography.caption.copyWith(
+                                    child: Center(
+                                      child: Icon(Icons.sports_esports_rounded, color: Colors.white.withOpacity(0.92), size: 56),
+                                    ),
+                                  );
+                                },
+                              )
+                            else
+                              Container(
+                                decoration: BoxDecoration(
+                                  gradient: LinearGradient(
+                                    colors: [cs.primary.withOpacity(0.95), AppColors.accent.withOpacity(0.85)],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                ),
+                                child: Center(
+                                  child: Icon(Icons.sports_esports_rounded, color: Colors.white.withOpacity(0.92), size: 56),
+                                ),
+                              ),
+                            DecoratedBox(
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [
+                                    Colors.black.withOpacity(0.58),
+                                    Colors.transparent,
+                                    Colors.black.withOpacity(0.72),
+                                  ],
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  stops: const [0.0, 0.55, 1.0],
+                                ),
+                              ),
+                            ),
+                            Positioned.fill(
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  gradient: RadialGradient(
+                                    colors: [AppColors.accent.withOpacity(0.28), Colors.transparent],
+                                    radius: 1.2,
+                                    center: const Alignment(0.65, -0.75),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              top: 14,
+                              left: 14,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(999),
+                                  color: Colors.black.withOpacity(0.22),
+                                  border: Border.all(color: Colors.white.withOpacity(0.18)),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Container(
+                                      width: 8,
+                                      height: 8,
+                                      decoration: BoxDecoration(
+                                        shape: BoxShape.circle,
                                         color: Colors.white.withOpacity(0.92),
-                                        fontWeight: FontWeight.w800,
+                                        boxShadow: [BoxShadow(color: Colors.white.withOpacity(0.45), blurRadius: 12)],
+                                      ),
+                                    ),
+                                    const SizedBox(width: 10),
+                                    Text(
+                                      'ARCADE',
+                                      style: AppTypography.caption.copyWith(
+                                        color: Colors.white,
+                                        fontWeight: FontWeight.w900,
+                                        letterSpacing: 0.3,
                                       ),
                                     ),
                                   ],
                                 ),
                               ),
-                              const SizedBox(width: 10),
-                              ClipRRect(
-                                borderRadius: BorderRadius.circular(16),
-                                child: Container(
-                                  width: 92,
-                                  height: 92,
-                                  padding: const EdgeInsets.all(8),
-                                  color: Colors.white,
-                                  child: LayoutBuilder(
-                                    builder: (context, c) {
-                                      final s = c.biggest.shortestSide;
-                                      final qr = (s - 20).clamp(42.0, 62.0);
-                                      return Column(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Stack(
-                                            alignment: Alignment.center,
+                            ),
+                            Positioned(
+                              left: 14,
+                              right: 14,
+                              bottom: 14,
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Text(
+                                          title.isEmpty ? 'Game' : title,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: AppTypography.h4.copyWith(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.w900,
+                                            height: 1.05,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        Text(
+                                          'Built with GameForge',
+                                          style: AppTypography.caption.copyWith(
+                                            color: Colors.white.withOpacity(0.92),
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(16),
+                                    child: Container(
+                                      width: 92,
+                                      height: 92,
+                                      padding: const EdgeInsets.all(8),
+                                      color: Colors.white,
+                                      child: LayoutBuilder(
+                                        builder: (context, c) {
+                                          final s = c.biggest.shortestSide;
+                                          final qr = (s - 20).clamp(42.0, 62.0);
+                                          return Column(
+                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            mainAxisSize: MainAxisSize.min,
                                             children: [
-                                              QrImageView(
-                                                data: url,
-                                                version: QrVersions.auto,
-                                                size: qr,
-                                                backgroundColor: Colors.white,
+                                              Stack(
+                                                alignment: Alignment.center,
+                                                children: [
+                                                  QrImageView(
+                                                    data: url,
+                                                    version: QrVersions.auto,
+                                                    size: qr,
+                                                    backgroundColor: Colors.white,
+                                                  ),
+                                                  Container(
+                                                    width: 16,
+                                                    height: 16,
+                                                    decoration: BoxDecoration(
+                                                      color: Colors.white,
+                                                      shape: BoxShape.circle,
+                                                      border: Border.all(color: Colors.black.withOpacity(0.12)),
+                                                    ),
+                                                    child: Icon(Icons.gamepad_rounded, size: 11, color: cs.primary),
+                                                  ),
+                                                ],
                                               ),
-                                              Container(
-                                                width: 16,
-                                                height: 16,
-                                                decoration: BoxDecoration(
-                                                  color: Colors.white,
-                                                  shape: BoxShape.circle,
-                                                  border: Border.all(color: Colors.black.withOpacity(0.12)),
+                                              const SizedBox(height: 2),
+                                              FittedBox(
+                                                fit: BoxFit.scaleDown,
+                                                child: Text(
+                                                  'Scan',
+                                                  style: AppTypography.caption.copyWith(
+                                                    fontWeight: FontWeight.w900,
+                                                    color: Colors.black,
+                                                  ),
                                                 ),
-                                                child: Icon(Icons.gamepad_rounded, size: 11, color: cs.primary),
                                               ),
                                             ],
-                                          ),
-                                          const SizedBox(height: 2),
-                                          FittedBox(
-                                            fit: BoxFit.scaleDown,
-                                            child: Text(
-                                              'Scan',
-                                              style: AppTypography.caption.copyWith(
-                                                fontWeight: FontWeight.w900,
-                                                color: Colors.black,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      );
-                                    },
+                                          );
+                                        },
+                                      ),
+                                    ),
                                   ),
-                                ),
+                                ],
                               ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-          );
-        }
-
-            return SafeArea(
-          top: false,
-          child: Container(
-            constraints: BoxConstraints(maxHeight: maxH),
-            padding: const EdgeInsets.all(AppSpacing.md),
-            child: glass(
-              child: Padding(
-                padding: const EdgeInsets.all(AppSpacing.lg),
-                child: SingleChildScrollView(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: [
-                          Expanded(
-                            child: Text('Share build', style: AppTypography.subtitle1.copyWith(fontWeight: FontWeight.w900)),
-                          ),
-                          IconButton(
-                            onPressed: () => Navigator.of(sheetCtx).pop(),
-                            icon: const Icon(Icons.close_rounded),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 8),
-                      shareCardWidget(),
-                      const SizedBox(height: 12),
-                      CustomButton(
-                        text: 'Share Now',
-                        onPressed: shareNow,
-                        type: ButtonType.primary,
-                        icon: const Icon(Icons.ios_share_rounded),
-                        isFullWidth: true,
-                      ),
-                      const SizedBox(height: 12),
-                      CustomButton(
-                        text: 'Save Share Card',
-                        onPressed: saveCard,
-                        type: ButtonType.secondary,
-                        icon: const Icon(Icons.download_rounded),
-                        isFullWidth: true,
-                      ),
-                      const SizedBox(height: 12),
-                      CustomButton(
-                        text: 'Save QR to Photos',
-                        onPressed: saveQr,
-                        type: ButtonType.secondary,
-                        icon: const Icon(Icons.qr_code_rounded),
-                        isFullWidth: true,
-                      ),
-                      const SizedBox(height: AppSpacing.lg),
-                      Text('WebGL', style: AppTypography.subtitle2.copyWith(fontWeight: FontWeight.w900)),
-                      const SizedBox(height: 10),
-                      Container(
-                        padding: const EdgeInsets.all(12),
-                        decoration: BoxDecoration(
-                          color: cs.surfaceContainerHighest.withOpacity(0.35),
-                          borderRadius: BorderRadius.circular(18),
-                          border: Border.all(color: cs.outlineVariant.withOpacity(0.5)),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text('Playable link', style: AppTypography.caption.copyWith(fontWeight: FontWeight.w900, color: cs.onSurfaceVariant)),
-                            const SizedBox(height: 8),
-                            Text(url, maxLines: 2, overflow: TextOverflow.ellipsis, style: AppTypography.body2.copyWith(fontWeight: FontWeight.w700)),
-                            const SizedBox(height: 10),
-                            Row(
-                              children: [
-                                actionChip(icon: Icons.copy_rounded, label: 'Copy', onTap: () => copy(url)),
-                                const SizedBox(width: 10),
-                                actionChip(
-                                  icon: Icons.open_in_new_rounded,
-                                  label: 'Open',
-                                  onTap: () async {
-                                    try {
-                                      await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
-                                    } catch (_) {}
-                                  },
-                                ),
-                              ],
                             ),
                           ],
                         ),
                       ),
-                      const SizedBox(height: AppSpacing.lg),
-                      Text('QR code', style: AppTypography.subtitle2.copyWith(fontWeight: FontWeight.w900)),
-                      const SizedBox(height: 10),
-                      Center(
-                        child: Container(
-                          padding: const EdgeInsets.all(14),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(18),
-                            boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 16, offset: const Offset(0, 10))],
+                    ),
+                  ),
+                ),
+              );
+            }
+
+            return SafeArea(
+              top: false,
+              child: Container(
+                constraints: BoxConstraints(maxHeight: maxH),
+                padding: const EdgeInsets.all(AppSpacing.md),
+                child: glass(
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSpacing.lg),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text('Share build', style: AppTypography.subtitle1.copyWith(fontWeight: FontWeight.w900)),
+                              ),
+                              IconButton(
+                                onPressed: () => Navigator.of(sheetCtx).pop(),
+                                icon: const Icon(Icons.close_rounded),
+                              ),
+                            ],
                           ),
-                          child: QrImageView(
-                            data: url,
-                            version: QrVersions.auto,
-                            size: 190,
-                            backgroundColor: Colors.white,
+                          const SizedBox(height: 8),
+                          shareCardWidget(),
+                          const SizedBox(height: 12),
+                          CustomButton(
+                            text: 'Share Now',
+                            onPressed: shareNow,
+                            type: ButtonType.primary,
+                            icon: const Icon(Icons.ios_share_rounded),
+                            isFullWidth: true,
                           ),
-                        ),
+                          const SizedBox(height: 12),
+                          CustomButton(
+                            text: 'Save Share Card',
+                            onPressed: saveCard,
+                            type: ButtonType.secondary,
+                            icon: const Icon(Icons.download_rounded),
+                            isFullWidth: true,
+                          ),
+                          const SizedBox(height: 12),
+                          CustomButton(
+                            text: 'Save QR to Photos',
+                            onPressed: saveQr,
+                            type: ButtonType.secondary,
+                            icon: const Icon(Icons.qr_code_rounded),
+                            isFullWidth: true,
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                          Text('WebGL', style: AppTypography.subtitle2.copyWith(fontWeight: FontWeight.w900)),
+                          const SizedBox(height: 10),
+                          Container(
+                            padding: const EdgeInsets.all(12),
+                            decoration: BoxDecoration(
+                              color: cs.surfaceContainerHighest.withOpacity(0.35),
+                              borderRadius: BorderRadius.circular(18),
+                              border: Border.all(color: cs.outlineVariant.withOpacity(0.5)),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text('Playable link', style: AppTypography.caption.copyWith(fontWeight: FontWeight.w900, color: cs.onSurfaceVariant)),
+                                const SizedBox(height: 8),
+                                Text(url, maxLines: 2, overflow: TextOverflow.ellipsis, style: AppTypography.body2.copyWith(fontWeight: FontWeight.w700)),
+                                const SizedBox(height: 10),
+                                Row(
+                                  children: [
+                                    actionChip(icon: Icons.copy_rounded, label: 'Copy', onTap: () => copy(url)),
+                                    const SizedBox(width: 10),
+                                    actionChip(
+                                      icon: Icons.open_in_new_rounded,
+                                      label: 'Open',
+                                      onTap: () async {
+                                        try {
+                                          await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                                        } catch (_) {}
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                          Text('QR code', style: AppTypography.subtitle2.copyWith(fontWeight: FontWeight.w900)),
+                          const SizedBox(height: 10),
+                          Center(
+                            child: Container(
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(18),
+                                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 16, offset: const Offset(0, 10))],
+                              ),
+                              child: QrImageView(
+                                data: url,
+                                version: QrVersions.auto,
+                                size: 190,
+                                backgroundColor: Colors.white,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                          Center(
+                            child: actionChip(icon: Icons.copy_rounded, label: 'Copy link for QR', onTap: () => copy(url)),
+                          ),
+                          const SizedBox(height: 6),
+                          if (apkUrl.isNotEmpty) ...[
+                            const SizedBox(height: AppSpacing.lg),
+                            Text('Android (APK)', style: AppTypography.subtitle2.copyWith(fontWeight: FontWeight.w900)),
+                            const SizedBox(height: 10),
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: cs.surfaceContainerHighest.withOpacity(0.35),
+                                borderRadius: BorderRadius.circular(18),
+                                border: Border.all(color: cs.outlineVariant.withOpacity(0.5)),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text('Download link', style: AppTypography.caption.copyWith(fontWeight: FontWeight.w900, color: cs.onSurfaceVariant)),
+                                  const SizedBox(height: 8),
+                                  Text(apkUrl, maxLines: 2, overflow: TextOverflow.ellipsis, style: AppTypography.body2.copyWith(fontWeight: FontWeight.w700)),
+                                  const SizedBox(height: 10),
+                                  Row(
+                                    children: [
+                                      actionChip(icon: Icons.copy_rounded, label: 'Copy', onTap: () => copy(apkUrl)),
+                                      const SizedBox(width: 10),
+                                      actionChip(
+                                        icon: Icons.open_in_new_rounded,
+                                        label: 'Open',
+                                        onTap: () async {
+                                          try {
+                                            await launchUrl(Uri.parse(apkUrl), mode: LaunchMode.externalApplication);
+                                          } catch (_) {}
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: AppSpacing.lg),
+                            Text('APK QR code', style: AppTypography.subtitle2.copyWith(fontWeight: FontWeight.w900)),
+                            const SizedBox(height: 10),
+                            Center(
+                              child: Container(
+                                padding: const EdgeInsets.all(14),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(18),
+                                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 16, offset: const Offset(0, 10))],
+                                ),
+                                child: QrImageView(
+                                  data: apkUrl,
+                                  version: QrVersions.auto,
+                                  size: 190,
+                                  backgroundColor: Colors.white,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            Center(
+                              child: actionChip(icon: Icons.copy_rounded, label: 'Copy link for QR', onTap: () => copy(apkUrl)),
+                            ),
+                            const SizedBox(height: 6),
+                          ],
+                        ],
                       ),
-                      const SizedBox(height: 10),
-                      Center(
-                        child: actionChip(icon: Icons.copy_rounded, label: 'Copy link for QR', onTap: () => copy(url)),
-                      ),
-                      const SizedBox(height: 6),
-                    ],
+                    ),
                   ),
                 ),
               ),
-            ),
-          ),
-        );
+            );
           },
         );
       },
@@ -1018,57 +1576,359 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
     await _openShareBuildSheet(p);
   }
 
+  Future<void> _openSupportSheet(Map<String, dynamic> p) async {
+    final token = context.read<AuthProvider>().token;
+    if (token == null || token.trim().isEmpty) return;
+
+    final creatorId = _postCreatorId(p).trim();
+    if (creatorId.isEmpty) {
+      AppNotifier.showError('Missing creator');
+      return;
+    }
+
+    final creatorUsername = (p['creatorUsername'] ?? p['creator'] ?? '').toString().trim();
+    final cs = Theme.of(context).colorScheme;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) {
+        var loading = true;
+        var hasPass = false;
+        var busy = false;
+        var amount = 5.0;
+        final msgCtrl = TextEditingController();
+
+        Future<void> init() async {
+          try {
+            final res = await CreatorMonetizationService.entitlement(token: token, creatorUserId: creatorId);
+            final data = res['data'];
+            hasPass = (data is Map) ? (data['hasCreatorPass'] == true) : false;
+          } catch (_) {
+            hasPass = false;
+          }
+          loading = false;
+        }
+
+        init();
+
+        Widget glass({required Widget child}) {
+          return ClipRRect(
+            borderRadius: BorderRadius.circular(24),
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: cs.surface.withOpacity(0.88),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: cs.outlineVariant.withOpacity(0.6)),
+                ),
+                child: child,
+              ),
+            ),
+          );
+        }
+
+        Future<void> openPaymentSheet(String type, {double? amountUsd}) async {
+          if (busy) return;
+          busy = true;
+          try {
+            final pk = Stripe.publishableKey;
+            if (pk.isEmpty) {
+              throw Exception('Missing Stripe publishable key');
+            }
+
+            final res = await CreatorMonetizationService.paymentSheet(
+              token: token,
+              creatorUserId: creatorId,
+              type: type,
+              amountUsd: amountUsd,
+              message: msgCtrl.text.trim().isEmpty ? null : msgCtrl.text.trim(),
+            );
+
+            if (res['success'] != true) {
+              final msg = (res['message'] ?? res['error'] ?? 'PaymentSheet request failed').toString();
+              throw Exception(msg);
+            }
+
+            final data = res['data'];
+            final m = (data is Map) ? Map<String, dynamic>.from(data) : <String, dynamic>{};
+            final customerId = m['customerId']?.toString() ?? '';
+            final ephemeralKeySecret = m['ephemeralKeySecret']?.toString() ?? '';
+            final paymentIntentClientSecret = m['paymentIntentClientSecret']?.toString() ?? '';
+            final paymentIntentId = m['paymentIntentId']?.toString() ?? '';
+            if (customerId.isEmpty || ephemeralKeySecret.isEmpty || paymentIntentClientSecret.isEmpty) {
+              throw Exception('Invalid PaymentSheet data from server: ${m.isEmpty ? res.toString() : m.toString()}');
+            }
+
+            final cs = Theme.of(sheetCtx).colorScheme;
+            final isDark = Theme.of(sheetCtx).brightness == Brightness.dark;
+
+            await Stripe.instance.initPaymentSheet(
+              paymentSheetParameters: SetupPaymentSheetParameters(
+                merchantDisplayName: 'GameForge AI',
+                customerId: customerId,
+                customerEphemeralKeySecret: ephemeralKeySecret,
+                paymentIntentClientSecret: paymentIntentClientSecret,
+                style: isDark ? ThemeMode.dark : ThemeMode.light,
+                appearance: PaymentSheetAppearance(
+                  colors: PaymentSheetAppearanceColors(
+                    background: cs.surface,
+                    primary: cs.primary,
+                    componentBackground: cs.surface,
+                    componentBorder: cs.outlineVariant,
+                    componentDivider: cs.outlineVariant,
+                    componentText: cs.onSurface,
+                    primaryText: cs.onPrimary,
+                    secondaryText: cs.onSurfaceVariant,
+                    placeholderText: cs.onSurfaceVariant,
+                    icon: cs.onSurfaceVariant,
+                    error: cs.error,
+                  ),
+                ),
+              ),
+            );
+
+            await Stripe.instance.presentPaymentSheet();
+
+            if (paymentIntentId.trim().isNotEmpty) {
+              try {
+                await CreatorMonetizationService.confirmPaymentIntent(
+                  token: token,
+                  paymentIntentId: paymentIntentId.trim(),
+                );
+              } catch (_) {}
+            }
+
+            // Refresh entitlement state after successful payment
+            try {
+              final ent = await CreatorMonetizationService.entitlement(token: token, creatorUserId: creatorId);
+              final d = ent['data'];
+              hasPass = (d is Map) ? (d['hasCreatorPass'] == true) : hasPass;
+            } catch (_) {}
+          } catch (e) {
+            AppNotifier.showError(e.toString());
+          } finally {
+            busy = false;
+          }
+        }
+
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            final maxH = MediaQuery.of(sheetCtx).size.height * 0.86;
+
+            Future<void> safeSet(VoidCallback fn) async {
+              if (!mounted) return;
+              setModalState(fn);
+            }
+
+            if (loading) {
+              Future.microtask(() async {
+                await init();
+                await safeSet(() {});
+              });
+            }
+
+            Widget amountChip(double v) {
+              final selected = (amount - v).abs() < 0.01;
+              return GestureDetector(
+                onTap: () => safeSet(() => amount = v),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(999),
+                    color: selected ? cs.primary.withOpacity(0.14) : cs.surfaceContainerHighest.withOpacity(0.35),
+                    border: Border.all(color: selected ? cs.primary.withOpacity(0.38) : cs.outlineVariant.withOpacity(0.55)),
+                  ),
+                  child: Text('\$${v.toStringAsFixed(0)}', style: AppTypography.caption.copyWith(fontWeight: FontWeight.w900)),
+                ),
+              );
+            }
+
+            return SafeArea(
+              top: false,
+              child: Container(
+                constraints: BoxConstraints(maxHeight: maxH),
+                padding: const EdgeInsets.all(AppSpacing.md),
+                child: glass(
+                  child: Padding(
+                    padding: const EdgeInsets.all(AppSpacing.lg),
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  creatorUsername.isEmpty ? 'Support creator' : 'Support @$creatorUsername',
+                                  style: AppTypography.subtitle1.copyWith(fontWeight: FontWeight.w900),
+                                ),
+                              ),
+                              IconButton(
+                                onPressed: () => Navigator.of(sheetCtx).pop(),
+                                icon: const Icon(Icons.close_rounded),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(20),
+                              gradient: LinearGradient(
+                                colors: [cs.primary.withOpacity(0.16), AppColors.accent.withOpacity(0.10)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              border: Border.all(color: cs.outlineVariant.withOpacity(0.55)),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      width: 40,
+                                      height: 40,
+                                      decoration: BoxDecoration(
+                                        color: cs.primary.withOpacity(0.12),
+                                        borderRadius: BorderRadius.circular(14),
+                                        border: Border.all(color: cs.primary.withOpacity(0.18)),
+                                      ),
+                                      child: Icon(Icons.workspace_premium_outlined, color: cs.primary),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text('Creator Pass', style: AppTypography.body1.copyWith(fontWeight: FontWeight.w900)),
+                                          const SizedBox(height: 2),
+                                          Text(
+                                            'Unlock Source Export + remove watermark for all games.',
+                                            style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                CustomButton(
+                                  text: hasPass ? 'Unlocked' : 'Unlock now',
+                                  onPressed: hasPass
+                                      ? null
+                                      : () async {
+                                          await openPaymentSheet('creator_pass');
+                                          await safeSet(() {});
+                                        },
+                                  type: hasPass ? ButtonType.secondary : ButtonType.primary,
+                                  isFullWidth: true,
+                                  isLoading: busy,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.all(14),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(20),
+                              color: cs.surface,
+                              border: Border.all(color: cs.outlineVariant.withOpacity(0.6)),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      width: 40,
+                                      height: 40,
+                                      decoration: BoxDecoration(
+                                        color: AppColors.accent.withOpacity(0.12),
+                                        borderRadius: BorderRadius.circular(14),
+                                        border: Border.all(color: AppColors.accent.withOpacity(0.18)),
+                                      ),
+                                      child: Icon(Icons.volunteer_activism_outlined, color: AppColors.accent),
+                                    ),
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text('Tip', style: AppTypography.body1.copyWith(fontWeight: FontWeight.w900)),
+                                          const SizedBox(height: 2),
+                                          Text('Support the creator and help fund new games.', style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700)),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                Wrap(
+                                  spacing: 10,
+                                  runSpacing: 10,
+                                  children: [amountChip(2), amountChip(5), amountChip(10), amountChip(20)],
+                                ),
+                                const SizedBox(height: 12),
+                                TextField(
+                                  controller: msgCtrl,
+                                  maxLines: 3,
+                                  maxLength: 240,
+                                  decoration: InputDecoration(
+                                    hintText: 'Add a message…',
+                                    filled: true,
+                                    fillColor: cs.surfaceContainerHighest.withOpacity(0.35),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(18),
+                                      borderSide: BorderSide(color: cs.outlineVariant.withOpacity(0.6)),
+                                    ),
+                                    enabledBorder: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(18),
+                                      borderSide: BorderSide(color: cs.outlineVariant.withOpacity(0.6)),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(height: 10),
+                                SizedBox(
+                                  width: double.infinity,
+                                  child: ElevatedButton.icon(
+                                    icon: const Icon(Icons.payment_rounded),
+                                    label: const Text('Send tip'),
+                                    onPressed: () async {
+                                      await openPaymentSheet('tip', amountUsd: amount);
+                                      await safeSet(() {});
+                                    },
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Payments are processed by Stripe. Revenue split: 80/20.',
+                            style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
   void _openFullscreenPlay(Map<String, dynamic> p) {
     final url = _postWebglUrl(p).trim();
     if (url.isEmpty) return;
     context.push('/play-webgl', extra: {'url': url});
-  }
-
-  Future<void> _openQuickNav() async {
-    final cs = Theme.of(context).colorScheme;
-    await showModalBottomSheet<void>(
-      context: context,
-      backgroundColor: cs.surface,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(AppBorderRadius.large)),
-      ),
-      builder: (context) {
-        Widget tile({required IconData icon, required String label, required String tab}) {
-          return ListTile(
-            leading: Icon(icon),
-            title: Text(label, style: AppTypography.body1.copyWith(fontWeight: FontWeight.w800)),
-            onTap: () {
-              Navigator.of(context).pop();
-              this.context.go('/dashboard?tab=$tab');
-            },
-          );
-        }
-
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(vertical: 10),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(
-                  width: 44,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 10),
-                  decoration: BoxDecoration(
-                    color: cs.onSurface.withOpacity(0.18),
-                    borderRadius: BorderRadius.circular(999),
-                  ),
-                ),
-                tile(icon: Icons.home_rounded, label: 'Home', tab: 'home'),
-                tile(icon: Icons.folder_rounded, label: 'Projects', tab: 'projects'),
-                tile(icon: Icons.grid_view_rounded, label: 'Templates', tab: 'templates'),
-                tile(icon: Icons.person_rounded, label: 'Profile', tab: 'profile'),
-              ],
-            ),
-          ),
-        );
-      },
-    );
   }
 
   Widget _buildPreview(Map<String, dynamic> p) {
@@ -1093,54 +1953,6 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
     );
   }
 
-  Widget _glass({required Widget child, EdgeInsets? padding}) {
-    final cs = Theme.of(context).colorScheme;
-    final r = BorderRadius.circular(18);
-    return AnimatedBuilder(
-      animation: _neonCtrl,
-      builder: (context, _) {
-        final t = _neonCtrl.value;
-        final glow = 0.22 + 0.10 * (0.5 + 0.5 * math.sin(t * math.pi * 2));
-        final borderA = Color.lerp(cs.primary.withOpacity(0.55), AppColors.accent.withOpacity(0.55), 0.5 + 0.5 * math.sin((t + 0.18) * math.pi * 2))!;
-
-        return ClipRRect(
-          borderRadius: r,
-          child: BackdropFilter(
-            filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
-            child: Container(
-              padding: padding ?? const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(
-                borderRadius: r,
-                gradient: LinearGradient(
-                  colors: [
-                    Colors.black.withOpacity(0.22),
-                    cs.surface.withOpacity(0.16),
-                  ],
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                ),
-                border: Border.all(color: borderA.withOpacity(0.55), width: 1.0),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.34),
-                    blurRadius: 28,
-                    offset: const Offset(0, 16),
-                  ),
-                  BoxShadow(
-                    color: cs.primary.withOpacity(glow),
-                    blurRadius: 34,
-                    offset: const Offset(0, 18),
-                  ),
-                ],
-              ),
-              child: child,
-            ),
-          ),
-        );
-      },
-    );
-  }
-
   Widget _tagChip(String t) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
@@ -1161,21 +1973,273 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
 
   Widget _buildPage(Map<String, dynamic> p, int index) {
     final cs = Theme.of(context).colorScheme;
+    final isAd = _isAd(p);
     final title = _postTitle(p);
     final liked = _postLikedByMe(p);
     final likeCount = _postLikeCount(p);
     final commentCount = _postCommentCount(p);
     final creator = (p['creatorUsername'] ?? p['creator'] ?? '').toString().trim();
+    final creatorId = _postCreatorId(p).trim();
     final tags = (p['tags'] is List) ? (p['tags'] as List).map((e) => e?.toString() ?? '').where((e) => e.trim().isNotEmpty).toList() : <String>[];
+    final isReel = _isReel(p);
+    final reelUrl = _postReelUrl(p).trim();
+    final wowScore = (p['wowScore'] is num) ? (p['wowScore'] as num).toInt() : 0;
+    final reelStyle = (p['reelStyle'] ?? '').toString().trim().toUpperCase();
+    final reelTarget = (p['reelTarget'] ?? '').toString().trim().toUpperCase();
+    final reelPromoText = _postReelPromoText(p);
+    final reelMusicCue = _postReelMusicCue(p);
+    final reelCaptionLines = _postReelCaptionLines(p);
+    final reelCaptionStyle = _postReelCaptionStyle(p);
 
     final isActive = index == _activeIndex;
     final web = (isActive && _activePostId == _postId(p)) ? _activeWeb : null;
+    final reelPlaying = isActive && _reelPostId == _postId(p) && _reelVideo != null && _reelVideo!.value.isInitialized;
 
     final burst = (_burstPostId != null && _burstPostId == _postId(p)) ? _burstT : 1.2;
     final burstVisible = (_burstPostId != null && _burstPostId == _postId(p));
     final heartScale = 0.65 + (1 - (burst - 0.5).abs() * 1.3).clamp(0.0, 1.0) * 0.55;
     final heartOpacity = (1.0 - burst).clamp(0.0, 1.0);
 
+    if (isAd) {
+      final img = (p['imageUrl'] ?? '').toString().trim();
+      final videoUrl = (p['videoUrl'] ?? '').toString().trim();
+      final adTitle = (p['title'] ?? 'Sponsored').toString().trim();
+      final adDesc = (p['description'] ?? '').toString().trim();
+      final advertiser = (p['advertiserName'] ?? '').toString().trim();
+      final cta = (p['ctaLabel'] ?? 'Visit').toString().trim();
+      final clickUrl = (p['clickUrl'] ?? '').toString().trim();
+      final campaignId = _adCampaignId(p).trim();
+      final creditedCreatorId = (p['creditedCreatorId'] ?? '').toString().trim();
+
+      Future<void> click() async {
+        final token = context.read<AuthProvider>().token;
+        if (token == null || token.trim().isEmpty) return;
+        if (campaignId.isEmpty || clickUrl.isEmpty) return;
+        try {
+          await AdsService.track(
+            token: token,
+            campaignId: campaignId,
+            type: 'click',
+            creditedCreatorUserId: creditedCreatorId.isEmpty ? null : creditedCreatorId,
+          );
+        } catch (_) {}
+        try {
+          final uri = Uri.tryParse(clickUrl);
+          if (uri != null) {
+            await launchUrl(uri, mode: LaunchMode.externalApplication);
+          }
+        } catch (_) {}
+      }
+
+      final canPlayVideo = videoUrl.isNotEmpty;
+      final isActiveAd = isActive;
+      if (canPlayVideo) {
+        // Fire-and-forget: ensure video controller exists for active ad.
+        if (isActiveAd && campaignId.isNotEmpty) {
+          Future.microtask(() => _ensureAdVideo(campaignId: campaignId, url: videoUrl, play: true));
+        } else {
+          Future.microtask(() async {
+            try {
+              await _adVideo?.pause();
+            } catch (_) {}
+          });
+        }
+      }
+
+      return Stack(
+        fit: StackFit.expand,
+        children: [
+          Positioned.fill(
+            child: canPlayVideo && _adVideo != null && _adVideoCampaignId == campaignId && _adVideo!.value.isInitialized
+                ? FittedBox(
+                    fit: BoxFit.cover,
+                    child: SizedBox(
+                      width: _adVideo!.value.size.width,
+                      height: _adVideo!.value.size.height,
+                      child: VideoPlayer(_adVideo!),
+                    ),
+                  )
+                : (img.isNotEmpty
+                    ? CachedNetworkImage(
+                        imageUrl: img,
+                        fit: BoxFit.cover,
+                        placeholder: (context, _) => Container(color: Colors.black.withOpacity(0.85)),
+                        errorWidget: (context, _, __) => Container(color: Colors.black.withOpacity(0.85)),
+                      )
+                    : Container(
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            colors: [cs.primary.withOpacity(0.9), AppColors.accent.withOpacity(0.7)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                        ),
+                      )),
+          ),
+          Positioned.fill(
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [Colors.black.withOpacity(0.70), Colors.transparent, Colors.black.withOpacity(0.78)],
+                  begin: Alignment.topCenter,
+                  end: Alignment.bottomCenter,
+                  stops: const [0.0, 0.55, 1.0],
+                ),
+              ),
+            ),
+          ),
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 74,
+            left: AppSpacing.lg,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _glass(
+                  context,
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.campaign_outlined, size: 16, color: Theme.of(context).brightness == Brightness.dark ? Colors.white.withOpacity(0.92) : cs.onSurface),
+                      const SizedBox(width: 8),
+                      Text(
+                        'Sponsored',
+                        style: AppTypography.caption.copyWith(color: Theme.of(context).brightness == Brightness.dark ? Colors.white.withOpacity(0.92) : cs.onSurface, fontWeight: FontWeight.w900),
+                      ),
+                    ],
+                  ),
+                ),
+                if (advertiser.isNotEmpty) ...[
+                  const SizedBox(width: 10),
+                  _glass(
+                    context,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    child: Text(
+                      advertiser,
+                      style: AppTypography.caption.copyWith(color: Theme.of(context).brightness == Brightness.dark ? Colors.white.withOpacity(0.92) : cs.onSurface, fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          if (canPlayVideo)
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 74,
+              right: AppSpacing.lg,
+              child: _glass(
+                context,
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                child: GestureDetector(
+                  onTap: _toggleAdMuted,
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(
+                        _adMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+                        size: 18,
+                        color: Theme.of(context).brightness == Brightness.dark ? Colors.white.withOpacity(0.92) : cs.onSurface,
+                      ),
+                      const SizedBox(width: 8),
+                      Text(
+                        _adMuted ? 'Muted' : 'Sound',
+                        style: AppTypography.caption.copyWith(color: Theme.of(context).brightness == Brightness.dark ? Colors.white.withOpacity(0.92) : cs.onSurface, fontWeight: FontWeight.w900),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          Positioned(
+            left: AppSpacing.lg,
+            right: AppSpacing.lg,
+            bottom: AppSpacing.xxxl + 12,
+            child: _glass(
+              context,
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(999),
+                          color: (Theme.of(context).brightness == Brightness.dark ? Colors.white : cs.onSurface).withOpacity(0.10),
+                          border: Border.all(color: (Theme.of(context).brightness == Brightness.dark ? Colors.white : cs.onSurface).withOpacity(0.14)),
+                        ),
+                        child: Text(
+                          'Ad',
+                          style: AppTypography.caption.copyWith(color: Theme.of(context).brightness == Brightness.dark ? Colors.white.withOpacity(0.92) : cs.onSurface, fontWeight: FontWeight.w900),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          adTitle.isEmpty ? 'Sponsored' : adTitle,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTypography.subtitle1.copyWith(color: Theme.of(context).brightness == Brightness.dark ? Colors.white : cs.onSurface, fontWeight: FontWeight.w900),
+                        ),
+                      ),
+                    ],
+                  ),
+                  if (adDesc.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    Text(
+                      adDesc,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTypography.body2.copyWith(color: Theme.of(context).brightness == Brightness.dark ? Colors.white.withOpacity(0.92) : cs.onSurfaceVariant, fontWeight: FontWeight.w700, height: 1.25),
+                    ),
+                  ],
+                  const SizedBox(height: 14),
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      gradient: LinearGradient(
+                        colors: [cs.primary, AppColors.accent],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      boxShadow: [
+                        BoxShadow(color: cs.primary.withOpacity(0.22), blurRadius: 22, offset: const Offset(0, 12)),
+                      ],
+                    ),
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(16),
+                        onTap: clickUrl.isEmpty ? null : click,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  cta.isEmpty ? 'Learn more' : cta,
+                                  style: AppTypography.body2.copyWith(color: cs.onPrimary, fontWeight: FontWeight.w900),
+                                ),
+                              ),
+                              Icon(Icons.arrow_forward_rounded, color: cs.onPrimary),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Stack(
       fit: StackFit.expand,
       children: [
@@ -1188,20 +2252,149 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
               child: Padding(
                 padding: EdgeInsets.zero,
                 child: isActive
-                    ? (web != null ? WebViewWidget(controller: web) : _buildPreview(p))
+                    ? (reelPlaying
+                        ? FittedBox(
+                            fit: BoxFit.cover,
+                            child: SizedBox(
+                              width: _reelVideo!.value.size.width,
+                              height: _reelVideo!.value.size.height,
+                              child: VideoPlayer(_reelVideo!),
+                            ),
+                          )
+                        : (web != null ? WebViewWidget(controller: web) : _buildPreview(p)))
                     : _buildPreview(p),
               ),
             ),
           ),
         ),
+        if (isReel && reelUrl.isNotEmpty)
+          Positioned(
+            top: MediaQuery.of(context).padding.top + 74,
+            right: AppSpacing.lg,
+            child: AnimatedBuilder(
+              animation: _neonCtrl,
+              builder: (context, _) {
+                final pulse = 0.96 + (math.sin(_neonCtrl.value * math.pi * 2) * 0.04);
+                return Row(
+                  children: [
+                    Transform.scale(
+                      scale: pulse,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(999),
+                          gradient: LinearGradient(
+                            colors: [
+                              const Color(0xFFFF5C93).withOpacity(0.86),
+                              const Color(0xFF7F5CFF).withOpacity(0.88),
+                            ],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                          border: Border.all(color: Colors.white.withOpacity(0.26)),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFFFF4D8D).withOpacity(0.32),
+                              blurRadius: 18,
+                              spreadRadius: 1,
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.local_fire_department_rounded, size: 16, color: Colors.white.withOpacity(0.98)),
+                            if (wowScore >= 80) ...[
+                              const SizedBox(width: 4),
+                              const Icon(Icons.auto_awesome_rounded, size: 14, color: Colors.white),
+                            ],
+                            const SizedBox(width: 8),
+                            Text(
+                              wowScore > 0 ? 'REEL • WOW $wowScore' : 'REEL',
+                              style: AppTypography.caption.copyWith(color: Colors.white.withOpacity(0.98), fontWeight: FontWeight.w900),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    if (reelStyle.isNotEmpty || reelTarget.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      _glass(
+                        context,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        child: Text(
+                          reelStyle.isNotEmpty && reelTarget.isNotEmpty
+                              ? '$reelStyle • $reelTarget'
+                              : (reelStyle.isNotEmpty ? reelStyle : reelTarget),
+                          style: AppTypography.caption.copyWith(color: Colors.white.withOpacity(0.92), fontWeight: FontWeight.w900),
+                        ),
+                      ),
+                    ],
+                    const SizedBox(width: 8),
+                    _glass(
+                      context,
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      child: GestureDetector(
+                        onTap: _toggleReelMuted,
+                        child: Icon(
+                          _reelMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+                          size: 18,
+                          color: Colors.white.withOpacity(0.95),
+                        ),
+                      ),
+                    ),
+                    if (reelMusicCue.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      _glass(
+                        context,
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.music_note_rounded,
+                              size: 16,
+                              color: Colors.white.withOpacity(0.95),
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              reelMusicCue,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: AppTypography.caption.copyWith(
+                                color: Colors.white.withOpacity(0.94),
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ],
+                );
+              },
+            ),
+          ),
+        if (reelPlaying && _reelVideo != null && _reelVideo!.value.isBuffering)
+          const Positioned.fill(
+            child: IgnorePointer(
+              child: Center(
+                child: SizedBox(
+                  width: 36,
+                  height: 36,
+                  child: CircularProgressIndicator(strokeWidth: 2.4),
+                ),
+              ),
+            ),
+          ),
         Positioned.fill(
           child: DecoratedBox(
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  Colors.black.withOpacity(0.62),
+                  (isDark ? Colors.black : Colors.black).withOpacity(isDark ? 0.62 : 0.45),
                   Colors.transparent,
-                  Colors.black.withOpacity(0.72),
+                  (isDark ? Colors.black : Colors.black).withOpacity(isDark ? 0.72 : 0.55),
                 ],
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
@@ -1210,6 +2403,75 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
             ),
           ),
         ),
+        if (isReel && (reelPromoText.isNotEmpty || reelCaptionLines.isNotEmpty))
+          Positioned(
+            left: AppSpacing.lg,
+            right: AppSpacing.lg,
+            top: MediaQuery.of(context).padding.top + 148,
+            child: IgnorePointer(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (reelPromoText.isNotEmpty)
+                    _glass(
+                      context,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      child: Text(
+                        reelPromoText,
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTypography.subtitle1.copyWith(
+                          color: Colors.white.withOpacity(0.98),
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 0.4,
+                          shadows: [
+                            Shadow(
+                              color: Colors.black.withOpacity(0.55),
+                              blurRadius: 10,
+                              offset: const Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  if (reelCaptionLines.isNotEmpty) ...[
+                    const SizedBox(height: 10),
+                    ...reelCaptionLines.take(2).map(
+                      (line) => Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withOpacity(
+                              reelCaptionStyle == 'impact-neon' ? 0.52 : 0.60,
+                            ),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: reelCaptionStyle == 'impact-neon'
+                                  ? const Color(0xFFFF5C93).withOpacity(0.44)
+                                  : Colors.white.withOpacity(0.16),
+                            ),
+                          ),
+                          child: Text(
+                            line,
+                            textAlign: TextAlign.center,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTypography.body2.copyWith(
+                              color: Colors.white.withOpacity(0.95),
+                              fontWeight: FontWeight.w800,
+                              height: 1.2,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
         if (burstVisible)
           Positioned.fill(
             child: IgnorePointer(
@@ -1221,45 +2483,54 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                     child: Icon(
                       Icons.favorite_rounded,
                       size: 128,
-                      color: Colors.white.withOpacity(0.92),
+                      color: (isDark ? Colors.white : Colors.white).withOpacity(0.92),
                     ),
                   ),
                 ),
               ),
             ),
           ),
+        // Content Overlays
         Positioned(
           left: AppSpacing.lg,
-          right: 92,
-          bottom: AppSpacing.xxl + 8,
+          right: 100,
+          bottom: MediaQuery.of(context).padding.bottom + AppSpacing.xl,
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
               if (creator.isNotEmpty)
-                _glass(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 7,
-                        height: 7,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          color: AppColors.accent,
-                          boxShadow: [BoxShadow(color: AppColors.accent.withOpacity(0.4), blurRadius: 10)],
+                GestureDetector(
+                  onTap: creatorId.isEmpty ? null : () => context.push('/creator/$creatorId'),
+                  child: _glass(
+                    context,
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 7,
+                          height: 7,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: AppColors.accent,
+                            boxShadow: [BoxShadow(color: AppColors.accent.withOpacity(0.4), blurRadius: 10)],
+                          ),
                         ),
-                      ),
-                      const SizedBox(width: 10),
-                      Text(
-                        '@$creator',
-                        style: AppTypography.caption.copyWith(
-                          color: Colors.white.withOpacity(0.92),
-                          fontWeight: FontWeight.w900,
+                        const SizedBox(width: 10),
+                        Text(
+                          '@$creator',
+                          style: AppTypography.caption.copyWith(
+                            color: Colors.white.withOpacity(0.92),
+                            fontWeight: FontWeight.w900,
+                          ),
                         ),
-                      ),
-                    ],
+                        if (creatorId.isNotEmpty) ...[
+                          const SizedBox(width: 8),
+                          Icon(Icons.chevron_right_rounded, size: 18, color: Colors.white.withOpacity(0.78)),
+                        ],
+                      ],
+                    ),
                   ),
                 ),
               if (creator.isNotEmpty) const SizedBox(height: 10),
@@ -1311,33 +2582,40 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
             ],
           ),
         ),
-        Positioned(
-          right: AppSpacing.lg,
-          bottom: AppSpacing.xxl + 8,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              _ActionButton(
-                icon: liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                label: likeCount.toString(),
-                active: liked,
-                onTap: () => _toggleLike(p),
-              ),
-              const SizedBox(height: 14),
-              _ActionButton(
-                icon: Icons.mode_comment_outlined,
-                label: commentCount.toString(),
-                onTap: () => _openCommentsSheet(p),
-              ),
-              const SizedBox(height: 14),
-              _ActionButton(
-                icon: Icons.ios_share_rounded,
-                label: 'Share',
-                onTap: () => _share(p),
-              ),
-            ],
+        if (!isAd)
+          Positioned(
+            right: AppSpacing.lg,
+            bottom: AppSpacing.xxl + 8,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _ActionButton(
+                  icon: liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                  label: likeCount.toString(),
+                  active: liked,
+                  onTap: () => _toggleLike(p),
+                ),
+                const SizedBox(height: 14),
+                _ActionButton(
+                  icon: Icons.mode_comment_outlined,
+                  label: commentCount.toString(),
+                  onTap: () => _openCommentsSheet(p),
+                ),
+                const SizedBox(height: 14),
+                _ActionButton(
+                  icon: Icons.ios_share_rounded,
+                  label: 'Share',
+                  onTap: () => _share(p),
+                ),
+                const SizedBox(height: 14),
+                _ActionButton(
+                  icon: Icons.volunteer_activism_outlined,
+                  label: 'Tip',
+                  onTap: () => _openSupportSheet(p),
+                ),
+              ],
+            ),
           ),
-        ),
         if (!isActive)
           Positioned(
             top: 0,
@@ -1450,20 +2728,48 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                       fit: StackFit.expand,
                       children: [
                         Padding(
-                          padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 68),
-                          child: PageView.builder(
-                            controller: _pageController,
-                            scrollDirection: Axis.vertical,
-                            itemCount: _posts.length,
-                            onPageChanged: (i) async {
-                              setState(() => _activeIndex = i);
-                              await _ensureActiveWebView();
-                              await _loadMoreIfNeeded(i);
-                            },
-                            itemBuilder: (context, index) {
-                              final p = _posts[index];
-                              return _buildPage(p, index);
-                            },
+                          padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 60),
+                          child: Column(
+                            children: [
+                              _buildLiveHorizontalList(),
+                              Expanded(
+                                child: PageView.builder(
+                                  controller: _pageController,
+                                  scrollDirection: Axis.vertical,
+                                  itemCount: _posts.length,
+                                  onPageChanged: (i) async {
+                                    setState(() => _activeIndex = i);
+                                    final cur = _postAt(i);
+                                    if (cur != null && _isAd(cur)) {
+                                      final campaignId = _adCampaignId(cur).trim();
+                                      final creditedCreatorId = (cur['creditedCreatorId'] ?? '').toString().trim();
+
+                                      if (campaignId.isNotEmpty && !_seenAdImpressions.contains(campaignId)) {
+                                        _seenAdImpressions.add(campaignId);
+                                        final token = context.read<AuthProvider>().token;
+                                        if (token != null && token.trim().isNotEmpty) {
+                                          try {
+                                            await AdsService.track(
+                                              token: token,
+                                              campaignId: campaignId,
+                                              type: 'impression',
+                                              creditedCreatorUserId: creditedCreatorId.isEmpty ? null : creditedCreatorId,
+                                            );
+                                          } catch (_) {}
+                                        }
+                                      }
+                                    }
+                                    await _ensureActiveWebView();
+                                    await _loadMoreIfNeeded(i);
+                                  },
+                                  itemBuilder: (context, i) {
+                                    final p = _postAt(i);
+                                    if (p == null) return const SizedBox.shrink();
+                                    return _buildPage(p, i);
+                                  },
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                         Positioned(
@@ -2017,6 +3323,32 @@ class _CommentsSheetState extends State<_CommentsSheet> {
     }
   }
 
+  String _avatarUrl(Map<String, dynamic> c) {
+    final u = c['user'];
+    final um = (u is Map) ? u : null;
+    final candidates = <dynamic>[
+      c['avatarUrl'],
+      c['avatar'],
+      c['photoUrl'],
+      c['photo'],
+      c['profileImageUrl'],
+      c['profileImage'],
+      c['imageUrl'],
+      c['image'],
+      um?['avatarUrl'],
+      um?['avatar'],
+      um?['photoUrl'],
+      um?['photo'],
+      um?['profileImageUrl'],
+      um?['profileImage'],
+    ];
+    for (final v in candidates) {
+      final s = (v ?? '').toString().trim();
+      if (s.isNotEmpty) return s;
+    }
+    return '';
+  }
+
   Widget _row(Map<String, dynamic> c) {
     final cs = Theme.of(context).colorScheme;
     final author = (c['username'] ?? c['author'] ?? '').toString();
@@ -2026,29 +3358,80 @@ class _CommentsSheetState extends State<_CommentsSheet> {
     final audioUrl = (c['audioUrl'] ?? '').toString();
     final durationMs = c['audioDurationMs'];
 
+    final avatar = _avatarUrl(c);
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 34,
-            height: 34,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              gradient: LinearGradient(
-                colors: [cs.primary.withOpacity(0.9), AppColors.accent.withOpacity(0.9)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-            ),
-            child: Center(
-              child: Text(
-                author.isEmpty ? 'U' : author.characters.first.toUpperCase(),
-                style: AppTypography.caption.copyWith(color: cs.onPrimary, fontWeight: FontWeight.w900),
-              ),
-            ),
-          ),
+          (avatar.isNotEmpty)
+              ? ClipOval(
+                  child: CachedNetworkImage(
+                    imageUrl: avatar,
+                    width: 34,
+                    height: 34,
+                    fit: BoxFit.cover,
+                    placeholder: (context, _) {
+                      return Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            colors: [cs.primary.withOpacity(0.9), AppColors.accent.withOpacity(0.9)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                        ),
+                        child: Center(
+                          child: Text(
+                            author.isEmpty ? 'U' : author.characters.first.toUpperCase(),
+                            style: AppTypography.caption.copyWith(color: cs.onPrimary, fontWeight: FontWeight.w900),
+                          ),
+                        ),
+                      );
+                    },
+                    errorWidget: (context, _, __) {
+                      return Container(
+                        width: 34,
+                        height: 34,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            colors: [cs.primary.withOpacity(0.9), AppColors.accent.withOpacity(0.9)],
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                          ),
+                        ),
+                        child: Center(
+                          child: Text(
+                            author.isEmpty ? 'U' : author.characters.first.toUpperCase(),
+                            style: AppTypography.caption.copyWith(color: cs.onPrimary, fontWeight: FontWeight.w900),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                )
+              : Container(
+                  width: 34,
+                  height: 34,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      colors: [cs.primary.withOpacity(0.9), AppColors.accent.withOpacity(0.9)],
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                    ),
+                  ),
+                  child: Center(
+                    child: Text(
+                      author.isEmpty ? 'U' : author.characters.first.toUpperCase(),
+                      style: AppTypography.caption.copyWith(color: cs.onPrimary, fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                ),
           const SizedBox(width: 12),
           Expanded(
             child: Column(

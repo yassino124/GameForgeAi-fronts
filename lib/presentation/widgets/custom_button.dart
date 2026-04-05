@@ -4,6 +4,7 @@ import '../../core/constants/app_constants.dart';
 
 class CustomButton extends StatelessWidget {
   final String text;
+  final String? subText;
   final VoidCallback? onPressed;
   final ButtonType type;
   final ButtonSize size;
@@ -14,6 +15,7 @@ class CustomButton extends StatelessWidget {
   const CustomButton({
     super.key,
     required this.text,
+    this.subText,
     this.onPressed,
     this.type = ButtonType.primary,
     this.size = ButtonSize.medium,
@@ -56,19 +58,36 @@ class CustomButton extends StatelessWidget {
 
   Widget _buildPrimaryButton(BuildContext context, {required VoidCallback? onPressed}) {
     final cs = Theme.of(context).colorScheme;
-    return ElevatedButton(
-      onPressed: onPressed,
-      style: ElevatedButton.styleFrom(
-        backgroundColor: cs.primary,
-        foregroundColor: cs.onPrimary,
-        elevation: 0,
-        shadowColor: cs.primary,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppBorderRadius.medium),
+    return Container(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: const LinearGradient(
+          colors: [Color(0xFF6366F1), Color(0xFF818CF8)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
         ),
-        padding: _getPadding(),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF6366F1).withOpacity(0.3),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
       ),
-      child: _buildButtonContent(context, foreground: cs.onPrimary),
+      child: ElevatedButton(
+        onPressed: onPressed,
+        style: ElevatedButton.styleFrom(
+          backgroundColor: Colors.transparent,
+          foregroundColor: Colors.white,
+          elevation: 0,
+          shadowColor: Colors.transparent,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          padding: _getPadding(),
+        ),
+        child: _buildButtonContent(context, foreground: Colors.white),
+      ),
     );
   }
 
@@ -108,15 +127,15 @@ class CustomButton extends StatelessWidget {
     return ElevatedButton(
       onPressed: onPressed,
       style: ElevatedButton.styleFrom(
-        backgroundColor: cs.error,
-        foregroundColor: cs.onError,
+        backgroundColor: cs.errorContainer,
+        foregroundColor: cs.onErrorContainer,
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(AppBorderRadius.medium),
         ),
         padding: _getPadding(),
       ),
-      child: _buildButtonContent(context, foreground: cs.onError),
+      child: _buildButtonContent(context, foreground: cs.onErrorContainer),
     );
   }
 
@@ -148,30 +167,73 @@ class CustomButton extends StatelessWidget {
     }
 
     final hasIcon = icon != null;
-    return FittedBox(
-      fit: BoxFit.scaleDown,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          if (hasIcon) ...[
-            IconTheme(
-              data: IconThemeData(color: foreground, size: _getTextSize() + 2),
-              child: icon!,
+    final subtitle = (subText ?? '').trim();
+    if (subtitle.isEmpty) {
+      return FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            if (hasIcon) ...[
+              IconTheme(
+                data: IconThemeData(color: foreground, size: _getTextSize() + 2),
+                child: icon!,
+              ),
+              const SizedBox(width: AppSpacing.sm),
+            ],
+            Flexible(
+              child: Text(
+                text,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                softWrap: false,
+                style: _getTextStyle().copyWith(color: foreground),
+              ),
             ),
-            const SizedBox(width: AppSpacing.sm),
           ],
-          Flexible(
-            child: Text(
-              text,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              softWrap: false,
-              style: _getTextStyle().copyWith(color: foreground),
-            ),
+        ),
+      );
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        if (hasIcon) ...[
+          IconTheme(
+            data: IconThemeData(color: foreground, size: _getTextSize() + 2),
+            child: icon!,
           ),
+          const SizedBox(width: AppSpacing.sm),
         ],
-      ),
+        Flexible(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                text,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                softWrap: false,
+                style: _getTextStyle().copyWith(color: foreground),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                softWrap: false,
+                style: AppTypography.caption.copyWith(
+                  color: foreground.withOpacity(0.85),
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ],
     );
   }
 

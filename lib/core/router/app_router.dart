@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../constants/app_constants.dart';
-import '../themes/app_theme.dart';
 import '../guards/auth_guard.dart';
 import '../../presentation/screens/onboarding/onboarding.dart';
 import '../../presentation/screens/auth/auth.dart';
@@ -15,7 +14,11 @@ import '../../presentation/screens/assets/assets_library_screen.dart';
 import '../../presentation/screens/assets/assets_export_screen.dart';
 import '../../presentation/screens/project/project_export_screen.dart';
 import '../../presentation/screens/quiz/game_quiz_screen.dart';
-import '../../presentation/screens/project/ai_phaser_game_screen.dart';
+import '../../presentation/screens/multiplayer/multiplayer.dart';
+import '../../presentation/screens/live/live_feed_screen.dart';
+import '../../presentation/screens/live/go_live_screen.dart';
+import '../../presentation/screens/live/live_watch_screen.dart';
+import '../../presentation/screens/project/play_webgl_screen.dart' as play_webgl;
 
 class AppRouter {
   static Page<T> _fadeSlidePage<T>({
@@ -60,11 +63,14 @@ class AppRouter {
         path: '/permissions',
         builder: (context, state) => const PermissionsScreen(),
       ),
-      
+
       // Authentication routes
       GoRoute(
         path: '/signin',
-        builder: (context, state) => const SignInScreen(),
+        builder: (context, state) {
+          final email = state.uri.queryParameters['email'];
+          return SignInScreen(initialEmail: email);
+        },
       ),
       GoRoute(
         path: '/forgot-password',
@@ -91,9 +97,12 @@ class AppRouter {
       ),
       GoRoute(
         path: '/email-verification',
-        builder: (context, state) => const EmailVerificationScreen(),
+        builder: (context, state) {
+          final email = state.uri.queryParameters['email'];
+          return EmailVerificationScreen(initialEmail: email);
+        },
       ),
-      
+
       // Main app routes (protected)
       GoRoute(
         path: '/dashboard',
@@ -132,7 +141,74 @@ class AppRouter {
           return _fadeSlidePage(child: HomeDashboard(initialIndex: initialIndex), state: state);
         },
       ),
-      
+
+      GoRoute(
+        path: '/multiplayer',
+        pageBuilder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return _fadeSlidePage(child: const SignInScreen(), state: state);
+          }
+          return _fadeSlidePage(child: const MultiplayerLobbyScreen(), state: state);
+        },
+      ),
+
+      GoRoute(
+        path: '/multiplayer/room',
+        pageBuilder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return _fadeSlidePage(child: const SignInScreen(), state: state);
+          }
+
+          final extra = state.extra;
+          final data = extra is Map ? Map<String, dynamic>.from(extra) : <String, dynamic>{};
+          final mode = (data['mode']?.toString() ?? 'join').trim().isEmpty ? 'join' : (data['mode']?.toString() ?? 'join').trim();
+          final roomId = data['roomId']?.toString();
+          final name = data['name']?.toString();
+
+          return _fadeSlidePage(
+            child: MultiplayerRoomScreen(
+              mode: mode,
+              roomId: roomId,
+              name: name,
+            ),
+            state: state,
+          );
+        },
+      ),
+
+      GoRoute(
+        path: '/live',
+        pageBuilder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return _fadeSlidePage(child: const SignInScreen(), state: state);
+          }
+          return _fadeSlidePage(child: const LiveFeedScreen(), state: state);
+        },
+      ),
+      GoRoute(
+        path: '/live/go',
+        pageBuilder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return _fadeSlidePage(child: const SignInScreen(), state: state);
+          }
+          return _fadeSlidePage(child: const GoLiveScreen(), state: state);
+        },
+      ),
+      GoRoute(
+        path: '/live/watch/:id',
+        pageBuilder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return _fadeSlidePage(child: const SignInScreen(), state: state);
+          }
+          final liveId = state.pathParameters['id'] ?? '';
+          final tab = state.uri.queryParameters['tab'];
+          return _fadeSlidePage(
+            child: LiveWatchScreen(liveId: liveId, initialTab: tab),
+            state: state,
+          );
+        },
+      ),
+
       // Project creation routes (protected)
       GoRoute(
         path: '/create-project',
@@ -165,12 +241,32 @@ class AppRouter {
       ),
 
       GoRoute(
-        path: '/ai-phaser',
+        path: '/ai-phaser-game',
         pageBuilder: (context, state) {
           if (!AuthGuard.canActivate(context)) {
             return _fadeSlidePage(child: const SignInScreen(), state: state);
           }
           return _fadeSlidePage(child: const AiPhaserGameScreen(), state: state);
+        },
+      ),
+
+      GoRoute(
+        path: '/ai-claude-game',
+        pageBuilder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return _fadeSlidePage(child: const SignInScreen(), state: state);
+          }
+          return _fadeSlidePage(child: const AiClaudeGameScreen(), state: state);
+        },
+      ),
+
+      GoRoute(
+        path: '/ai-threejs-game',
+        pageBuilder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return _fadeSlidePage(child: const SignInScreen(), state: state);
+          }
+          return _fadeSlidePage(child: const AiThreeJsGameScreen(), state: state);
         },
       ),
 
@@ -218,8 +314,18 @@ class AppRouter {
             return _fadeSlidePage(child: const SignInScreen(), state: state);
           }
           final extra = state.extra;
-          final data = extra is Map ? Map<String, dynamic>.from(extra as Map) : <String, dynamic>{};
+          final data = extra is Map ? Map<String, dynamic>.from(extra) : <String, dynamic>{};
           return _fadeSlidePage(child: ProjectDetailScreen(data: data), state: state);
+        },
+      ),
+
+      GoRoute(
+        path: '/edit-project',
+        pageBuilder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return _fadeSlidePage(child: const SignInScreen(), state: state);
+          }
+          return _fadeSlidePage(child: const ProjectEditScreen(), state: state);
         },
       ),
 
@@ -230,8 +336,33 @@ class AppRouter {
             return _fadeSlidePage(child: const SignInScreen(), state: state);
           }
           final extra = state.extra;
-          final url = (extra is Map) ? extra['url']?.toString() : null;
-          return _fadeSlidePage(child: PlayWebglScreen(url: url ?? ''), state: state);
+          final data = extra is Map ? Map<String, dynamic>.from(extra) : <String, dynamic>{};
+          final url = data['url']?.toString();
+          final projectId = data['projectId']?.toString();
+          final mpRoomId = (data['mpRoomId'] ?? data['roomId'])?.toString();
+          final mpSessionId = (data['mpSessionId'] ?? data['sessionId'])?.toString();
+          final mpIsHost = data['mpIsHost'] == true || data['isHost'] == true;
+          return _fadeSlidePage(
+            child: play_webgl.PlayWebglScreen(
+              url: url ?? '',
+              projectId: projectId,
+              mpRoomId: mpRoomId,
+              mpSessionId: mpSessionId,
+              mpIsHost: mpIsHost,
+            ),
+            state: state,
+          );
+        },
+      ),
+
+      GoRoute(
+        path: '/creator/:id',
+        pageBuilder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return _fadeSlidePage(child: const SignInScreen(), state: state);
+          }
+          final creatorId = state.pathParameters['id'] ?? '';
+          return _fadeSlidePage(child: CreatorProfileScreen(creatorId: creatorId), state: state);
         },
       ),
 
@@ -242,11 +373,24 @@ class AppRouter {
             return _fadeSlidePage(child: const SignInScreen(), state: state);
           }
           final extra = state.extra;
-          final data = extra is Map ? Map<String, dynamic>.from(extra as Map) : <String, dynamic>{};
+          final data = extra is Map ? Map<String, dynamic>.from(extra) : <String, dynamic>{};
           final rawPid = data['projectId']?.toString() ?? '';
           final pid = rawPid.trim().isEmpty ? null : rawPid.trim();
           final name = data['projectName']?.toString();
-          return _fadeSlidePage(child: AiCoachScreen(projectId: pid, projectName: name), state: state);
+          final sessionContext = <String, dynamic>{
+            if (data['playerDna'] != null) 'playerDna': data['playerDna'],
+            if (data['suggestedPreset'] != null) 'suggestedPreset': data['suggestedPreset'],
+            if (data['nextActions'] != null) 'nextActions': data['nextActions'],
+          };
+
+          return _fadeSlidePage(
+            child: AiCoachScreen(
+              projectId: pid,
+              projectName: name,
+              sessionContext: sessionContext.isEmpty ? null : sessionContext,
+            ),
+            state: state,
+          );
         },
       ),
 
@@ -259,7 +403,7 @@ class AppRouter {
           return _fadeSlidePage(child: const GameQuizScreen(), state: state);
         },
       ),
-      
+
       // Build routes (protected)
       GoRoute(
         path: '/build-configuration',
@@ -288,7 +432,7 @@ class AppRouter {
           return _fadeSlidePage(child: const BuildResultsScreen(), state: state);
         },
       ),
-      
+
       // Marketplace routes (protected)
       GoRoute(
         path: '/marketplace',
@@ -296,7 +440,8 @@ class AppRouter {
           if (!AuthGuard.canActivate(context)) {
             return const SignInScreen();
           }
-          return const TemplateMarketplaceScreen();
+          final autoFinder = (state.uri.queryParameters['autofinder'] ?? '').toString() == '1';
+          return TemplateMarketplaceScreen(autoOpenAiFinder: autoFinder);
         },
       ),
 
@@ -310,7 +455,7 @@ class AppRouter {
           return TemplateDetailsScreen(templateId: id);
         },
       ),
-      
+
       // Profile and settings routes (protected)
       GoRoute(
         path: '/profile',
@@ -354,7 +499,18 @@ class AppRouter {
           if (!AuthGuard.canActivate(context)) {
             return const SignInScreen();
           }
-          return const SubscriptionScreen();
+          final autoStart = (state.uri.queryParameters['autostart'] ?? '').toString() == '1';
+          return SubscriptionScreen(autoStart: autoStart);
+        },
+      ),
+
+      GoRoute(
+        path: '/creator-wallet',
+        pageBuilder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return _fadeSlidePage(child: const SignInScreen(), state: state);
+          }
+          return _fadeSlidePage(child: const CreatorWalletScreen(), state: state);
         },
       ),
 
@@ -436,7 +592,7 @@ class AppRouter {
           return const SecurityCenterScreen();
         },
       ),
-      
+
       // Notification and messaging routes (protected)
       GoRoute(
         path: '/notifications',
@@ -451,7 +607,7 @@ class AppRouter {
         path: '/messages',
         builder: (context, state) => const InAppMessagesScreen(),
       ),
-      
+
       // TODO: Add more routes as we implement them
     ],
     errorBuilder: (context, state) => Scaffold(

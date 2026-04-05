@@ -5,102 +5,119 @@ class AppTypography {
   static const String fontFamily = 'Inter';
 
   // Headings
-  static const TextStyle h1 = TextStyle(
-    fontFamily: fontFamily,
-    fontSize: 32,
-    fontWeight: FontWeight.bold,
-    height: 1.2,
+  static const TextStyle displayLarge = TextStyle(
+    fontFamily: 'Inter',
+    fontSize: 48,
+    fontWeight: FontWeight.w900,
+    letterSpacing: -2.0,
+    height: 1.1,
   );
 
-  static const TextStyle h2 = TextStyle(
-    fontFamily: fontFamily,
+  static const TextStyle displayMedium = TextStyle(
+    fontFamily: 'Inter',
+    fontSize: 36,
+    fontWeight: FontWeight.w900,
+    letterSpacing: -1.5,
+    height: 1.1,
+  );
+
+  static const TextStyle displaySmall = TextStyle(
+    fontFamily: 'Inter',
     fontSize: 28,
-    fontWeight: FontWeight.bold,
+    fontWeight: FontWeight.w900,
+    letterSpacing: -1.0,
+    height: 1.1,
+  );
+
+  static const TextStyle headlineLarge = TextStyle(
+    fontFamily: 'Inter',
+    fontSize: 32,
+    fontWeight: FontWeight.w900,
+    letterSpacing: -1.0,
     height: 1.2,
   );
 
-  static const TextStyle h3 = TextStyle(
-    fontFamily: fontFamily,
-    fontSize: 24,
-    fontWeight: FontWeight.bold,
-    height: 1.3,
-  );
-
-  static const TextStyle h4 = TextStyle(
-    fontFamily: fontFamily,
-    fontSize: 20,
-    fontWeight: FontWeight.w600,
-    height: 1.3,
-  );
-
-  // Subheadings
-  static const TextStyle subtitle1 = TextStyle(
-    fontFamily: fontFamily,
-    fontSize: 20,
-    fontWeight: FontWeight.w600,
-    height: 1.3,
-  );
-
-  static const TextStyle subtitle2 = TextStyle(
-    fontFamily: fontFamily,
+  static const TextStyle titleMedium = TextStyle(
+    fontFamily: 'Inter',
     fontSize: 18,
-    fontWeight: FontWeight.w600,
-    height: 1.3,
+    fontWeight: FontWeight.w700,
+    letterSpacing: 0.1,
   );
 
-  // Body Text
-  static const TextStyle body1 = TextStyle(
-    fontFamily: fontFamily,
+  static const TextStyle labelSmall = TextStyle(
+    fontFamily: 'Inter',
+    fontSize: 11,
+    fontWeight: FontWeight.w800,
+    letterSpacing: 0.5,
+  );
+
+  static const TextStyle titleLarge = TextStyle(
+    fontFamily: 'Inter',
+    fontSize: 22,
+    fontWeight: FontWeight.w800,
+    letterSpacing: -0.5,
+  );
+
+  static const TextStyle bodyLarge = TextStyle(
+    fontFamily: 'Inter',
     fontSize: 16,
-    fontWeight: FontWeight.normal,
+    fontWeight: FontWeight.w500,
     height: 1.5,
   );
 
-  static const TextStyle body2 = TextStyle(
-    fontFamily: fontFamily,
+  static const TextStyle bodyMedium = TextStyle(
+    fontFamily: 'Inter',
     fontSize: 14,
-    fontWeight: FontWeight.normal,
+    fontWeight: FontWeight.w400,
     height: 1.5,
   );
 
+  static const TextStyle labelLarge = TextStyle(
+    fontFamily: 'Inter',
+    fontSize: 14,
+    fontWeight: FontWeight.w900,
+    letterSpacing: 1.2,
+    height: 1.2,
+  );
+
+  // Legacy Aliases for Compatibility
+  static const TextStyle h1 = headlineLarge;
+  static const TextStyle h2 = titleLarge;
+  static const TextStyle h3 = TextStyle(
+    fontFamily: 'Inter',
+    fontSize: 18,
+    fontWeight: FontWeight.w700,
+  );
+  static const TextStyle h4 = TextStyle(
+    fontFamily: 'Inter',
+    fontSize: 16,
+    fontWeight: FontWeight.w600,
+  );
+  
+  static const TextStyle subtitle1 = h3;
+  static const TextStyle subtitle2 = h4;
+  
+  static const TextStyle body1 = bodyLarge;
+  static const TextStyle body2 = bodyMedium;
   static const TextStyle body3 = TextStyle(
     fontFamily: fontFamily,
     fontSize: 12,
-    fontWeight: FontWeight.normal,
+    fontWeight: FontWeight.w400,
     height: 1.5,
   );
 
-  // Caption
   static const TextStyle caption = TextStyle(
-    fontFamily: fontFamily,
+    fontFamily: 'Inter',
     fontSize: 12,
-    fontWeight: FontWeight.normal,
-    height: 1.4,
+    fontWeight: FontWeight.w400,
+    color: Colors.grey,
   );
 
-  // Button Text
-  static const TextStyle button = TextStyle(
-    fontFamily: fontFamily,
-    fontSize: 16,
-    fontWeight: FontWeight.w600,
-    height: 1.2,
-  );
-
+  static const TextStyle button = labelLarge;
   static const TextStyle buttonSmall = TextStyle(
-    fontFamily: fontFamily,
-    fontSize: 14,
-    fontWeight: FontWeight.w600,
-    height: 1.2,
-  );
-
-  // Custom Styles
-  static TextStyle overline(Color color) => TextStyle(
-    fontFamily: fontFamily,
+    fontFamily: 'Inter',
     fontSize: 12,
-    fontWeight: FontWeight.w500,
-    color: color,
-    height: 1.4,
-    letterSpacing: 1.0,
+    fontWeight: FontWeight.w700,
   );
 
   static TextStyle display(Color color) => TextStyle(

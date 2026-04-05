@@ -1,0 +1,311 @@
+  1640	                      ),
+  1641	                    ),
+  1642	                  ],
+  1643	                ),
+  1644	              ),
+  1645	            ),
+  1646	          } else if (it.isNotEmpty) ...[
+  1647	            _introEntry(
+  1648	              index: 6,
+  1649	              child: SizedBox(
+  1650	                height: 206,
+  1651	                child: PageView.builder(
+  1652	                  controller: _trendsPageController,
+  1653	                  onPageChanged: (i) {
+  1654	                    setState(() => _trendsIndex = i);
+  1655	                  },
+  1656	                  itemCount: it.length,
+  1657	                  itemBuilder: (context, i) {
+  1658	                    final item = it[i];
+  1659	                    final title = item['title']?.toString() ?? 'Article';
+  1660	                    final url = item['url']?.toString() ?? '';
+  1661	                    final source = item['source']?.toString() ?? '';
+  1662	                    final publishedAt = item['publishedAt']?.toString();
+  1663	                    final imageUrl = item['imageUrl']?.toString();
+  1664	                    final bgUrl = (imageUrl != null && imageUrl.trim().isNotEmpty)
+  1665	                        ? imageUrl.trim()
+  1666	                        : _fallbackTrendImageUrl(i);
+  1667	                    final dateText = (publishedAt != null && publishedAt.trim().isNotEmpty)
+  1668	                        ? publishedAt.split('T').first
+  1669	                        : '';
+  1670	                    final host = _tryGetHost(url);
+  1671	
+  1672	                    return Padding(
+  1673	                      padding: const EdgeInsets.only(bottom: AppSpacing.sm),
+  1674	                      child: Container(
+  1675	                        decoration: BoxDecoration(
+  1676	                          borderRadius: BorderRadius.circular(AppBorderRadius.large),
+  1677	                          boxShadow: [
+  1678	                            BoxShadow(
+  1679	                              color: Colors.black.withOpacity(0.22),
+  1680	                              blurRadius: 18,
+  1681	                              offset: const Offset(0, 10),
+  1682	                            ),
+  1683	                          ],
+  1684	                        ),
+  1685	                        child: ClipRRect(
+  1686	                          borderRadius: BorderRadius.circular(AppBorderRadius.large),
+  1687	                          child: Material(
+  1688	                            color: Colors.transparent,
+  1689	                            child: InkWell(
+  1690	                              onTap: url.isEmpty ? null : () => _openTrendUrl(url),
+  1691	                              child: Stack(
+  1692	                                children: [
+  1693	                                  Positioned.fill(
+  1694	                                    child: AnimatedBuilder(
+  1695	                                      animation: _trendsPageController,
+  1696	                                      builder: (context, _) {
+  1697	                                        double page = _trendsIndex.toDouble();
+  1698	                                        try {
+  1699	                                          if (_trendsPageController.hasClients) {
+  1700	                                            page = (_trendsPageController.page ?? _trendsIndex).toDouble();
+  1701	                                          }
+  1702	                                        } catch (_) {}
+  1703	                                        final delta = (page - i).clamp(-1.0, 1.0);
+  1704	                                        return Transform.translate(
+  1705	                                          offset: Offset(delta * -18.0, 0),
+  1706	                                          child: Image.network(
+  1707	                                            bgUrl,
+  1708	                                            fit: BoxFit.cover,
+  1709	                                            errorBuilder: (_, __, ___) {
+  1710	                                              final fallback = _fallbackTrendImageUrl(i + 1);
+  1711	                                              return Image.network(
+  1712	                                                fallback,
+  1713	                                                fit: BoxFit.cover,
+  1714	                                                errorBuilder: (_, __, ___) {
+  1715	                                                  return Container(
+  1716	                                                    decoration: BoxDecoration(
+  1717	                                                      gradient: LinearGradient(
+  1718	                                                        colors: [
+  1719	                                                          cs.primary.withOpacity(0.26),
+  1720	                                                          cs.secondary.withOpacity(0.14),
+  1721	                                                          cs.surface,
+  1722	                                                        ],
+  1723	                                                        begin: Alignment.topLeft,
+  1724	                                                        end: Alignment.bottomRight,
+  1725	                                                      ),
+  1726	                                                    ),
+  1727	                                                  );
+  1728	                                                },
+  1729	                                              );
+  1730	                                            },
+  1731	                                          ),
+  1732	                                        );
+  1733	                                      },
+  1734	                                    ),
+  1735	                                  ),
+  1736	                                  Positioned.fill(
+  1737	                                    child: DecoratedBox(
+  1738	                                      decoration: BoxDecoration(
+  1739	                                        gradient: LinearGradient(
+  1740	                                          colors: [
+  1741	                                            Colors.black.withOpacity(0.68),
+  1742	                                            Colors.black.withOpacity(0.24),
+  1743	                                            Colors.black.withOpacity(0.06),
+  1744	                                          ],
+  1745	                                          begin: Alignment.bottomLeft,
+  1746	                                          end: Alignment.topRight,
+  1747	                                        ),
+  1748	                                      ),
+  1749	                                    ),
+  1750	                                  ),
+  1751	                                  Positioned.fill(
+  1752	                                    child: DecoratedBox(
+  1753	                                      decoration: BoxDecoration(
+  1754	                                        gradient: RadialGradient(
+  1755	                                          colors: [
+  1756	                                            cs.primary.withOpacity(0.26),
+  1757	                                            Colors.transparent,
+  1758	                                          ],
+  1759	                                          radius: 1.15,
+  1760	                                          center: const Alignment(-0.7, -0.9),
+  1761	                                        ),
+  1762	                                      ),
+  1763	                                    ),
+  1764	                                  ),
+  1765	                                  Positioned.fill(
+  1766	                                    child: Container(
+  1767	                                      decoration: BoxDecoration(
+  1768	                                        borderRadius: BorderRadius.circular(AppBorderRadius.large),
+  1769	                                        border: Border.all(color: Colors.white.withOpacity(0.12)),
+  1770	                                      ),
+  1771	                                    ),
+  1772	                                  ),
+  1773	                                  Padding(
+  1774	                                    padding: const EdgeInsets.all(AppSpacing.lg),
+  1775	                                    child: Column(
+  1776	                                      crossAxisAlignment: CrossAxisAlignment.start,
+  1777	                                      children: [
+  1778	                                        Row(
+  1779	                                          children: [
+  1780	                                            Container(
+  1781	                                              width: 40,
+  1782	                                              height: 40,
+  1783	                                              decoration: BoxDecoration(
+  1784	                                                color: Colors.white.withOpacity(0.16),
+  1785	                                                borderRadius: BorderRadius.circular(16),
+  1786	                                              ),
+  1787	                                              child: const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 18),
+  1788	                                            ),
+  1789	                                            const SizedBox(width: AppSpacing.sm),
+  1790	                                            Expanded(
+  1791	                                              child: Align(
+  1792	                                                alignment: Alignment.centerLeft,
+  1793	                                                child: SizedBox(
+  1794	                                                  height: 30,
+  1795	                                                  child: ListView(
+  1796	                                                    scrollDirection: Axis.horizontal,
+  1797	                                                    children: [
+  1798	                                                      if (source.isNotEmpty)
+  1799	                                                        Container(
+  1800	                                                          margin: const EdgeInsets.only(right: AppSpacing.sm),
+  1801	                                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+  1802	                                                          decoration: BoxDecoration(
+  1803	                                                            color: Colors.white.withOpacity(0.14),
+  1804	                                                            borderRadius: BorderRadius.circular(99),
+  1805	                                                            border: Border.all(color: Colors.white.withOpacity(0.14)),
+  1806	                                                          ),
+  1807	                                                          child: Text(
+  1808	                                                            source,
+  1809	                                                            maxLines: 1,
+  1810	                                                            overflow: TextOverflow.ellipsis,
+  1811	                                                            style: AppTypography.caption.copyWith(
+  1812	                                                              color: Colors.white.withOpacity(0.90),
+  1813	                                                              fontWeight: FontWeight.w800,
+  1814	                                                            ),
+  1815	                                                          ),
+  1816	                                                        ),
+  1817	                                                      if (host.isNotEmpty)
+  1818	                                                        Container(
+  1819	                                                          margin: const EdgeInsets.only(right: AppSpacing.sm),
+  1820	                                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+  1821	                                                          decoration: BoxDecoration(
+  1822	                                                            color: Colors.black.withOpacity(0.22),
+  1823	                                                            borderRadius: BorderRadius.circular(99),
+  1824	                                                            border: Border.all(color: Colors.white.withOpacity(0.10)),
+  1825	                                                          ),
+  1826	                                                          child: Text(
+  1827	                                                            host,
+  1828	                                                            maxLines: 1,
+  1829	                                                            overflow: TextOverflow.ellipsis,
+  1830	                                                            style: AppTypography.caption.copyWith(
+  1831	                                                              color: Colors.white.withOpacity(0.90),
+  1832	                                                              fontWeight: FontWeight.w800,
+  1833	                                                            ),
+  1834	                                                          ),
+  1835	                                                        ),
+  1836	                                                      if (dateText.isNotEmpty)
+  1837	                                                        Container(
+  1838	                                                          margin: const EdgeInsets.only(right: AppSpacing.sm),
+  1839	                                                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+  1840	                                                          decoration: BoxDecoration(
+  1841	                                                            color: Colors.black.withOpacity(0.22),
+  1842	                                                            borderRadius: BorderRadius.circular(99),
+  1843	                                                            border: Border.all(color: Colors.white.withOpacity(0.10)),
+  1844	                                                          ),
+  1845	                                                          child: Text(
+  1846	                                                            dateText,
+  1847	                                                            maxLines: 1,
+  1848	                                                            overflow: TextOverflow.ellipsis,
+  1849	                                                            style: AppTypography.caption.copyWith(
+  1850	                                                              color: Colors.white.withOpacity(0.90),
+  1851	                                                              fontWeight: FontWeight.w800,
+  1852	                                                            ),
+  1853	                                                          ),
+  1854	                                                        ),
+  1855	                                                    ],
+  1856	                                                  ),
+  1857	                                                ),
+  1858	                                              ),
+  1859	                                            ),
+  1860	                                            Icon(Icons.chevron_right_rounded, color: Colors.white.withOpacity(0.92)),
+  1861	                                          ],
+  1862	                                        ),
+  1863	                                        const SizedBox(height: 10),
+  1864	                                        Expanded(
+  1865	                                          child: Text(
+  1866	                                            title,
+  1867	                                            maxLines: 3,
+  1868	                                            overflow: TextOverflow.ellipsis,
+  1869	                                            style: AppTypography.subtitle1.copyWith(
+  1870	                                              color: Colors.white,
+  1871	                                              fontWeight: FontWeight.w900,
+  1872	                                            ),
+  1873	                                          ),
+  1874	                                        ),
+  1875	                                        const SizedBox(height: 12),
+  1876	                                        Row(
+  1877	                                          children: [
+  1878	                                            Expanded(
+  1879	                                              child: Text(
+  1880	                                                url.isNotEmpty ? url : 'Tap to open',
+  1881	                                                maxLines: 1,
+  1882	                                                overflow: TextOverflow.ellipsis,
+  1883	                                                style: AppTypography.caption.copyWith(
+  1884	                                                  color: Colors.white.withOpacity(0.82),
+  1885	                                                  fontWeight: FontWeight.w700,
+  1886	                                                ),
+  1887	                                              ),
+  1888	                                            ),
+  1889	                                            const SizedBox(width: 8),
+  1890	                                            Container(
+  1891	                                              padding: const EdgeInsets.all(10),
+  1892	                                              decoration: BoxDecoration(
+  1893	                                                color: Colors.white.withOpacity(0.16),
+  1894	                                                borderRadius: BorderRadius.circular(16),
+  1895	                                                border: Border.all(color: Colors.white.withOpacity(0.18)),
+  1896	                                              ),
+  1897	                                              child: const Icon(Icons.open_in_new_rounded, color: Colors.white, size: 18),
+  1898	                                            ),
+  1899	                                          ],
+  1900	                                        )
+  1901	                                      ],
+  1902	                                    ),
+  1903	                                  ),
+  1904	                                ],
+  1905	                              ),
+  1906	                            ),
+  1907	                          ),
+  1908	                        ),
+  1909	                      ),
+  1910	                    );
+  1911	                  },
+  1912	                ),
+  1913	              ),
+  1914	            ),
+  1915	            const SizedBox(height: AppSpacing.sm),
+  1916	            _introEntry(
+  1917	              index: 7,
+  1918	              child: Row(
+  1919	                mainAxisAlignment: MainAxisAlignment.center,
+  1920	                children: List.generate(
+  1921	                  it.length.clamp(0, 8),
+  1922	                  (i) {
+  1923	                    final active = i == (_trendsIndex.clamp(0, math.max(0, it.length - 1)));
+  1924	                    return AnimatedContainer(
+  1925	                      duration: const Duration(milliseconds: 220),
+  1926	                      margin: const EdgeInsets.symmetric(horizontal: 4),
+  1927	                      width: active ? 18 : 8,
+  1928	                      height: 8,
+  1929	                      decoration: BoxDecoration(
+  1930	                        color: active ? cs.primary : cs.outlineVariant.withOpacity(0.6),
+  1931	                        borderRadius: BorderRadius.circular(99),
+  1932	                      ),
+  1933	                    );
+  1934	                  },
+  1935	                ),
+  1936	              ),
+  1937	            ),
+  1938	          ],
+  1939	
+  1940	          const SizedBox(height: AppSpacing.xxxl),
+  1941	          
+  1942	          // Recent Projects
+  1943	          Row(
+  1944	            children: [
+  1945	              Text(
+  1946	                'Recent Projects',
+  1947	                style: AppTypography.subtitle1,
+  1948	              ),
+  1949	              const Expanded(
+  1950	                child: SizedBox(),

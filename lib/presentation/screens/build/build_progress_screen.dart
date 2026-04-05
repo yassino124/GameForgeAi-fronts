@@ -61,6 +61,22 @@ class _BuildProgressScreenState extends State<BuildProgressScreen>
   static const _kEtaStartedPrefix = 'build.etaStartedAtMs.';
   static const _kBuildStartedPrefix = 'build.startedAtMs.';
 
+  String _platformLabelForTarget(String target) {
+    final t = target.trim().toLowerCase();
+    if (t == 'android_apk' || t == 'android') return 'Android';
+    if (t == 'windows' || t == 'win') return 'Windows';
+    if (t == 'macos' || t == 'osx') return 'macOS';
+    return 'Web';
+  }
+
+  IconData _platformIconForTarget(String target) {
+    final t = target.trim().toLowerCase();
+    if (t == 'android_apk' || t == 'android') return Icons.phone_android;
+    if (t == 'windows' || t == 'win') return Icons.desktop_windows;
+    if (t == 'macos' || t == 'osx') return Icons.laptop_mac;
+    return Icons.language;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -147,10 +163,10 @@ class _BuildProgressScreenState extends State<BuildProgressScreen>
         ..clear()
         ..add(
           BuildStep(
-            platform: nextTarget == 'android_apk' ? 'Android' : 'Web',
+            platform: _platformLabelForTarget(nextTarget),
             status: BuildStatus.inProgress,
             progress: 0.1,
-            icon: nextTarget == 'android_apk' ? Icons.phone_android : Icons.language,
+            icon: _platformIconForTarget(nextTarget),
           ),
         );
     });
@@ -328,7 +344,6 @@ class _BuildProgressScreenState extends State<BuildProgressScreen>
 
       final status = (data['status']?.toString() ?? '').toLowerCase();
       final buildTarget = (data['buildTarget']?.toString() ?? 'webgl').trim().toLowerCase();
-      final isAndroidApk = buildTarget == 'android_apk' || buildTarget == 'android';
       final error = data['error']?.toString();
       final nm = (data['name']?.toString() ?? data['title']?.toString() ?? '').trim();
       final ver = (data['version']?.toString() ?? '').trim();
@@ -359,10 +374,10 @@ class _BuildProgressScreenState extends State<BuildProgressScreen>
           ..clear()
           ..add(
             BuildStep(
-              platform: isAndroidApk ? 'Android' : 'Web',
+              platform: _platformLabelForTarget(buildTarget),
               status: BuildStatus.pending,
               progress: 0.0,
-              icon: isAndroidApk ? Icons.phone_android : Icons.language,
+              icon: _platformIconForTarget(buildTarget),
             ),
           );
       }
@@ -381,8 +396,16 @@ class _BuildProgressScreenState extends State<BuildProgressScreen>
           _buildSteps[0].progress = 0.2;
         }
       } else if (status == 'running') {
-        stepText = isAndroidApk ? 'Building Android APK' : 'Building WebGL';
-        final base = isAndroidApk ? 720 : 420;
+        if (buildTarget == 'android_apk' || buildTarget == 'android') {
+          stepText = 'Building Android APK';
+        } else if (buildTarget == 'windows' || buildTarget == 'win') {
+          stepText = 'Building Windows desktop';
+        } else if (buildTarget == 'macos' || buildTarget == 'osx') {
+          stepText = 'Building macOS desktop';
+        } else {
+          stepText = 'Building WebGL';
+        }
+        final base = (buildTarget == 'android_apk' || buildTarget == 'android') ? 720 : 420;
         if (_etaTotalSeconds != base || _buildStatus != status) {
           _etaTotalSeconds = base;
           _etaStartedAt ??= DateTime.now();
@@ -406,6 +429,7 @@ class _BuildProgressScreenState extends State<BuildProgressScreen>
         prog = 1.0;
         stepText = error?.trim().isNotEmpty == true ? error!.trim() : 'Build failed';
         etaText = '—';
+        done = true;
         if (_buildSteps.isNotEmpty) {
           _buildSteps[0].status = BuildStatus.failed;
         }
@@ -438,8 +462,8 @@ class _BuildProgressScreenState extends State<BuildProgressScreen>
       _persistTimingCache(id);
 
       if (done) {
-        // If a build queue exists, chain next target automatically.
-        if (_buildQueue.isNotEmpty && _buildIndex < _buildQueue.length - 1 && st == 'ready') {
+        // If a build queue exists, chain next target automatically (even if current target failed).
+        if (_buildQueue.isNotEmpty && _buildIndex < _buildQueue.length - 1) {
           unawaited(_startNextBuildIfAny(projectId: id, token: token));
           return;
         }
@@ -468,6 +492,7 @@ class _BuildProgressScreenState extends State<BuildProgressScreen>
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final extra = GoRouterState.of(context).extra;
     final projectId = (extra is Map) ? extra['projectId']?.toString() : null;
     final isAndroidApk = _buildTarget == 'android_apk' || _buildTarget == 'android';
@@ -747,8 +772,8 @@ class _BuildProgressScreenState extends State<BuildProgressScreen>
                       border: Border.all(color: cs.outlineVariant.withOpacity(0.35)),
                       gradient: LinearGradient(
                         colors: [
-                          cs.surface.withOpacity(0.78),
-                          cs.surface.withOpacity(0.48),
+                          isDark ? cs.surface.withOpacity(0.78) : cs.surface,
+                          isDark ? cs.surface.withOpacity(0.48) : cs.surface.withOpacity(0.9),
                         ],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
@@ -768,8 +793,8 @@ class _BuildProgressScreenState extends State<BuildProgressScreen>
                               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(999),
-                                color: cs.surfaceVariant.withOpacity(0.55),
-                                border: Border.all(color: cs.outlineVariant.withOpacity(0.45)),
+                                color: (isDark ? cs.surfaceVariant : cs.primaryContainer).withOpacity(isDark ? 0.55 : 0.4),
+                                border: Border.all(color: (isDark ? cs.outlineVariant : cs.primary).withOpacity(0.45)),
                               ),
                               child: Row(
                                 mainAxisSize: MainAxisSize.min,
@@ -777,12 +802,12 @@ class _BuildProgressScreenState extends State<BuildProgressScreen>
                                   Icon(
                                     isAndroidApk ? Icons.android_rounded : Icons.public_rounded,
                                     size: 16,
-                                    color: cs.primary,
+                                    color: isDark ? cs.primary : cs.primary,
                                   ),
                                   const SizedBox(width: 8),
                                   Text(
                                     subtitle,
-                                    style: AppTypography.caption.copyWith(color: cs.onSurface, fontWeight: FontWeight.w800),
+                                    style: AppTypography.caption.copyWith(color: isDark ? cs.onSurface : cs.onSurface, fontWeight: FontWeight.w800),
                                   ),
                                 ],
                               ),
@@ -894,8 +919,8 @@ class _BuildProgressScreenState extends State<BuildProgressScreen>
                               height: 36,
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(999),
-                                color: cs.surfaceContainerHighest.withOpacity(0.28),
-                                border: Border.all(color: cs.outlineVariant.withOpacity(0.55)),
+                                color: (isDark ? cs.surfaceContainerHighest : cs.surfaceContainer).withOpacity(isDark ? 0.28 : 0.5),
+                                border: Border.all(color: (isDark ? cs.outlineVariant : cs.outlineVariant).withOpacity(0.55)),
                               ),
                             ),
                             Positioned.fill(

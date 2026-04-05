@@ -13,6 +13,10 @@ class BillingService {
     return ApiService.get('/billing/subscription', token: token);
   }
 
+  static Future<Map<String, dynamic>> getEntitlements({required String token}) async {
+    return ApiService.get('/billing/entitlements', token: token);
+  }
+
   static Future<Map<String, dynamic>> createCheckoutSession({
     required String token,
     required String priceId,
@@ -45,9 +49,30 @@ class BillingService {
     );
   }
 
+  static Future<Map<String, dynamic>> subscribeWithSetupIntent({
+    required String token,
+    required String priceId,
+    required String setupIntentId,
+  }) async {
+    return ApiService.post(
+      '/billing/subscribe',
+      token: token,
+      data: {
+        'priceId': priceId,
+        'setupIntentId': setupIntentId,
+      },
+    );
+  }
+
   static Future<Map<String, dynamic>> cancelSubscription({
     required String token,
   }) async {
     return ApiService.post('/billing/cancel-subscription', token: token);
+  }
+
+  static Future<Map<String, dynamic>> syncSubscription({
+    required String token,
+  }) async {
+    return ApiService.post('/billing/sync', token: token);
   }
 }

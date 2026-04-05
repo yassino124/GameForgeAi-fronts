@@ -54,6 +54,25 @@ class ProjectsService {
     double? cameraZoom,
     double? gravityY,
     double? jumpForce,
+    // Asset URLs
+    String? playerSpriteUrl,
+    String? backgroundImageUrl,
+    String? soundFileUrl,
+    // ── Extended gameplay configs ────────────────────────────────────────────
+    double? scoreMultiplier,
+    double? enemyMultiplier,
+    bool? bloomEnabled,
+    double? bloomIntensity,
+    bool? godMode,
+    bool? infiniteJump,
+    double? playerScale,
+    String? gameMode,
+    String? skyboxTheme,
+    String? ambientLightColor,
+    String? bgMusicUrl,
+    String? bgImageUrl,
+    int? timeLimit,
+    int? lives,
   }) async {
     return ApiService.put(
       '/projects/$projectId',
@@ -79,6 +98,26 @@ class ProjectsService {
         if (cameraZoom != null) 'cameraZoom': cameraZoom,
         if (gravityY != null) 'gravityY': gravityY,
         if (jumpForce != null) 'jumpForce': jumpForce,
+        if (playerSpriteUrl != null && playerSpriteUrl.trim().isNotEmpty)
+          'playerSpriteUrl': playerSpriteUrl.trim(),
+        if (backgroundImageUrl != null && backgroundImageUrl.trim().isNotEmpty)
+          'backgroundImageUrl': backgroundImageUrl.trim(),
+        if (soundFileUrl != null && soundFileUrl.trim().isNotEmpty)
+          'soundFileUrl': soundFileUrl.trim(),
+        if (scoreMultiplier != null) 'scoreMultiplier': scoreMultiplier,
+        if (enemyMultiplier != null) 'enemyMultiplier': enemyMultiplier,
+        if (bloomEnabled != null) 'bloomEnabled': bloomEnabled,
+        if (bloomIntensity != null) 'bloomIntensity': bloomIntensity,
+        if (godMode != null) 'godMode': godMode,
+        if (infiniteJump != null) 'infiniteJump': infiniteJump,
+        if (playerScale != null) 'playerScale': playerScale,
+        if (gameMode != null && gameMode.trim().isNotEmpty) 'gameMode': gameMode.trim(),
+        if (skyboxTheme != null && skyboxTheme.trim().isNotEmpty) 'skyboxTheme': skyboxTheme.trim(),
+        if (_normHex(ambientLightColor) != null) 'ambientLightColor': _normHex(ambientLightColor),
+        if (bgMusicUrl != null && bgMusicUrl.trim().isNotEmpty) 'bgMusicUrl': bgMusicUrl.trim(),
+        if (bgImageUrl != null && bgImageUrl.trim().isNotEmpty) 'bgImageUrl': bgImageUrl.trim(),
+        if (timeLimit != null && timeLimit > 0) 'timeLimit': timeLimit,
+        if (lives != null && lives > 0) 'lives': lives,
       },
     );
   }
@@ -105,6 +144,25 @@ class ProjectsService {
     double? cameraZoom,
     double? gravityY,
     double? jumpForce,
+    // Custom asset URLs
+    String? playerSpriteUrl,
+    String? backgroundImageUrl,
+    String? soundFileUrl,
+    // ── Extended gameplay configs ────────────────────────────────────────────
+    double? scoreMultiplier,
+    double? enemyMultiplier,
+    bool? bloomEnabled,
+    double? bloomIntensity,
+    bool? godMode,
+    bool? infiniteJump,
+    double? playerScale,
+    String? gameMode,
+    String? skyboxTheme,
+    String? ambientLightColor,
+    String? bgMusicUrl,
+    String? bgImageUrl,
+    int? timeLimit,
+    int? lives,
   }) async {
     final runtimeConfig = <String, dynamic>{
       if (timeScale != null) 'timeScale': timeScale,
@@ -119,6 +177,26 @@ class ProjectsService {
       if (cameraZoom != null) 'cameraZoom': cameraZoom,
       if (gravityY != null) 'gravityY': gravityY,
       if (jumpForce != null) 'jumpForce': jumpForce,
+      if (playerSpriteUrl != null && playerSpriteUrl.trim().isNotEmpty)
+        'playerSpriteUrl': playerSpriteUrl.trim(),
+      if (backgroundImageUrl != null && backgroundImageUrl.trim().isNotEmpty)
+        'backgroundImageUrl': backgroundImageUrl.trim(),
+      if (soundFileUrl != null && soundFileUrl.trim().isNotEmpty)
+        'soundFileUrl': soundFileUrl.trim(),
+      if (scoreMultiplier != null) 'scoreMultiplier': scoreMultiplier,
+      if (enemyMultiplier != null) 'enemyMultiplier': enemyMultiplier,
+      if (bloomEnabled != null) 'bloomEnabled': bloomEnabled,
+      if (bloomIntensity != null) 'bloomIntensity': bloomIntensity,
+      if (godMode != null) 'godMode': godMode,
+      if (infiniteJump != null) 'infiniteJump': infiniteJump,
+      if (playerScale != null) 'playerScale': playerScale,
+      if (gameMode != null && gameMode.trim().isNotEmpty) 'gameMode': gameMode.trim(),
+      if (skyboxTheme != null && skyboxTheme.trim().isNotEmpty) 'skyboxTheme': skyboxTheme.trim(),
+      if (_normHex(ambientLightColor) != null) 'ambientLightColor': _normHex(ambientLightColor),
+      if (bgMusicUrl != null && bgMusicUrl.trim().isNotEmpty) 'bgMusicUrl': bgMusicUrl.trim(),
+      if (bgImageUrl != null && bgImageUrl.trim().isNotEmpty) 'bgImageUrl': bgImageUrl.trim(),
+      if (timeLimit != null && timeLimit > 0) 'timeLimit': timeLimit,
+      if (lives != null && lives > 0) 'lives': lives,
     };
 
     return ApiService.post(
@@ -146,8 +224,28 @@ class ProjectsService {
         if (cameraZoom != null) 'cameraZoom': cameraZoom,
         if (gravityY != null) 'gravityY': gravityY,
         if (jumpForce != null) 'jumpForce': jumpForce,
+        if (playerSpriteUrl != null && playerSpriteUrl.trim().isNotEmpty)
+          'playerSpriteUrl': playerSpriteUrl.trim(),
+        if (backgroundImageUrl != null && backgroundImageUrl.trim().isNotEmpty)
+          'backgroundImageUrl': backgroundImageUrl.trim(),
+        if (soundFileUrl != null && soundFileUrl.trim().isNotEmpty)
+          'soundFileUrl': soundFileUrl.trim(),
+        if (scoreMultiplier != null) 'scoreMultiplier': scoreMultiplier,
+        if (enemyMultiplier != null) 'enemyMultiplier': enemyMultiplier,
+        if (bloomEnabled != null) 'bloomEnabled': bloomEnabled,
+        if (bloomIntensity != null) 'bloomIntensity': bloomIntensity,
+        if (godMode != null) 'godMode': godMode,
+        if (infiniteJump != null) 'infiniteJump': infiniteJump,
+        if (playerScale != null) 'playerScale': playerScale,
+        if (gameMode != null && gameMode.trim().isNotEmpty) 'gameMode': gameMode.trim(),
+        if (skyboxTheme != null && skyboxTheme.trim().isNotEmpty) 'skyboxTheme': skyboxTheme.trim(),
+        if (_normHex(ambientLightColor) != null) 'ambientLightColor': _normHex(ambientLightColor),
+        if (bgMusicUrl != null && bgMusicUrl.trim().isNotEmpty) 'bgMusicUrl': bgMusicUrl.trim(),
+        if (bgImageUrl != null && bgImageUrl.trim().isNotEmpty) 'bgImageUrl': bgImageUrl.trim(),
+        if (timeLimit != null && timeLimit > 0) 'timeLimit': timeLimit,
+        if (lives != null && lives > 0) 'lives': lives,
       },
-      timeout: const Duration(seconds: 120),
+      timeout: const Duration(seconds: 300),
     );
   }
 

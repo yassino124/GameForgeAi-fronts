@@ -4,6 +4,8 @@ export 'edit_profile_screen.dart';
 export 'settings_screen.dart';
 export 'change_password_screen.dart';
 export 'subscription_screen.dart';
+export 'creator_wallet_screen.dart';
+export 'creator_profile_screen.dart';
 export 'how_to_use_screen.dart';
 export 'about_app_screen.dart';
 export 'privacy_policy_screen.dart';

@@ -155,4 +155,26 @@ class AuthService {
       '/auth/verify-email/$token',
     );
   }
+
+  // Verify email with code
+  static Future<Map<String, dynamic>> verifyEmailCode({
+    required String email,
+    required String code,
+  }) async {
+    return await ApiService.post(
+      '/auth/verify-email-code',
+      data: {
+        'email': email.trim(),
+        'code': code.trim(),
+      },
+    );
+  }
+
+  // Resend verification email
+  static Future<Map<String, dynamic>> resendVerificationEmail(String email) async {
+    return await ApiService.post(
+      '/auth/resend-verification',
+      data: {'email': email.trim()},
+    );
+  }
 }

@@ -5,6 +5,7 @@ import '../../../core/constants/app_constants.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/providers/build_monitor_provider.dart';
 import '../../../core/services/app_notifier.dart';
+import '../../../core/services/billing_service.dart';
 import '../../../core/services/projects_service.dart';
 import '../../widgets/widgets.dart';
 
@@ -22,6 +23,8 @@ class _BuildConfigurationScreenState extends State<BuildConfigurationScreen> {
 
   String? _projectId;
   bool _isStarting = false;
+  bool _loadingEntitlements = true;
+  bool _androidAllowed = true;
   
   final List<Platform> _platforms = [
     Platform(
@@ -47,13 +50,15 @@ class _BuildConfigurationScreenState extends State<BuildConfigurationScreen> {
     Platform(
       name: 'Windows',
       icon: Icons.desktop_windows,
-      enabled: false,
+      enabled: true,
+      isSelected: false,
       requirements: 'Windows 10 or later',
     ),
     Platform(
       name: 'macOS',
       icon: Icons.laptop_mac,
-      enabled: false,
+      enabled: true,
+      isSelected: false,
       requirements: 'macOS 10.14 or later',
     ),
     Platform(
@@ -63,6 +68,57 @@ class _BuildConfigurationScreenState extends State<BuildConfigurationScreen> {
       requirements: 'Ubuntu 18.04 or later',
     ),
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadEntitlements();
+    });
+  }
+
+  Future<void> _loadEntitlements() async {
+    final auth = context.read<AuthProvider>();
+    final token = auth.token;
+    if (token == null || token.isEmpty) {
+      if (!mounted) return;
+      setState(() {
+        _loadingEntitlements = false;
+        _androidAllowed = false;
+      });
+      return;
+    }
+
+    try {
+      final res = await BillingService.getEntitlements(token: token);
+      final data = (res['success'] == true && res['data'] is Map)
+          ? Map<String, dynamic>.from(res['data'] as Map)
+          : <String, dynamic>{};
+      final ent = (data['entitlements'] is Map) ? Map<String, dynamic>.from(data['entitlements'] as Map) : <String, dynamic>{};
+      final flags = (ent['flags'] is Map) ? Map<String, dynamic>.from(ent['flags'] as Map) : <String, dynamic>{};
+      final allowed = flags['androidBuildEnabled'] == true;
+
+      if (!mounted) return;
+      setState(() {
+        _androidAllowed = allowed;
+        _loadingEntitlements = false;
+      });
+
+      if (!allowed) {
+        for (final p in _platforms) {
+          if (p.name == 'Android') {
+            p.enabled = false;
+            p.isSelected = false;
+          }
+        }
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _loadingEntitlements = false;
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -79,6 +135,10 @@ class _BuildConfigurationScreenState extends State<BuildConfigurationScreen> {
         out.add('android_apk');
       } else if (p.name == 'Web') {
         out.add('webgl');
+      } else if (p.name == 'Windows') {
+        out.add('windows');
+      } else if (p.name == 'macOS') {
+        out.add('macos');
       }
     }
     if (out.isEmpty) out.add('webgl');
@@ -489,7 +549,7 @@ class Platform {
   final IconData icon;
   final String requirements;
   bool isSelected;
-  final bool enabled;
+  bool enabled;
 
   Platform({
     required this.name,

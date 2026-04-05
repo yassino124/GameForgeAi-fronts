@@ -40,7 +40,7 @@ class LocalNotificationsService {
 
     tz.initializeTimeZones();
 
-    const androidInit = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const androidInit = AndroidInitializationSettings('ic_launcher');
     const iosInit = DarwinInitializationSettings(
       defaultPresentAlert: true,
       defaultPresentBadge: true,
@@ -99,6 +99,41 @@ class LocalNotificationsService {
         channelDescription: 'Build progress and completion notifications',
         importance: Importance.high,
         priority: Priority.high,
+        icon: 'ic_launcher',
+      ),
+      iOS: const DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      ),
+    );
+
+    final id = DateTime.now().millisecondsSinceEpoch.remainder(1 << 31);
+    await _plugin.show(id, title, body, details, payload: payload);
+  }
+
+  static Future<void> showRemoteNotification({
+    required String title,
+    required String body,
+    String? payload,
+    String channelId = 'remote_updates',
+    String channelName = 'Updates',
+  }) async {
+    if (!_initialized) {
+      await init();
+    }
+
+    final ok = await requestPermissions();
+    if (!ok) return;
+
+    final details = NotificationDetails(
+      android: AndroidNotificationDetails(
+        channelId,
+        channelName,
+        channelDescription: 'Remote push notifications',
+        importance: Importance.high,
+        priority: Priority.high,
+        icon: 'ic_launcher',
       ),
       iOS: const DarwinNotificationDetails(
         presentAlert: true,
@@ -293,6 +328,7 @@ class LocalNotificationsService {
         channelDescription: 'Daily reminder to play the Game Quiz',
         importance: Importance.high,
         priority: Priority.high,
+        icon: 'ic_launcher',
       ),
       iOS: const DarwinNotificationDetails(
         presentAlert: true,
@@ -379,6 +415,7 @@ class LocalNotificationsService {
         channelDescription: 'Daily reminder to play the Game Quiz',
         importance: Importance.defaultImportance,
         priority: Priority.defaultPriority,
+        icon: 'ic_launcher',
       ),
       iOS: const DarwinNotificationDetails(),
     );

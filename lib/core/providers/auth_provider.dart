@@ -408,13 +408,14 @@ class AuthProvider extends ChangeNotifier {
       final result = await AuthService.login(email: email, password: password, rememberMe: rememberMe);
       
       if (result['success']) {
-        final data = result['data'];
-        _token = data['access_token'];
+        final data = result['data'] is Map ? Map<String, dynamic>.from(result['data']) : <String, dynamic>{};
+        final accessToken = data['access_token']?.toString();
+        _token = (accessToken != null && accessToken.trim().isNotEmpty) ? accessToken.trim() : null;
         _refreshToken = data['refresh_token']?.toString();
         if (data['user'] is Map<String, dynamic>) {
           _user = _normalizeUser(Map<String, dynamic>.from(data['user']));
         } else {
-          _user = _normalizeUser(<String, dynamic>{});
+          _user = null;
         }
         
         await _saveAuthToStorage();

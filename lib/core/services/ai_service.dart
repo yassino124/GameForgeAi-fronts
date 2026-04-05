@@ -52,8 +52,23 @@ class AiService {
       '/ai/image',
       token: token,
       timeout: timeout,
+      data: {'prompt': prompt.trim()},
+    );
+  }
+
+  static Future<Map<String, dynamic>> generateClaudeGame({
+    required String token,
+    required String prompt,
+    String style = 'auto',
+    Duration timeout = const Duration(seconds: 180),
+  }) async {
+    return ApiService.post(
+      '/ai/claude/generate-game',
+      token: token,
+      timeout: timeout,
       data: {
         'prompt': prompt.trim(),
+        'style': style.trim().isEmpty ? 'auto' : style.trim(),
       },
     );
   }

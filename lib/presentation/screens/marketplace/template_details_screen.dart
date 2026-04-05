@@ -5,6 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'dart:ui';
 import 'dart:io';
 
@@ -33,6 +35,9 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
   bool _loading = false;
   String? _error;
   Map<String, dynamic>? _template;
+
+  late final PageController _heroController;
+  int _heroIndex = 0;
 
   bool _forking = false;
 
@@ -65,7 +70,84 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
   @override
   void initState() {
     super.initState();
+    _heroController = PageController();
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
+  }
+
+  Future<void> _downloadTemplateZip() async {
+    final cs = Theme.of(context).colorScheme;
+    final token = _getToken();
+    if (token == null || token.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: const Text('Please sign in.'), backgroundColor: cs.error),
+      );
+      return;
+    }
+
+    try {
+      final res = await TemplatesService.getTemplateDownloadUrl(token: token, id: widget.templateId);
+      if (!mounted) return;
+      if (res['success'] != true) {
+        throw Exception(res['message']?.toString() ?? 'Failed to get download link');
+      }
+      final url = (res['data'] is Map) ? (res['data'] as Map)['url']?.toString() : null;
+      if (url == null || url.trim().isEmpty) {
+        throw Exception('No download link returned');
+      }
+
+      final u = Uri.tryParse(url.trim());
+      if (u == null) throw Exception('Invalid download URL');
+
+      final ok = await launchUrl(u, mode: LaunchMode.externalApplication);
+      if (!ok && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: const Text('Could not open download link'), backgroundColor: cs.error),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: cs.error),
+      );
+    }
+  }
+
+  Future<void> _copyTemplateLink({String? downloadUrl}) async {
+    final cs = Theme.of(context).colorScheme;
+
+    final apiBase = ApiService.baseUrl; // e.g. http://127.0.0.1:3000/api
+    final templateApiUrl = '${apiBase.replaceAll(RegExp(r"/+$"), '')}/templates/${widget.templateId}';
+
+    String? resolvedZipUrl = downloadUrl;
+    if (resolvedZipUrl == null || resolvedZipUrl.trim().isEmpty) {
+      try {
+        final token = _getToken();
+        if (token != null && token.trim().isNotEmpty) {
+          final res = await TemplatesService.getTemplateDownloadUrl(token: token, id: widget.templateId);
+          if (res['success'] == true && res['data'] is Map) {
+            resolvedZipUrl = (res['data'] as Map)['url']?.toString();
+          }
+        }
+      } catch (_) {
+        // ignore
+      }
+    }
+
+    final zipLine = (resolvedZipUrl != null && resolvedZipUrl.trim().isNotEmpty) ? resolvedZipUrl!.trim() : null;
+    final text = zipLine != null ? '${templateApiUrl}\n${zipLine}' : templateApiUrl;
+
+    try {
+      await Clipboard.setData(ClipboardData(text: text));
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: const Text('Link copied'), backgroundColor: cs.primary),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString()), backgroundColor: cs.error),
+      );
+    }
   }
 
   Future<void> _showAiModels() async {
@@ -242,6 +324,7 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
 
   @override
   void dispose() {
+    _heroController.dispose();
     _reviewController.dispose();
     _aiNotesController.dispose();
     super.dispose();
@@ -532,27 +615,7 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
   }
 
   String? _resolveMediaUrl(String? url) {
-    if (url == null) return null;
-    final raw = url.trim();
-    if (raw.isEmpty) return null;
-
-    try {
-      final base = Uri.parse(ApiService.baseUrl);
-      final baseOrigin = Uri(scheme: base.scheme, host: base.host, port: base.hasPort ? base.port : null);
-
-      if (raw.startsWith('/')) {
-        return baseOrigin.resolve(raw).toString();
-      }
-
-      final u = Uri.parse(raw);
-      if (!u.hasScheme) {
-        return baseOrigin.resolve('/$raw').toString();
-      }
-
-      return baseOrigin.replace(path: u.path, query: u.query).toString();
-    } catch (_) {
-      return raw;
-    }
+    return ApiService.normalizeImageUrl(url);
   }
 
   Future<void> _load() async {
@@ -788,6 +851,13 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
         ? tagsRaw.map((e) => e?.toString() ?? '').where((e) => e.trim().isNotEmpty).toList()
         : <String>[];
     final compatBadges = _compatBadges(tags);
+
+    final ownerId = t?['ownerId']?.toString() ?? '';
+    final ownerUsername = t?['ownerUsername']?.toString() ?? '';
+    final ownerAvatar = _resolveMediaUrl(t?['ownerAvatar']?.toString());
+    final ownerRole = (t?['ownerRole']?.toString() ?? '').trim().toLowerCase();
+    final isDevOwner = ownerRole == 'dev' || ownerRole == 'devl';
+
     final auth = context.watch<AuthProvider>();
     final canEditMedia = auth.isAdmin || auth.isDevl;
 
@@ -799,6 +869,37 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
     final shotPrompts = (mediaPrompts?['screenshots'] is List)
         ? (mediaPrompts?['screenshots'] as List).map((e) => e?.toString() ?? '').where((e) => e.isNotEmpty).toList()
         : <String>[];
+
+    final heroMedia = <String>[
+      if (coverUrl != null && coverUrl.trim().isNotEmpty) coverUrl.trim(),
+      ...screenshotUrls,
+    ];
+
+    final bottomCta = (t == null || _loading || _error != null)
+        ? null
+        : _BottomCtaBar(
+            canUse: canUse,
+            isPaidLocked: isPaid && !canUse,
+            price: price,
+            purchasing: _purchasing,
+            forking: _forking,
+            onDownload: canUse ? _downloadTemplateZip : null,
+            onCopy: canUse ? () => _copyTemplateLink() : null,
+            onUseOrBuy: (isPaid && !canUse)
+                ? (_purchasing ? null : _buyTemplate)
+                : () {
+                    context.go('/create-project');
+                  },
+            onFork: _forking
+                ? null
+                : () async {
+                    await _forkTemplate(
+                      templateId: widget.templateId,
+                      defaultName: name,
+                      defaultDescription: desc,
+                    );
+                  },
+          );
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -825,324 +926,520 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
         ),
         child: SafeArea(
           top: false,
-          child: _loading
-              ? const _TemplateDetailsSkeleton()
-              : (_error != null)
-                  ? Center(
-                      child: Padding(
-                        padding: const EdgeInsets.all(AppSpacing.lg),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(_error!, style: AppTypography.body2.copyWith(color: cs.error)),
-                            const SizedBox(height: AppSpacing.md),
-                            CustomButton(text: 'Retry', onPressed: _load),
-                          ],
-                        ),
-                      ),
-                    )
-                  : (t == null)
-                      ? const SizedBox.shrink()
-                      : SingleChildScrollView(
-                          padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.xxxl),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              _buildHero(
-                                cs: cs,
-                                coverUrl: coverUrl,
-                                previewVideoUrl: previewVideoUrl,
-                                onPlay: previewVideoUrl == null || previewVideoUrl.trim().isEmpty
-                                    ? null
-                                    : () async {
-                                        await _openVideoPlayer(previewVideoUrl);
-                                      },
-                              ),
-                              if (screenshotUrls.isNotEmpty) ...[
-                                const SizedBox(height: AppSpacing.md),
-                                _buildScreenshots(screenshotUrls),
-                              ],
-                              const SizedBox(height: AppSpacing.lg),
-                              Text(name, style: AppTypography.h3.copyWith(fontWeight: FontWeight.w900)),
-                              const SizedBox(height: AppSpacing.xs),
-                              Text(category, style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant)),
-                              if (compatBadges.isNotEmpty) ...[
-                                const SizedBox(height: AppSpacing.sm),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: compatBadges.take(3).map((b) => _DetailsBadgeChip(label: b.label, icon: b.icon)).toList(),
-                                ),
-                              ],
-                              const SizedBox(height: AppSpacing.md),
-                              Row(
+          child: Stack(
+            children: [
+              Positioned.fill(
+                child: _loading
+                    ? const _TemplateDetailsSkeleton()
+                    : (_error != null)
+                        ? Center(
+                            child: Padding(
+                              padding: const EdgeInsets.all(AppSpacing.lg),
+                              child: Column(
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  const Icon(Icons.star, size: 16, color: AppColors.warning),
-                                  const SizedBox(width: 6),
-                                  Text(rating.toStringAsFixed(1), style: AppTypography.body2.copyWith(fontWeight: FontWeight.w800)),
-                                  const SizedBox(width: AppSpacing.lg),
-                                  Text('$downloads downloads', style: AppTypography.body2.copyWith(color: cs.onSurfaceVariant)),
-                                  const Spacer(),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: AppSpacing.md, vertical: AppSpacing.xs),
-                                    decoration: BoxDecoration(
-                                      color: cs.primary.withOpacity(0.14),
-                                      borderRadius: AppBorderRadius.allSmall,
-                                      border: Border.all(color: cs.primary.withOpacity(0.22)),
-                                    ),
-                                    child: Text(
-                                      price == 0.0 ? 'FREE' : '\$${price.toStringAsFixed(2)}',
-                                      style: AppTypography.caption.copyWith(color: cs.primary, fontWeight: FontWeight.w900),
-                                    ),
-                                  ),
+                                  Text(_error!, style: AppTypography.body2.copyWith(color: cs.error)),
+                                  const SizedBox(height: AppSpacing.md),
+                                  CustomButton(text: 'Retry', onPressed: _load),
                                 ],
                               ),
-                              if (desc.trim().isNotEmpty) ...[
-                                const SizedBox(height: AppSpacing.xl),
-                                Text('About', style: AppTypography.subtitle2),
-                                const SizedBox(height: AppSpacing.sm),
-                                Text(desc, style: AppTypography.body2.copyWith(color: cs.onSurfaceVariant, height: 1.35)),
-                              ],
-                              if (canEditMedia) ...[
-                                Text('Media', style: AppTypography.subtitle1),
-                                const SizedBox(height: AppSpacing.md),
-                                Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.all(AppSpacing.lg),
-                                  decoration: BoxDecoration(
-                                    color: cs.surface,
-                                    borderRadius: BorderRadius.circular(AppBorderRadius.large),
-                                    border: Border.all(color: cs.outlineVariant.withOpacity(0.6)),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: Text(
-                                              _newPreviewImage?.path.split('/').last ?? 'No new preview image',
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: AppTypography.body2.copyWith(color: cs.onSurface),
-                                            ),
-                                          ),
-                                          const SizedBox(width: AppSpacing.sm),
-                                          CustomButton(
-                                            text: 'Image',
-                                            onPressed: _uploadingMedia ? null : _pickNewPreviewImage,
-                                            isFullWidth: false,
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: AppSpacing.sm),
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: Text(
-                                              _newScreenshots.isEmpty ? 'No new screenshots' : '${_newScreenshots.length} new screenshot(s)',
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: AppTypography.body2.copyWith(color: cs.onSurface),
-                                            ),
-                                          ),
-                                          const SizedBox(width: AppSpacing.sm),
-                                          CustomButton(
-                                            text: 'Shots',
-                                            onPressed: _uploadingMedia ? null : _pickNewScreenshots,
-                                            isFullWidth: false,
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: AppSpacing.sm),
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: Text(
-                                              _newPreviewVideo?.path.split('/').last ?? 'No new preview video',
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                              style: AppTypography.body2.copyWith(color: cs.onSurface),
-                                            ),
-                                          ),
-                                          const SizedBox(width: AppSpacing.sm),
-                                          CustomButton(
-                                            text: 'Video',
-                                            onPressed: _uploadingMedia ? null : _pickNewPreviewVideo,
-                                            isFullWidth: false,
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: AppSpacing.lg),
-                                      CustomButton(
-                                        text: _uploadingMedia ? 'Uploading…' : 'Upload Media',
-                                        onPressed: _uploadingMedia ? null : _uploadMedia,
-                                        isFullWidth: true,
-                                      ),
-                                    ],
-                                  ),
+                            ),
+                          )
+                        : (t == null)
+                            ? const SizedBox.shrink()
+                            : SingleChildScrollView(
+                                padding: EdgeInsets.fromLTRB(
+                                  AppSpacing.lg,
+                                  AppSpacing.md,
+                                  AppSpacing.lg,
+                                  (bottomCta == null ? AppSpacing.xxxl : (AppSpacing.xxxl + 88)),
                                 ),
-                                const SizedBox(height: AppSpacing.xl),
-                              ],
-                              if (canEditMedia) ...[
-                                Text('AI', style: AppTypography.subtitle1),
-                                const SizedBox(height: AppSpacing.md),
-                                Container(
-                                  width: double.infinity,
-                                  padding: const EdgeInsets.all(AppSpacing.lg),
-                                  decoration: BoxDecoration(
-                                    color: cs.surface,
-                                    borderRadius: BorderRadius.circular(AppBorderRadius.large),
-                                    border: Border.all(color: cs.outlineVariant.withOpacity(0.6)),
-                                  ),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Align(
-                                        alignment: Alignment.centerRight,
-                                        child: TextButton(
-                                          onPressed: _listingModels ? null : _showAiModels,
-                                          child: Text(_listingModels ? 'Loading…' : 'List models'),
-                                        ),
-                                      ),
-                                      TextField(
-                                        controller: _aiNotesController,
-                                        minLines: 2,
-                                        maxLines: 4,
-                                        decoration: const InputDecoration(labelText: 'Notes (optional)'),
-                                      ),
-                                      const SizedBox(height: AppSpacing.md),
-                                      Row(
-                                        children: [
-                                          Expanded(
-                                            child: Text(
-                                              'Overwrite template fields',
-                                              style: AppTypography.body2.copyWith(fontWeight: FontWeight.w600),
-                                            ),
-                                          ),
-                                          Switch(
-                                            value: _aiOverwrite,
-                                            onChanged: _generatingAi
-                                                ? null
-                                                : (v) {
-                                                    setState(() {
-                                                      _aiOverwrite = v;
-                                                    });
-                                                  },
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: AppSpacing.md),
-                                      CustomButton(
-                                        text: _generatingAi ? 'Generating…' : 'Generate with Gemini',
-                                        onPressed: _generatingAi ? null : _generateAiMetadata,
-                                        isFullWidth: true,
-                                      ),
-                                      if (ai != null) ...[
-                                        const SizedBox(height: AppSpacing.lg),
-                                        Text('Generated', style: AppTypography.subtitle2),
-                                        const SizedBox(height: AppSpacing.sm),
-                                        if ((ai['description']?.toString() ?? '').trim().isNotEmpty)
-                                          Text(
-                                            ai['description'].toString(),
-                                            style: AppTypography.body2.copyWith(color: cs.onSurfaceVariant, height: 1.35),
-                                          ),
-                                        if (aiTags.isNotEmpty) ...[
-                                          const SizedBox(height: AppSpacing.sm),
-                                          Text('Tags: ${aiTags.join(', ')}', style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant)),
-                                        ],
-                                        if (mediaPrompts != null) ...[
-                                          const SizedBox(height: AppSpacing.md),
-                                          if ((mediaPrompts['cover']?.toString() ?? '').trim().isNotEmpty)
-                                            Text('Cover prompt: ${mediaPrompts['cover']}', style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant)),
-                                          if (shotPrompts.isNotEmpty) ...[
-                                            const SizedBox(height: AppSpacing.xs),
-                                            Text('Screenshot prompts:', style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant)),
-                                            const SizedBox(height: 6),
-                                            ...shotPrompts.map((p) => Padding(
-                                                  padding: const EdgeInsets.only(bottom: 4),
-                                                  child: Text('- $p', style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant)),
-                                                )),
-                                          ],
-                                        ],
-                                      ],
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(height: AppSpacing.xl),
-                              ],
-                              const SizedBox(height: AppSpacing.xl),
-                              _UserReviewCard(
-                                rating: _userRating,
-                                onRatingChanged: (v) {
-                                  setState(() {
-                                    _userRating = v;
-                                  });
-                                },
-                                controller: _reviewController,
-                                submitting: _submittingReview,
-                                onSubmit: _submitReview,
-                              ),
-                              const SizedBox(height: AppSpacing.lg),
-                              Text('Reviews', style: AppTypography.subtitle2),
-                              const SizedBox(height: AppSpacing.sm),
-                              if (_reviewsLoading)
-                                const Padding(
-                                  padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
-                                  child: Center(child: CircularProgressIndicator()),
-                                )
-                              else if (_reviews.isEmpty)
-                                Text('No reviews yet.', style: AppTypography.body2.copyWith(color: cs.onSurfaceVariant))
-                              else
-                                Column(
-                                  children: _reviews
-                                      .take(6)
-                                      .map((r) => Padding(
-                                            padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                                            child: _ReviewListItem(review: r),
-                                          ))
-                                      .toList(),
-                                ),
-                              const SizedBox(height: AppSpacing.xl),
-                              Row(
-                                children: [
-                                  Expanded(
-                                    child: CustomButton(
-                                      text: isPaid && !canUse
-                                          ? (_purchasing ? 'Processing...' : 'Buy for \$${price.toStringAsFixed(2)}')
-                                          : 'Use Template',
-                                      onPressed: (isPaid && !canUse)
-                                          ? (_purchasing ? null : _buyTemplate)
-                                          : () {
-                                              context.go('/create-project');
-                                            },
-                                      type: ButtonType.primary,
-                                      icon: Icon(isPaid && !canUse ? Icons.lock_open : Icons.auto_awesome),
-                                    ),
-                                  ),
-                                  const SizedBox(width: AppSpacing.md),
-                                  Expanded(
-                                    child: CustomButton(
-                                      text: _forking ? 'Forking…' : 'Fork Template',
-                                      onPressed: _forking
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    _buildHeroCarousel(
+                                      cs: cs,
+                                      mediaUrls: heroMedia,
+                                      previewVideoUrl: previewVideoUrl,
+                                      onPlay: previewVideoUrl == null || previewVideoUrl.trim().isEmpty
                                           ? null
                                           : () async {
-                                              await _forkTemplate(
-                                                templateId: widget.templateId,
-                                                defaultName: name,
-                                                defaultDescription: desc,
-                                              );
+                                              await _openVideoPlayer(previewVideoUrl);
                                             },
-                                      type: ButtonType.secondary,
-                                      icon: const Icon(Icons.fork_right_rounded),
                                     ),
-                                  ),
-                                ],
+                                    if (heroMedia.length > 1) ...[
+                                      const SizedBox(height: AppSpacing.md),
+                                      Row(
+                                        mainAxisAlignment: MainAxisAlignment.center,
+                                        children: List.generate(
+                                          heroMedia.length,
+                                          (i) {
+                                            final sel = i == _heroIndex;
+                                            return GestureDetector(
+                                              onTap: () {
+                                                _heroController.animateToPage(
+                                                  i,
+                                                  duration: const Duration(milliseconds: 240),
+                                                  curve: Curves.easeOut,
+                                                );
+                                              },
+                                              child: AnimatedContainer(
+                                                duration: const Duration(milliseconds: 220),
+                                                curve: Curves.easeOut,
+                                                margin: const EdgeInsets.symmetric(horizontal: 3),
+                                                height: 6,
+                                                width: sel ? 18 : 6,
+                                                decoration: BoxDecoration(
+                                                  color: sel ? cs.primary : cs.onSurface.withOpacity(0.16),
+                                                  borderRadius: BorderRadius.circular(99),
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                      const SizedBox(height: AppSpacing.sm),
+                                      SizedBox(
+                                        height: 54,
+                                        child: ListView.separated(
+                                          scrollDirection: Axis.horizontal,
+                                          itemCount: heroMedia.length,
+                                          separatorBuilder: (_, __) => const SizedBox(width: 10),
+                                          itemBuilder: (context, i) {
+                                            final u = heroMedia[i];
+                                            final sel = i == _heroIndex;
+                                            return GestureDetector(
+                                              onTap: () {
+                                                _heroController.animateToPage(
+                                                  i,
+                                                  duration: const Duration(milliseconds: 240),
+                                                  curve: Curves.easeOut,
+                                                );
+                                              },
+                                              child: AnimatedContainer(
+                                                duration: const Duration(milliseconds: 220),
+                                                curve: Curves.easeOut,
+                                                width: 86,
+                                                decoration: BoxDecoration(
+                                                  borderRadius: BorderRadius.circular(AppBorderRadius.medium),
+                                                  border: Border.all(
+                                                    color: sel ? cs.primary : cs.outlineVariant.withOpacity(0.55),
+                                                    width: sel ? 2 : 1,
+                                                  ),
+                                                ),
+                                                clipBehavior: Clip.antiAlias,
+                                                child: Image.network(
+                                                  u,
+                                                  fit: BoxFit.cover,
+                                                  errorBuilder: (context, error, stackTrace) {
+                                                    return Container(
+                                                      decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
+                                                      child: const Center(
+                                                        child: Icon(Icons.image, color: Colors.white70, size: 20),
+                                                      ),
+                                                    );
+                                                  },
+                                                ),
+                                              ),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    ],
+                                    const SizedBox(height: AppSpacing.lg),
+                                    Text(name, style: AppTypography.h3.copyWith(fontWeight: FontWeight.w900)),
+                                    const SizedBox(height: AppSpacing.xs),
+                                    Text(category, style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant)),
+                                    if (ownerId.trim().isNotEmpty || ownerUsername.trim().isNotEmpty) ...[
+                                      const SizedBox(height: AppSpacing.md),
+                                      _PublisherTile(
+                                        ownerId: ownerId,
+                                        username: ownerUsername,
+                                        avatarUrl: ownerAvatar,
+                                        showDevBadge: isDevOwner,
+                                        onTap: (ownerId.trim().isEmpty)
+                                            ? null
+                                            : () {
+                                                context.push('/creator/${Uri.encodeComponent(ownerId)}');
+                                              },
+                                      ),
+                                    ],
+                                    if (compatBadges.isNotEmpty) ...[
+                                      const SizedBox(height: AppSpacing.sm),
+                                      Wrap(
+                                        spacing: 8,
+                                        runSpacing: 8,
+                                        children: compatBadges
+                                            .take(3)
+                                            .map((b) => _DetailsBadgeChip(label: b.label, icon: b.icon))
+                                            .toList(),
+                                      ),
+                                    ],
+                                    const SizedBox(height: AppSpacing.md),
+                                    Wrap(
+                                      spacing: 10,
+                                      runSpacing: 10,
+                                      crossAxisAlignment: WrapCrossAlignment.center,
+                                      children: [
+                                        _DetailsStatChip(
+                                          icon: Icons.star_rounded,
+                                          iconColor: AppColors.warning,
+                                          label: rating.toStringAsFixed(1),
+                                        ),
+                                        _DetailsStatChip(
+                                          icon: Icons.download_rounded,
+                                          label: '$downloads',
+                                          suffix: 'downloads',
+                                        ),
+                                        _DetailsPriceChip(price: price),
+                                      ],
+                                    ),
+                                    if (desc.trim().isNotEmpty) ...[
+                                      const SizedBox(height: AppSpacing.xl),
+                                      Text('About', style: AppTypography.subtitle2),
+                                      const SizedBox(height: AppSpacing.sm),
+                                      Text(desc, style: AppTypography.body2.copyWith(color: cs.onSurfaceVariant, height: 1.35)),
+                                    ],
+                                    if (canEditMedia) ...[
+                                      const SizedBox(height: AppSpacing.xl),
+                                      Text('Media', style: AppTypography.subtitle1),
+                                      const SizedBox(height: AppSpacing.md),
+                                      Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.all(AppSpacing.lg),
+                                        decoration: BoxDecoration(
+                                          color: cs.surface,
+                                          borderRadius: BorderRadius.circular(AppBorderRadius.large),
+                                          border: Border.all(color: cs.outlineVariant.withOpacity(0.6)),
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Row(
+                                              children: [
+                                                Expanded(
+                                                  child: Text(
+                                                    _newPreviewImage?.path.split('/').last ?? 'No new preview image',
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                    style: AppTypography.body2.copyWith(color: cs.onSurface),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: AppSpacing.sm),
+                                                CustomButton(
+                                                  text: 'Image',
+                                                  onPressed: _uploadingMedia ? null : _pickNewPreviewImage,
+                                                  isFullWidth: false,
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: AppSpacing.sm),
+                                            Row(
+                                              children: [
+                                                Expanded(
+                                                  child: Text(
+                                                    _newScreenshots.isEmpty
+                                                        ? 'No new screenshots'
+                                                        : '${_newScreenshots.length} new screenshot(s)',
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                    style: AppTypography.body2.copyWith(color: cs.onSurface),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: AppSpacing.sm),
+                                                CustomButton(
+                                                  text: 'Shots',
+                                                  onPressed: _uploadingMedia ? null : _pickNewScreenshots,
+                                                  isFullWidth: false,
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: AppSpacing.sm),
+                                            Row(
+                                              children: [
+                                                Expanded(
+                                                  child: Text(
+                                                    _newPreviewVideo?.path.split('/').last ?? 'No new preview video',
+                                                    maxLines: 1,
+                                                    overflow: TextOverflow.ellipsis,
+                                                    style: AppTypography.body2.copyWith(color: cs.onSurface),
+                                                  ),
+                                                ),
+                                                const SizedBox(width: AppSpacing.sm),
+                                                CustomButton(
+                                                  text: 'Video',
+                                                  onPressed: _uploadingMedia ? null : _pickNewPreviewVideo,
+                                                  isFullWidth: false,
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: AppSpacing.lg),
+                                            CustomButton(
+                                              text: _uploadingMedia ? 'Uploading…' : 'Upload Media',
+                                              onPressed: _uploadingMedia ? null : _uploadMedia,
+                                              isFullWidth: true,
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                    if (canEditMedia) ...[
+                                      Text('AI', style: AppTypography.subtitle1),
+                                      const SizedBox(height: AppSpacing.md),
+                                      Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.all(AppSpacing.lg),
+                                        decoration: BoxDecoration(
+                                          color: cs.surface,
+                                          borderRadius: BorderRadius.circular(AppBorderRadius.large),
+                                          border: Border.all(color: cs.outlineVariant.withOpacity(0.6)),
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Align(
+                                              alignment: Alignment.centerRight,
+                                              child: TextButton(
+                                                onPressed: _listingModels ? null : _showAiModels,
+                                                child: Text(_listingModels ? 'Loading…' : 'List models'),
+                                              ),
+                                            ),
+                                            TextField(
+                                              controller: _aiNotesController,
+                                              minLines: 2,
+                                              maxLines: 4,
+                                              decoration: const InputDecoration(labelText: 'Notes (optional)'),
+                                            ),
+                                            const SizedBox(height: AppSpacing.md),
+                                            Row(
+                                              children: [
+                                                Expanded(
+                                                  child: Text(
+                                                    'Overwrite template fields',
+                                                    style: AppTypography.body2.copyWith(fontWeight: FontWeight.w600),
+                                                  ),
+                                                ),
+                                                Switch(
+                                                  value: _aiOverwrite,
+                                                  onChanged: _generatingAi
+                                                      ? null
+                                                      : (v) {
+                                                          setState(() {
+                                                            _aiOverwrite = v;
+                                                          });
+                                                        },
+                                                ),
+                                              ],
+                                            ),
+                                            const SizedBox(height: AppSpacing.md),
+                                            CustomButton(
+                                              text: _generatingAi ? 'Generating…' : 'Generate with Gemini',
+                                              onPressed: _generatingAi ? null : _generateAiMetadata,
+                                              isFullWidth: true,
+                                            ),
+                                            if (ai != null) ...[
+                                              const SizedBox(height: AppSpacing.lg),
+                                              Text('Generated', style: AppTypography.subtitle2),
+                                              const SizedBox(height: AppSpacing.sm),
+                                              if ((ai['description']?.toString() ?? '').trim().isNotEmpty)
+                                                Text(
+                                                  ai['description'].toString(),
+                                                  style: AppTypography.body2.copyWith(color: cs.onSurfaceVariant, height: 1.35),
+                                                ),
+                                              if (aiTags.isNotEmpty) ...[
+                                                const SizedBox(height: AppSpacing.sm),
+                                                Text('Tags: ${aiTags.join(', ')}', style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant)),
+                                              ],
+                                              if (mediaPrompts != null) ...[
+                                                const SizedBox(height: AppSpacing.md),
+                                                if ((mediaPrompts['cover']?.toString() ?? '').trim().isNotEmpty)
+                                                  Text('Cover prompt: ${mediaPrompts['cover']}', style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant)),
+                                                if (shotPrompts.isNotEmpty) ...[
+                                                  const SizedBox(height: AppSpacing.xs),
+                                                  Text('Screenshot prompts:', style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant)),
+                                                  const SizedBox(height: 6),
+                                                  ...shotPrompts.map(
+                                                    (p) => Padding(
+                                                      padding: const EdgeInsets.only(bottom: 4),
+                                                      child: Text('- $p', style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant)),
+                                                    ),
+                                                  ),
+                                                ],
+                                              ],
+                                            ],
+                                          ],
+                                        ),
+                                      ),
+                                      const SizedBox(height: AppSpacing.xl),
+                                    ],
+                                    const SizedBox(height: AppSpacing.xl),
+                                    _UserReviewCard(
+                                      rating: _userRating,
+                                      onRatingChanged: (v) {
+                                        setState(() {
+                                          _userRating = v;
+                                        });
+                                      },
+                                      controller: _reviewController,
+                                      submitting: _submittingReview,
+                                      onSubmit: _submitReview,
+                                    ),
+                                    const SizedBox(height: AppSpacing.lg),
+                                    Text('Reviews', style: AppTypography.subtitle2),
+                                    const SizedBox(height: AppSpacing.sm),
+                                    if (_reviewsLoading)
+                                      const Padding(
+                                        padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
+                                        child: Center(child: CircularProgressIndicator()),
+                                      )
+                                    else if (_reviews.isEmpty)
+                                      Text('No reviews yet.', style: AppTypography.body2.copyWith(color: cs.onSurfaceVariant))
+                                    else
+                                      Column(
+                                        children: _reviews
+                                            .take(6)
+                                            .map((r) => Padding(
+                                                  padding: const EdgeInsets.only(bottom: AppSpacing.md),
+                                                  child: _ReviewListItem(review: r),
+                                                ))
+                                            .toList(),
+                                      ),
+                                    const SizedBox(height: AppSpacing.xxxl),
+                                  ],
+                                ),
                               ),
-                              const SizedBox(height: AppSpacing.xxxl),
-                            ],
-                          ),
+              ),
+              if (bottomCta != null)
+                Positioned(
+                  left: 0,
+                  right: 0,
+                  bottom: 0,
+                  child: bottomCta,
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildHeroCarousel({
+    required ColorScheme cs,
+    required List<String> mediaUrls,
+    required String? previewVideoUrl,
+    required VoidCallback? onPlay,
+  }) {
+    final items = mediaUrls.isEmpty ? <String?>[null] : mediaUrls.map<String?>((e) => e).toList();
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(AppBorderRadius.large),
+      child: AspectRatio(
+        aspectRatio: 16 / 9,
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: PageView.builder(
+                controller: _heroController,
+                itemCount: items.length,
+                onPageChanged: (i) {
+                  if (!mounted) return;
+                  setState(() => _heroIndex = i);
+                },
+                itemBuilder: (context, i) {
+                  final u = items[i];
+                  if (u == null || u.trim().isEmpty) {
+                    return Container(
+                      decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
+                      child: const Center(child: Icon(Icons.games, color: Colors.white70, size: 44)),
+                    );
+                  }
+                  return Image.network(
+                    u,
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Container(
+                        decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
+                        child: const Center(child: Icon(Icons.image, color: Colors.white70, size: 44)),
+                      );
+                    },
+                  );
+                },
+              ),
+            ),
+            Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    colors: [
+                      Colors.black.withOpacity(0.06),
+                      Colors.black.withOpacity(0.62),
+                    ],
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                  ),
+                ),
+              ),
+            ),
+            Positioned(
+              left: AppSpacing.md,
+              bottom: AppSpacing.md,
+              child: _DetailsPressableGlow(
+                onTap: onPlay,
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(999),
+                  child: BackdropFilter(
+                    filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: cs.surface.withOpacity(0.52),
+                        borderRadius: BorderRadius.circular(999),
+                        border: Border.all(color: Colors.white.withOpacity(0.10)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.auto_awesome_rounded, size: 16, color: cs.primary),
+                          const SizedBox(width: 8),
+                          Text('Preview', style: AppTypography.caption.copyWith(fontWeight: FontWeight.w900)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+            if (previewVideoUrl != null && previewVideoUrl.trim().isNotEmpty)
+              Positioned(
+                bottom: AppSpacing.md,
+                right: AppSpacing.md,
+                child: _DetailsPressableGlow(
+                  onTap: onPlay,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: cs.primary,
+                      borderRadius: BorderRadius.circular(999),
+                      boxShadow: [
+                        BoxShadow(
+                          color: cs.primary.withOpacity(0.28),
+                          blurRadius: 18,
+                          offset: const Offset(0, 12),
                         ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.play_arrow_rounded, color: cs.onPrimary),
+                        const SizedBox(width: 6),
+                        Text('Play', style: AppTypography.caption.copyWith(color: cs.onPrimary, fontWeight: FontWeight.w900)),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+          ],
         ),
       ),
     );
@@ -1406,6 +1703,290 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
         },
       ),
     );
+  }
+}
+
+class _DetailsStatChip extends StatelessWidget {
+  final IconData icon;
+  final Color? iconColor;
+  final String label;
+  final String? suffix;
+
+  const _DetailsStatChip({
+    required this.icon,
+    this.iconColor,
+    required this.label,
+    this.suffix,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: cs.surface.withOpacity(0.72),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: cs.outlineVariant.withOpacity(0.6)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 16, color: iconColor ?? cs.primary),
+          const SizedBox(width: 6),
+          Text(label, style: AppTypography.caption.copyWith(fontWeight: FontWeight.w900)),
+          if (suffix != null && suffix!.trim().isNotEmpty) ...[
+            const SizedBox(width: 4),
+            Text(suffix!, style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant)),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _DetailsPriceChip extends StatelessWidget {
+  final double price;
+  const _DetailsPriceChip({required this.price});
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isPaid = price > 0.0;
+    final label = isPaid ? '\$${price.toStringAsFixed(2)}' : 'FREE';
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        gradient: isPaid ? null : LinearGradient(colors: [cs.primary, cs.secondary]),
+        color: isPaid ? cs.surface.withOpacity(0.72) : null,
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: (isPaid ? cs.outlineVariant : Colors.white).withOpacity(0.35)),
+      ),
+      child: Text(
+        label,
+        style: AppTypography.caption.copyWith(
+          color: isPaid ? cs.onSurface : cs.onPrimary,
+          fontWeight: FontWeight.w900,
+        ),
+      ),
+    );
+  }
+}
+
+class _BottomCtaBar extends StatelessWidget {
+  final bool canUse;
+  final bool isPaidLocked;
+  final double price;
+  final bool purchasing;
+  final bool forking;
+  final VoidCallback? onDownload;
+  final VoidCallback? onCopy;
+  final VoidCallback? onUseOrBuy;
+  final VoidCallback? onFork;
+
+  const _BottomCtaBar({
+    required this.canUse,
+    required this.isPaidLocked,
+    required this.price,
+    required this.purchasing,
+    required this.forking,
+    required this.onDownload,
+    required this.onCopy,
+    required this.onUseOrBuy,
+    required this.onFork,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+
+    return SafeArea(
+      top: false,
+      child: ClipRRect(
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(AppBorderRadius.large)),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.md),
+            decoration: BoxDecoration(
+              color: cs.surface.withOpacity(0.78),
+              border: Border(top: BorderSide(color: cs.outlineVariant.withOpacity(0.55))),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton.icon(
+                    onPressed: onFork,
+                    icon: Icon(Icons.fork_right_rounded, color: (onFork == null) ? cs.onSurfaceVariant : cs.primary),
+                    label: Text(
+                      forking ? 'Forking…' : 'Fork',
+                      style: AppTypography.buttonSmall.copyWith(
+                        color: (onFork == null) ? cs.onSurfaceVariant : cs.primary,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: onUseOrBuy,
+                    child: Text(
+                      purchasing
+                          ? 'Processing…'
+                          : (isPaidLocked ? 'Buy \$${price.toStringAsFixed(2)}' : (canUse ? 'Use template' : 'Unavailable')),
+                      style: AppTypography.buttonSmall.copyWith(fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: AppSpacing.md),
+                IconButton(
+                  onPressed: onCopy,
+                  icon: Icon(Icons.link_rounded, color: (onCopy == null) ? cs.onSurfaceVariant : cs.onSurface),
+                ),
+                IconButton(
+                  onPressed: onDownload,
+                  icon: Icon(Icons.download_rounded, color: (onDownload == null) ? cs.onSurfaceVariant : cs.onSurface),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PublisherTile extends StatelessWidget {
+  final String ownerId;
+  final String username;
+  final String? avatarUrl;
+  final bool showDevBadge;
+  final VoidCallback? onTap;
+
+  const _PublisherTile({
+    required this.ownerId,
+    required this.username,
+    required this.avatarUrl,
+    required this.showDevBadge,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final handle = username.trim().isNotEmpty ? '@${username.trim()}' : ownerId;
+
+    final avatar = (avatarUrl ?? '').trim();
+    final initial = username.trim().isNotEmpty ? username.trim().substring(0, 1).toUpperCase() : '';
+
+    final tile = Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(AppSpacing.md),
+      decoration: BoxDecoration(
+        color: cs.surface.withOpacity(0.72),
+        borderRadius: BorderRadius.circular(AppBorderRadius.large),
+        border: Border.all(color: cs.outlineVariant.withOpacity(0.65)),
+      ),
+      child: Row(
+        children: [
+          SizedBox(
+            width: 40,
+            height: 40,
+            child: ClipOval(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: cs.surfaceContainerHighest,
+                  border: Border.all(color: Colors.white.withOpacity(0.18)),
+                  shape: BoxShape.circle,
+                ),
+                child: avatar.isEmpty
+                    ? Center(
+                        child: initial.isNotEmpty
+                            ? Text(
+                                initial,
+                                style: AppTypography.subtitle2.copyWith(
+                                  color: cs.onSurfaceVariant,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              )
+                            : Icon(Icons.person_rounded, color: cs.onSurfaceVariant),
+                      )
+                    : Image.network(
+                        avatar,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) {
+                          return Center(
+                            child: initial.isNotEmpty
+                                ? Text(
+                                    initial,
+                                    style: AppTypography.subtitle2.copyWith(
+                                      color: cs.onSurfaceVariant,
+                                      fontWeight: FontWeight.w900,
+                                    ),
+                                  )
+                                : Icon(Icons.person_rounded, color: cs.onSurfaceVariant),
+                          );
+                        },
+                      ),
+              ),
+            ),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Publisher', style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant)),
+                const SizedBox(height: 4),
+                Text(handle, style: AppTypography.body2.copyWith(fontWeight: FontWeight.w900)),
+              ],
+            ),
+          ),
+          if (showDevBadge) ...[
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [cs.primary.withOpacity(0.95), cs.secondary.withOpacity(0.90)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(999),
+                border: Border.all(color: Colors.white.withOpacity(0.22)),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.verified_rounded, size: 14, color: cs.onPrimary),
+                  const SizedBox(width: 6),
+                  Text(
+                    'DEV',
+                    style: AppTypography.caption.copyWith(
+                      color: cs.onPrimary,
+                      fontWeight: FontWeight.w900,
+                      fontSize: 10,
+                      letterSpacing: 0.8,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ] else if (onTap != null) ...[
+            Icon(Icons.chevron_right_rounded, color: cs.onSurfaceVariant),
+          ],
+        ],
+      ),
+    );
+
+    return onTap == null
+        ? tile
+        : InkWell(
+            onTap: onTap,
+            borderRadius: BorderRadius.circular(AppBorderRadius.large),
+            child: tile,
+          );
   }
 }
 

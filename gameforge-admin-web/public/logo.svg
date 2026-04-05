@@ -1,0 +1,135 @@
+<svg width="800" height="240" viewBox="0 0 800 240" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- Background -->
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="800" y2="240" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#0a0b14"/>
+      <stop offset="100%" stop-color="#07080f"/>
+    </linearGradient>
+
+    <!-- Controller gradient -->
+    <linearGradient id="padGrad" x1="60" y1="60" x2="220" y2="180" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#7c3aed"/>
+      <stop offset="50%" stop-color="#6366f1"/>
+      <stop offset="100%" stop-color="#22d3ee"/>
+    </linearGradient>
+
+    <!-- Bolt gradient -->
+    <linearGradient id="boltGrad" x1="138" y1="80" x2="152" y2="165" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="50%" stop-color="#c084fc"/>
+      <stop offset="100%" stop-color="#22d3ee"/>
+    </linearGradient>
+
+    <!-- FORGE text gradient -->
+    <linearGradient id="forgeGrad" x1="320" y1="0" x2="580" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#22d3ee"/>
+      <stop offset="100%" stop-color="#a78bfa"/>
+    </linearGradient>
+
+    <!-- Ambient glow -->
+    <filter id="bigGlow" x="-60%" y="-60%" width="220%" height="220%">
+      <feGaussianBlur stdDeviation="14" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="midGlow" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="6" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="smGlow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="3" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <filter id="tglow" x="-10%" y="-10%" width="120%" height="120%">
+      <feGaussianBlur stdDeviation="1.5" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <!-- Background -->
+  <rect width="800" height="240" rx="24" fill="url(#bgGrad)"/>
+
+  <!-- ═══ AMBIENT HALO behind controller ═══ -->
+  <ellipse cx="148" cy="122" rx="90" ry="75" fill="rgba(99,102,241,0.12)" filter="url(#bigGlow)"/>
+  <ellipse cx="148" cy="100" rx="60" ry="44" fill="rgba(34,211,238,0.08)" filter="url(#bigGlow)"/>
+
+  <!-- ═══ GAMEPAD BODY ═══ -->
+  <!-- Main body -->
+  <rect x="62" y="82" width="172" height="96" rx="34" fill="#0d0e1f" stroke="url(#padGrad)" stroke-width="2"/>
+  <!-- Left grip -->
+  <path d="M62 148 Q58 176 80 180 L98 180 L98 162" fill="#0d0e1f" stroke="url(#padGrad)" stroke-width="2"/>
+  <!-- Right grip -->
+  <path d="M234 148 Q238 176 216 180 L198 180 L198 162" fill="#0d0e1f" stroke="url(#padGrad)" stroke-width="2"/>
+
+  <!-- Top bar detail -->
+  <rect x="112" y="76" width="72" height="10" rx="5" fill="#0d0e1f" stroke="rgba(99,102,241,0.4)" stroke-width="1"/>
+  <circle cx="140" cy="81" r="2.5" fill="rgba(99,102,241,0.5)"/>
+  <circle cx="148" cy="81" r="2.5" fill="rgba(34,211,238,0.3)"/>
+  <circle cx="156" cy="81" r="2.5" fill="rgba(99,102,241,0.5)"/>
+
+  <!-- ═══ D-PAD (left) ═══ -->
+  <rect x="84" y="112" width="38" height="14" rx="4" fill="url(#padGrad)" opacity="0.95"/>
+  <rect x="96" y="100" width="14" height="38" rx="4" fill="url(#padGrad)" opacity="0.95"/>
+  <!-- D-pad center dot -->
+  <circle cx="103" cy="119" r="4" fill="rgba(255,255,255,0.15)"/>
+
+  <!-- ═══ ABXY BUTTONS (right) ═══ -->
+  <!-- Top -->
+  <circle cx="186" cy="104" r="10" fill="rgba(34,211,238,0.08)" stroke="#22d3ee" stroke-width="1.8" filter="url(#tglow)"/>
+  <circle cx="186" cy="104" r="4" fill="#22d3ee" opacity="0.55"/>
+  <!-- Right -->
+  <circle cx="204" cy="120" r="10" fill="rgba(167,139,250,0.08)" stroke="#a78bfa" stroke-width="1.8" filter="url(#tglow)"/>
+  <circle cx="204" cy="120" r="4" fill="#a78bfa" opacity="0.55"/>
+  <!-- Bottom -->
+  <circle cx="186" cy="136" r="10" fill="rgba(34,211,238,0.08)" stroke="#22d3ee" stroke-width="1.8" filter="url(#tglow)"/>
+  <circle cx="186" cy="136" r="4" fill="#22d3ee" opacity="0.55"/>
+  <!-- Left -->
+  <circle cx="168" cy="120" r="10" fill="rgba(167,139,250,0.08)" stroke="#a78bfa" stroke-width="1.8" filter="url(#tglow)"/>
+  <circle cx="168" cy="120" r="4" fill="#a78bfa" opacity="0.55"/>
+
+  <!-- ═══ CENTER: AI BOLT ═══ -->
+  <!-- Glow layer -->
+  <path d="M150 84 L138 122 L148 122 L134 162 L162 118 L150 118 L162 84Z"
+    fill="url(#boltGrad)" opacity="0.3" filter="url(#bigGlow)"/>
+  <!-- Main bolt -->
+  <path d="M149 87 L138 121 L148 121 L134 160 L161 117 L150 117 L161 87Z"
+    fill="url(#boltGrad)" filter="url(#midGlow)" opacity="0.9"/>
+  <!-- Bright core -->
+  <path d="M149 91 L140 120 L149 120 L136 157 L159 118 L150 118 L159 91Z"
+    fill="rgba(255,255,255,0.6)"/>
+  <!-- White hot tip -->
+  <path d="M149 93 L143 118 L150 118 L149 93Z"
+    fill="rgba(255,255,255,0.95)"/>
+
+  <!-- ═══ DIVIDER ═══ -->
+  <line x1="270" y1="60" x2="270" y2="180" stroke="rgba(255,255,255,0.08)" stroke-width="1.5"/>
+
+  <!-- ═══ WORDMARK ═══ -->
+  <text x="300" y="118"
+    font-family="'Orbitron', 'Segoe UI', sans-serif"
+    font-size="52" font-weight="900"
+    fill="white" letter-spacing="3">GAME</text>
+
+  <text x="300" y="175"
+    font-family="'Orbitron', 'Segoe UI', sans-serif"
+    font-size="52" font-weight="900"
+    fill="url(#forgeGrad)" letter-spacing="3"
+    filter="url(#tglow)">FORGE</text>
+
+  <!-- ═══ AI BADGE ═══ -->
+  <rect x="608" y="148" width="64" height="30" rx="7"
+    fill="rgba(34,211,238,0.08)"
+    stroke="rgba(34,211,238,0.35)"
+    stroke-width="1.2"/>
+  <text x="640" y="169"
+    font-family="'Orbitron', 'Segoe UI', sans-serif"
+    font-size="14" font-weight="700"
+    fill="rgba(34,211,238,0.9)"
+    text-anchor="middle" letter-spacing="2">AI</text>
+
+  <!-- ═══ TAGLINE ═══ -->
+  <text x="300" y="204"
+    font-family="'Rajdhani', 'Segoe UI', sans-serif"
+    font-size="16" font-weight="700"
+    fill="rgba(255,255,255,0.18)"
+    letter-spacing="6">GENERATE · PLAY · FORGE</text>
+</svg>

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/gestures.dart';
 import 'package:provider/provider.dart';
 import 'package:go_router/go_router.dart';
 import 'package:font_awesome_flutter/font_awesome_flutter.dart';
@@ -22,6 +23,9 @@ class _SignUpScreenState extends State<SignUpScreen> {
   final _confirmPasswordController = TextEditingController();
   bool _agreeToTerms = false;
   String _selectedRole = 'user'; // Default role
+  bool _animateIn = false;
+  late final TapGestureRecognizer _termsRecognizer;
+  late final TapGestureRecognizer _privacyRecognizer;
 
   Future<void> _signInWithBiometrics() async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
@@ -53,7 +57,41 @@ class _SignUpScreenState extends State<SignUpScreen> {
   }
 
   @override
+  void initState() {
+    super.initState();
+    _termsRecognizer = TapGestureRecognizer()..onTap = _openTermsSheet;
+    _privacyRecognizer = TapGestureRecognizer()..onTap = _openTermsSheet;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        setState(() => _animateIn = true);
+      }
+    });
+  }
+
+  Widget _buildEntrance({
+    required Widget child,
+    required int order,
+    Offset beginOffset = const Offset(0, 0.08),
+  }) {
+    final duration = Duration(milliseconds: 320 + (order * 120));
+
+    return AnimatedOpacity(
+      opacity: _animateIn ? 1 : 0,
+      duration: duration,
+      curve: Curves.easeOutCubic,
+      child: AnimatedSlide(
+        offset: _animateIn ? Offset.zero : beginOffset,
+        duration: duration,
+        curve: Curves.easeOutCubic,
+        child: child,
+      ),
+    );
+  }
+
+  @override
   void dispose() {
+    _termsRecognizer.dispose();
+    _privacyRecognizer.dispose();
     _nameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
@@ -61,13 +99,165 @@ class _SignUpScreenState extends State<SignUpScreen> {
     super.dispose();
   }
 
+  Future<void> _openTermsSheet() async {
+    FocusScope.of(context).unfocus();
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return DraggableScrollableSheet(
+          initialChildSize: 0.86,
+          minChildSize: 0.55,
+          maxChildSize: 0.95,
+          builder: (ctx, scrollController) {
+            return Container(
+              decoration: BoxDecoration(
+                borderRadius: const BorderRadius.vertical(top: Radius.circular(28)),
+                color: cs.surface,
+                border: Border.all(color: cs.outlineVariant.withOpacity(0.55)),
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    margin: const EdgeInsets.only(top: 12, bottom: 8),
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: cs.outlineVariant,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                    child: Row(
+                      children: [
+                        Icon(Icons.description_rounded, color: cs.primary),
+                        const SizedBox(width: 12),
+                        Text(
+                          'Terms & Protocols',
+                          style: AppTypography.subtitle1.copyWith(fontWeight: FontWeight.w800),
+                        ),
+                        const Spacer(),
+                        IconButton(
+                          onPressed: () => Navigator.pop(ctx),
+                          icon: Icon(Icons.close, color: cs.onSurfaceVariant),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: ListView(
+                      controller: scrollController,
+                      padding: const EdgeInsets.all(24),
+                      children: [
+                        _buildTermsSection(
+                          '01. Platform Access',
+                          'By accessing GameForge AI Studio, you enter an ecosystem of high-end game development tools. You agree to use these tools for legitimate creative purposes and respect our ethical AI guidelines.',
+                        ),
+                        _buildTermsSection(
+                          '02. Intellectual Property',
+                          'Games generated through our AI remain your creative property. However, the proprietary algorithms, models, and platform architecture are the exclusive property of GameForge AI.',
+                        ),
+                        _buildTermsSection(
+                          '03. Usage Limits',
+                          'Accounts are intended for individual or professional team use. Automated scraping or reverse engineering of our AI generation pipeline is strictly prohibited.',
+                        ),
+                        _buildTermsSection(
+                          '04. Privacy & Data',
+                          'We process your prompts and data to improve your game generation experience. We never sell your personal data to third parties. Your projects are encrypted.',
+                        ),
+                        const SizedBox(height: 40),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      color: cs.surface,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.05),
+                          blurRadius: 10,
+                          offset: const Offset(0, -5),
+                        ),
+                      ],
+                    ),
+                    child: SafeArea(
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: CustomButton(
+                              text: 'Close',
+                              type: ButtonType.secondary,
+                              onPressed: () => Navigator.pop(ctx),
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: CustomButton(
+                              text: 'Accept Protocols',
+                              onPressed: () {
+                                setState(() => _agreeToTerms = true);
+                                Navigator.pop(ctx);
+                              },
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildTermsSection(String title, String content) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: AppTypography.caption.copyWith(
+              color: cs.primary,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            content,
+            style: AppTypography.body2.copyWith(
+              color: cs.onSurfaceVariant,
+              height: 1.5,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: Colors.transparent,
+      extendBodyBehindAppBar: true,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
+        scrolledUnderElevation: 0,
+        surfaceTintColor: Colors.transparent,
         toolbarHeight: kToolbarHeight + AppSpacing.sm,
         title: Text(
           'Create Account',
@@ -80,43 +270,143 @@ class _SignUpScreenState extends State<SignUpScreen> {
       
       body: Container(
         decoration: BoxDecoration(
-          gradient: Theme.of(context).brightness == Brightness.dark
-              ? AppColors.backgroundGradient
-              : AppTheme.backgroundGradientLight,
+          gradient: AppTheme.authBackgroundGradient(context),
         ),
-        child: SafeArea(
-          child: GestureDetector(
-            onTap: () => FocusScope.of(context).unfocus(),
-            child: SingleChildScrollView(
-              keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
-              padding: AppSpacing.paddingHorizontalLarge,
-              child: AutofillGroup(
-                child: Column(
-                  children: [
+        child: Stack(
+          children: [
+            const AuthBackdropGlow(),
+            SafeArea(
+              child: GestureDetector(
+                onTap: () => FocusScope.of(context).unfocus(),
+                child: SingleChildScrollView(
+                  keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
+                  padding: AppSpacing.paddingHorizontalLarge,
+                  child: AutofillGroup(
+                    child: Column(
+                      children: [
                     const SizedBox(height: AppSpacing.xl),
-                    
-                    // Header
-                    Text(
-                      'Create Account',
-                      style: AppTypography.h2,
+
+                    _buildEntrance(
+                      order: 0,
+                      beginOffset: const Offset(0, -0.08),
+                      child: Container(
+                        padding: const EdgeInsets.all(AppSpacing.lg),
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: AppColors.primary.withValues(alpha: 0.12),
+                          boxShadow: AppShadows.boxShadowPrimaryGlow,
+                        ),
+                        child: const Icon(
+                          Icons.person_add_alt_1_rounded,
+                          size: 42,
+                          color: AppColors.primary,
+                        ),
+                      ),
                     ),
+
+                    const SizedBox(height: AppSpacing.lg),
                     
-                    const SizedBox(height: AppSpacing.sm),
-                    
-                    Text(
-                      'Join the AI game creation revolution',
-                      style: AppTypography.body1.copyWith(
-                        color: AppColors.textSecondary,
+                    _buildEntrance(
+                      order: 1,
+                      child: Column(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.md,
+                              vertical: AppSpacing.xs,
+                            ),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(999),
+                              color: AppColors.secondary.withValues(alpha: 0.14),
+                              border: Border.all(
+                                color: AppColors.secondary.withValues(alpha: 0.35),
+                              ),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.auto_awesome_rounded,
+                                    size: 15, color: AppColors.secondary),
+                                const SizedBox(width: AppSpacing.xs),
+                                Text(
+                                  'Let\'s build something epic',
+                                  style: AppTypography.caption.copyWith(
+                                    color: AppColors.secondary,
+                                    fontWeight: FontWeight.w800,
+                                    letterSpacing: 0.2,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: AppSpacing.lg),
+                          Text(
+                            'Create Account',
+                            style: AppTypography.h2,
+                          ),
+                          const SizedBox(height: AppSpacing.sm),
+                          Text(
+                            'Join the AI game creation revolution',
+                            style: AppTypography.body1.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                        ],
                       ),
                     ),
                 
                     const SizedBox(height: AppSpacing.xxxl),
                 
                     // Sign up form
-                    Form(
-                      key: _formKey,
-                      child: Column(
-                        children: [
+                    _buildEntrance(
+                      order: 2,
+                      child: Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(AppSpacing.lg),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(24),
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? Colors.white.withValues(alpha: 0.04)
+                              : Colors.white.withValues(alpha: 0.82),
+                          border: Border.all(color: AppColors.border.withValues(alpha: 0.35)),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withValues(alpha: 0.08),
+                              blurRadius: 24,
+                              offset: const Offset(0, 10),
+                            ),
+                          ],
+                        ),
+                        child: Form(
+                          key: _formKey,
+                          child: Column(
+                            children: [
+                          Container(
+                            width: double.infinity,
+                            height: 5,
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(999),
+                              gradient: const LinearGradient(
+                                colors: [AppColors.secondary, AppColors.primary],
+                              ),
+                            ),
+                          ),
+
+                          const SizedBox(height: AppSpacing.md),
+
+                          Align(
+                            alignment: Alignment.centerLeft,
+                            child: Text(
+                              'Set up your profile and start creating',
+                              style: AppTypography.body3.copyWith(
+                                color: AppColors.textSecondary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+
+                          const SizedBox(height: AppSpacing.lg),
+
                           // Full name field
                           CustomTextField(
                             label: 'Full Name',
@@ -253,7 +543,7 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                         width: _selectedRole == role['value'] ? 2 : 1,
                                       ),
                                       color: _selectedRole == role['value']
-                                          ? AppColors.primary.withOpacity(0.1)
+                      ? AppColors.primary.withValues(alpha: 0.1)
                                           : Colors.transparent,
                                     ),
                                     child: Row(
@@ -346,34 +636,31 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                 activeColor: AppColors.primary,
                               ),
                               Expanded(
-                                child: GestureDetector(
-                                  onTap: () {
-                                    setState(() {
-                                      _agreeToTerms = !_agreeToTerms;
-                                    });
-                                  },
-                                  child: Text.rich(
-                                    TextSpan(
-                                      text: 'I agree to the ',
-                                      style: AppTypography.body2,
-                                      children: [
-                                        TextSpan(
-                                          text: 'Terms & Conditions',
-                                          style: AppTypography.body2.copyWith(
-                                            color: AppColors.primary,
-                                            fontWeight: FontWeight.w600,
-                                          ),
+                                child: Text.rich(
+                                  TextSpan(
+                                    text: 'I agree to the ',
+                                    style: AppTypography.body2,
+                                    children: [
+                                      TextSpan(
+                                        text: 'Terms & Conditions',
+                                        recognizer: _termsRecognizer,
+                                        style: AppTypography.body2.copyWith(
+                                          color: AppColors.primary,
+                                          fontWeight: FontWeight.w600,
+                                          decoration: TextDecoration.underline,
                                         ),
-                                        const TextSpan(text: ' and '),
-                                        TextSpan(
-                                          text: 'Privacy Policy',
-                                          style: AppTypography.body2.copyWith(
-                                            color: AppColors.primary,
-                                            fontWeight: FontWeight.w600,
-                                          ),
+                                      ),
+                                      const TextSpan(text: ' and '),
+                                      TextSpan(
+                                        text: 'Privacy Policy',
+                                        recognizer: _privacyRecognizer,
+                                        style: AppTypography.body2.copyWith(
+                                          color: AppColors.primary,
+                                          fontWeight: FontWeight.w600,
+                                          decoration: TextDecoration.underline,
                                         ),
-                                      ],
-                                    ),
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ),
@@ -385,11 +672,15 @@ class _SignUpScreenState extends State<SignUpScreen> {
                           // Create account button
                           Consumer<AuthProvider>(
                             builder: (context, authProvider, child) {
-                              return CustomButton(
-                                text: 'Create Account',
-                                onPressed: _signUp,
-                                isLoading: authProvider.isLoading,
-                                isFullWidth: true,
+                              return _buildEntrance(
+                                order: 3,
+                                beginOffset: const Offset(0, 0.05),
+                                child: CustomButton(
+                                  text: 'Create Account',
+                                  onPressed: _signUp,
+                                  isLoading: authProvider.isLoading,
+                                  isFullWidth: true,
+                                ),
                               );
                             },
                           ),
@@ -398,16 +689,20 @@ class _SignUpScreenState extends State<SignUpScreen> {
 
                           Consumer<AuthProvider>(
                             builder: (context, authProvider, child) {
-                              return CustomButton(
-                                text: 'Continue with Google',
-                                onPressed: () => _signUpWithGoogle(),
-                                type: ButtonType.secondary,
-                                isLoading: authProvider.isLoading,
-                                isFullWidth: true,
-                                icon: const Icon(
-                                  FontAwesomeIcons.google,
-                                  size: 18,
-                                  color: AppColors.primary,
+                              return _buildEntrance(
+                                order: 4,
+                                beginOffset: const Offset(0, 0.06),
+                                child: CustomButton(
+                                  text: 'Continue with Google',
+                                  onPressed: () => _signUpWithGoogle(),
+                                  type: ButtonType.secondary,
+                                  isLoading: authProvider.isLoading,
+                                  isFullWidth: true,
+                                  icon: const Icon(
+                                    FontAwesomeIcons.google,
+                                    size: 18,
+                                    color: AppColors.primary,
+                                  ),
                                 ),
                               );
                             },
@@ -423,16 +718,20 @@ class _SignUpScreenState extends State<SignUpScreen> {
                                   final show = snapshot.data == true;
                                   if (!show) return const SizedBox.shrink();
 
-                                  return CustomButton(
-                                    text: 'Continue with Face ID / Touch ID',
-                                    onPressed: _signInWithBiometrics,
-                                    type: ButtonType.secondary,
-                                    isLoading: authProvider.isLoading,
-                                    isFullWidth: true,
-                                    icon: const Icon(
-                                      Icons.fingerprint,
-                                      size: 18,
-                                      color: AppColors.primary,
+                                  return _buildEntrance(
+                                    order: 5,
+                                    beginOffset: const Offset(0, 0.07),
+                                    child: CustomButton(
+                                      text: 'Continue with Face ID / Touch ID',
+                                      onPressed: _signInWithBiometrics,
+                                      type: ButtonType.secondary,
+                                      isLoading: authProvider.isLoading,
+                                      isFullWidth: true,
+                                      icon: const Icon(
+                                        Icons.fingerprint,
+                                        size: 18,
+                                        color: AppColors.primary,
+                                      ),
                                     ),
                                   );
                                 },
@@ -468,14 +767,18 @@ class _SignUpScreenState extends State<SignUpScreen> {
                           ),
                           
                           const SizedBox(height: AppSpacing.xxl),
-                        ],
+                            ],
+                          ),
+                        ),
                       ),
                     ),
-                  ],
+                      ],
+                    ),
+                  ),
                 ),
               ),
             ),
-          ),
+          ],
         ),
       ),
     );
@@ -509,11 +812,12 @@ class _SignUpScreenState extends State<SignUpScreen> {
           if (mounted) {
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
-                content: Text('Registration successful!'),
+                content: Text('Registration successful! Check your email to verify your account.'),
                 backgroundColor: AppColors.success,
               ),
             );
-            context.go('/dashboard');
+            final encodedEmail = Uri.encodeComponent(_emailController.text.trim());
+            context.go('/email-verification?email=$encodedEmail');
           }
         } else {
           if (mounted) {

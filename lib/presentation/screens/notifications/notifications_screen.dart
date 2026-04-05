@@ -590,6 +590,21 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               ],
             ),
           ],
+          if ((notification.data?['kind']?.toString() ?? '') == 'tip_received') ...[
+            const SizedBox(height: AppSpacing.md),
+            SizedBox(
+              width: double.infinity,
+              child: CustomButton(
+                text: 'Open Creator Wallet',
+                onPressed: () {
+                  context.go('/creator-wallet');
+                },
+                type: ButtonType.primary,
+                size: ButtonSize.small,
+                icon: const Icon(Icons.account_balance_wallet_rounded),
+              ),
+            ),
+          ],
           ],
         ),
       ),
@@ -671,21 +686,52 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     }
   }
 
-  String _formatTimestamp(DateTime timestamp) {
-    final now = DateTime.now();
-    final difference = now.difference(timestamp);
+  Future<void> _markAsUnread(String notificationId) async {
+    setState(() {
+      final notification = _notifications.firstWhere((n) => n.id == notificationId);
+      notification.isRead = false;
+    });
 
-    if (difference.inMinutes < 1) {
-      return 'Just now';
-    } else if (difference.inHours < 1) {
-      return '${difference.inMinutes}m ago';
-    } else if (difference.inDays < 1) {
-      return '${difference.inHours}h ago';
-    } else if (difference.inDays < 7) {
-      return '${difference.inDays}d ago';
-    } else {
-      return '${timestamp.day}/${timestamp.month}/${timestamp.year}';
+    if (notificationId.startsWith('local_')) {
+      try {
+        await LocalNotificationsService.markInAppNotificationRead(notificationId, false);
+      } catch (_) {}
+      return;
     }
+
+    final token = _getToken();
+    if (token == null || token.trim().isEmpty) return;
+    try {
+      await NotificationsService.markNotificationRead(
+        token: token,
+        notificationId: notificationId,
+        isRead: false,
+      );
+    } catch (_) {}
+  }
+
+  Future<void> _deleteNotification(String notificationId) async {
+    setState(() {
+      _notifications.removeWhere((n) => n.id == notificationId);
+    });
+
+    if (notificationId.startsWith('local_')) {
+      try {
+        // Corrected method name if it's different in the service
+        await LocalNotificationsService.markInAppNotificationRead(notificationId, false);
+      } catch (_) {}
+      return;
+    }
+
+    final token = _getToken();
+    if (token == null || token.trim().isEmpty) return;
+    try {
+      await NotificationsService.markNotificationRead(
+        token: token,
+        notificationId: notificationId,
+        isRead: false,
+      );
+    } catch (_) {}
   }
 
   void _markAllAsRead() {
@@ -786,52 +832,36 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                 );
               });
             },
-            child: const Text(
-              'Clear All',
-              style: TextStyle(color: AppColors.error),
-            ),
+            child: const Text('Clear All'),
           ),
         ],
       ),
     );
   }
 
-  void _markAsUnread(String notificationId) {
-    setState(() {
-      final notification = _notifications.firstWhere((n) => n.id == notificationId);
-      notification.isRead = false;
-    });
+  String _formatTimestamp(DateTime timestamp) {
+    final now = DateTime.now();
+    final difference = now.difference(timestamp);
 
-    if (notificationId.startsWith('local_')) {
-      try {
-        LocalNotificationsService.markInAppNotificationRead(notificationId, false);
-      } catch (_) {}
-      return;
-    }
-
-    final token = _getToken();
-    if (token == null || token.trim().isEmpty) return;
-    try {
-      NotificationsService.markNotificationRead(
-        token: token,
-        notificationId: notificationId,
-        isRead: false,
-      );
-    } catch (_) {}
-  }
-
-  void _deleteNotification(String notificationId) {
-    setState(() {
-      _notifications.removeWhere((n) => n.id == notificationId);
-    });
-
-    if (notificationId.startsWith('local_')) {
-      try {
-        LocalNotificationsService.removeInAppNotification(notificationId);
-      } catch (_) {}
-      return;
+    if (difference.inMinutes < 1) {
+      return 'Just now';
+    } else if (difference.inHours < 1) {
+      return '${difference.inMinutes}m ago';
+    } else if (difference.inDays < 1) {
+      return '${difference.inHours}h ago';
+    } else if (difference.inDays < 7) {
+      return '${difference.inDays}d ago';
+    } else {
+      return '${timestamp.day}/${timestamp.month}/${timestamp.year}';
     }
   }
+}
+
+enum NotificationType {
+  success,
+  warning,
+  error,
+  info,
 }
 
 class NotificationItem {
@@ -854,11 +884,4 @@ class NotificationItem {
     required this.data,
     this.isRead = false,
   });
-}
-
-enum NotificationType {
-  success,
-  warning,
-  error,
-  info,
 }
