@@ -5,15 +5,23 @@ class BillingService {
     return ApiService.get('/billing/config');
   }
 
-  static Future<Map<String, dynamic>> getPlans() async {
-    return ApiService.get('/billing/plans');
+  static Future<Map<String, dynamic>> getPlans({String? token}) async {
+    final hasToken = token != null && token.trim().isNotEmpty;
+    return ApiService.get(
+      hasToken ? '/billing/plans/my' : '/billing/plans',
+      token: hasToken ? token : null,
+    );
   }
 
-  static Future<Map<String, dynamic>> getMySubscription({required String token}) async {
+  static Future<Map<String, dynamic>> getMySubscription({
+    required String token,
+  }) async {
     return ApiService.get('/billing/subscription', token: token);
   }
 
-  static Future<Map<String, dynamic>> getEntitlements({required String token}) async {
+  static Future<Map<String, dynamic>> getEntitlements({
+    required String token,
+  }) async {
     return ApiService.get('/billing/entitlements', token: token);
   }
 
@@ -24,9 +32,7 @@ class BillingService {
     return ApiService.post(
       '/billing/checkout',
       token: token,
-      data: {
-        'priceId': priceId,
-      },
+      data: {'priceId': priceId},
     );
   }
 
@@ -43,9 +49,7 @@ class BillingService {
     return ApiService.post(
       '/billing/payment-sheet',
       token: token,
-      data: {
-        'priceId': priceId,
-      },
+      data: {'priceId': priceId},
     );
   }
 
@@ -57,10 +61,7 @@ class BillingService {
     return ApiService.post(
       '/billing/subscribe',
       token: token,
-      data: {
-        'priceId': priceId,
-        'setupIntentId': setupIntentId,
-      },
+      data: {'priceId': priceId, 'setupIntentId': setupIntentId},
     );
   }
 

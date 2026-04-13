@@ -7,19 +7,25 @@ import 'package:video_player/video_player.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/app_constants.dart';
-import '../../../core/themes/app_theme.dart';
 import '../../../core/services/api_service.dart';
-import '../../../core/services/ai_service.dart';
 import '../../../core/services/templates_service.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../widgets/widgets.dart';
 
 class TemplateMarketplaceScreen extends StatefulWidget {
   final bool autoOpenAiFinder;
-  const TemplateMarketplaceScreen({super.key, this.autoOpenAiFinder = false});
+  final String? initialProFilter;
+  final String? initialSortBy;
+  const TemplateMarketplaceScreen({
+    super.key,
+    this.autoOpenAiFinder = false,
+    this.initialProFilter,
+    this.initialSortBy,
+  });
 
   @override
-  State<TemplateMarketplaceScreen> createState() => _TemplateMarketplaceScreenState();
+  State<TemplateMarketplaceScreen> createState() =>
+      _TemplateMarketplaceScreenState();
 }
 
 class _AiFinderSheet extends StatefulWidget {
@@ -81,7 +87,9 @@ class _AiFinderSheetState extends State<_AiFinderSheet> {
         return Container(
           decoration: BoxDecoration(
             color: cs.surface,
-            borderRadius: const BorderRadius.vertical(top: Radius.circular(AppBorderRadius.large)),
+            borderRadius: const BorderRadius.vertical(
+              top: Radius.circular(AppBorderRadius.large),
+            ),
             border: Border.all(color: cs.outlineVariant.withOpacity(0.55)),
           ),
           child: ListView(
@@ -90,7 +98,12 @@ class _AiFinderSheetState extends State<_AiFinderSheet> {
             children: [
               Row(
                 children: [
-                  Text('AI Template Finder', style: AppTypography.subtitle1.copyWith(fontWeight: FontWeight.w900)),
+                  Text(
+                    'AI Template Finder',
+                    style: AppTypography.subtitle1.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
                   const Spacer(),
                   IconButton(
                     onPressed: () => Navigator.of(context).pop(),
@@ -101,7 +114,10 @@ class _AiFinderSheetState extends State<_AiFinderSheet> {
               const SizedBox(height: 10),
               Text(
                 'Describe your game idea and I\'ll rank the best templates for you.',
-                style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant, height: 1.25),
+                style: AppTypography.caption.copyWith(
+                  color: cs.onSurfaceVariant,
+                  height: 1.25,
+                ),
               ),
               const SizedBox(height: AppSpacing.md),
               Row(
@@ -113,7 +129,8 @@ class _AiFinderSheetState extends State<_AiFinderSheet> {
                       onSubmitted: (_) => _run(),
                       decoration: const InputDecoration(
                         labelText: 'What do you want to build?',
-                        hintText: 'ex: 2D endless runner, mobile-ready, sci-fi…',
+                        hintText:
+                            'ex: 2D endless runner, mobile-ready, sci-fi…',
                       ),
                     ),
                   ),
@@ -123,7 +140,11 @@ class _AiFinderSheetState extends State<_AiFinderSheet> {
                     child: FilledButton.icon(
                       onPressed: _loading ? null : _run,
                       icon: _loading
-                          ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                          ? const SizedBox(
+                              width: 16,
+                              height: 16,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
                           : const Icon(Icons.auto_awesome_rounded),
                       label: Text(_loading ? 'Finding…' : 'Find'),
                     ),
@@ -132,7 +153,10 @@ class _AiFinderSheetState extends State<_AiFinderSheet> {
               ),
               if (_error != null) ...[
                 const SizedBox(height: AppSpacing.md),
-                Text(_error!, style: AppTypography.caption.copyWith(color: cs.error)),
+                Text(
+                  _error!,
+                  style: AppTypography.caption.copyWith(color: cs.error),
+                ),
               ],
               const SizedBox(height: AppSpacing.lg),
               AnimatedSwitcher(
@@ -143,8 +167,12 @@ class _AiFinderSheetState extends State<_AiFinderSheet> {
                         padding: const EdgeInsets.all(AppSpacing.lg),
                         decoration: BoxDecoration(
                           color: cs.surfaceContainerHighest.withOpacity(0.22),
-                          borderRadius: BorderRadius.circular(AppBorderRadius.large),
-                          border: Border.all(color: cs.outlineVariant.withOpacity(0.55)),
+                          borderRadius: BorderRadius.circular(
+                            AppBorderRadius.large,
+                          ),
+                          border: Border.all(
+                            color: cs.outlineVariant.withOpacity(0.55),
+                          ),
                         ),
                         child: Row(
                           children: [
@@ -154,15 +182,23 @@ class _AiFinderSheetState extends State<_AiFinderSheet> {
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 color: cs.primary.withOpacity(0.12),
-                                border: Border.all(color: cs.primary.withOpacity(0.22)),
+                                border: Border.all(
+                                  color: cs.primary.withOpacity(0.22),
+                                ),
                               ),
-                              child: Icon(Icons.tips_and_updates_rounded, color: cs.primary),
+                              child: Icon(
+                                Icons.tips_and_updates_rounded,
+                                color: cs.primary,
+                              ),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Text(
                                 'Tip: mention 2D/3D + mobile/web + genre for best results.',
-                                style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant, height: 1.25),
+                                style: AppTypography.caption.copyWith(
+                                  color: cs.onSurfaceVariant,
+                                  height: 1.25,
+                                ),
                               ),
                             ),
                           ],
@@ -172,15 +208,23 @@ class _AiFinderSheetState extends State<_AiFinderSheet> {
                         key: const ValueKey('results'),
                         children: _results.map((t) {
                           return InkWell(
-                            borderRadius: BorderRadius.circular(AppBorderRadius.large),
+                            borderRadius: BorderRadius.circular(
+                              AppBorderRadius.large,
+                            ),
                             onTap: () => widget.onPick(t),
                             child: Container(
                               margin: const EdgeInsets.only(bottom: 12),
                               padding: const EdgeInsets.all(AppSpacing.lg),
                               decoration: BoxDecoration(
-                                color: cs.surfaceContainerHighest.withOpacity(0.18),
-                                borderRadius: BorderRadius.circular(AppBorderRadius.large),
-                                border: Border.all(color: cs.outlineVariant.withOpacity(0.55)),
+                                color: cs.surfaceContainerHighest.withOpacity(
+                                  0.18,
+                                ),
+                                borderRadius: BorderRadius.circular(
+                                  AppBorderRadius.large,
+                                ),
+                                border: Border.all(
+                                  color: cs.outlineVariant.withOpacity(0.55),
+                                ),
                               ),
                               child: Row(
                                 children: [
@@ -190,18 +234,35 @@ class _AiFinderSheetState extends State<_AiFinderSheet> {
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
                                       color: cs.primary.withOpacity(0.12),
-                                      border: Border.all(color: cs.primary.withOpacity(0.22)),
+                                      border: Border.all(
+                                        color: cs.primary.withOpacity(0.22),
+                                      ),
                                     ),
-                                    child: Icon(Icons.auto_awesome_rounded, color: cs.primary),
+                                    child: Icon(
+                                      Icons.auto_awesome_rounded,
+                                      color: cs.primary,
+                                    ),
                                   ),
                                   const SizedBox(width: 12),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
-                                        Text(t.name, style: AppTypography.subtitle2.copyWith(fontWeight: FontWeight.w900)),
+                                        Text(
+                                          t.name,
+                                          style: AppTypography.subtitle2
+                                              .copyWith(
+                                                fontWeight: FontWeight.w900,
+                                              ),
+                                        ),
                                         const SizedBox(height: 4),
-                                        Text(t.category, style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant)),
+                                        Text(
+                                          t.category,
+                                          style: AppTypography.caption.copyWith(
+                                            color: cs.onSurfaceVariant,
+                                          ),
+                                        ),
                                       ],
                                     ),
                                   ),
@@ -329,24 +390,43 @@ class _InlineAutoplayVideoState extends State<InlineAutoplayVideo> {
     final init = _init;
 
     if (c == null || init == null) {
-      return Center(child: Icon(widget.fallbackIcon, size: 40, color: cs.onPrimary.withOpacity(0.75)));
+      return Center(
+        child: Icon(
+          widget.fallbackIcon,
+          size: 40,
+          color: cs.onPrimary.withOpacity(0.75),
+        ),
+      );
     }
 
     return FutureBuilder<void>(
       future: init,
       builder: (context, snap) {
-        if (snap.connectionState != ConnectionState.done || !c.value.isInitialized) {
+        if (snap.connectionState != ConnectionState.done ||
+            !c.value.isInitialized) {
           final url = widget.fallbackImageUrl;
           if (url != null && url.trim().isNotEmpty) {
             return Image.network(
               url,
               fit: BoxFit.cover,
               errorBuilder: (context, error, stackTrace) {
-                return Center(child: Icon(widget.fallbackIcon, size: 40, color: cs.onPrimary.withOpacity(0.75)));
+                return Center(
+                  child: Icon(
+                    widget.fallbackIcon,
+                    size: 40,
+                    color: cs.onPrimary.withOpacity(0.75),
+                  ),
+                );
               },
             );
           }
-          return Center(child: Icon(widget.fallbackIcon, size: 40, color: cs.onPrimary.withOpacity(0.75)));
+          return Center(
+            child: Icon(
+              widget.fallbackIcon,
+              size: 40,
+              color: cs.onPrimary.withOpacity(0.75),
+            ),
+          );
         }
 
         return FittedBox(
@@ -363,11 +443,12 @@ class _InlineAutoplayVideoState extends State<InlineAutoplayVideo> {
   }
 }
 
-class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> with TickerProviderStateMixin {
+class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen>
+    with TickerProviderStateMixin {
   final TextEditingController _searchController = TextEditingController();
   late final AnimationController _introAnim;
   late final AnimationController _neonCtrl;
-  
+
   String _selectedCategory = 'All';
   String _proFilter = 'All';
   String _sortBy = 'Popular';
@@ -380,9 +461,30 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
   final List<GameTemplate> _compareSelection = [];
   final List<String> _savedTemplateIds = [];
 
-  final List<String> _categories = ['All', 'Action', 'RPG', 'Puzzle', 'Strategy', 'Adventure'];
-  final List<String> _sortOptions = ['Popular', 'Newest', 'Rating', 'Price: Low', 'Price: High'];
-  final List<String> _proFilters = ['All', 'Featured', 'Mobile-ready', 'Free', 'Paid', '2D', '3D'];
+  final List<String> _categories = [
+    'All',
+    'Action',
+    'RPG',
+    'Puzzle',
+    'Strategy',
+    'Adventure',
+  ];
+  final List<String> _sortOptions = [
+    'Popular',
+    'Newest',
+    'Rating',
+    'Price: Low',
+    'Price: High',
+  ];
+  final List<String> _proFilters = [
+    'All',
+    'Featured',
+    'Mobile-ready',
+    'Free',
+    'Paid',
+    '2D',
+    '3D',
+  ];
 
   final stt.SpeechToText _speech = stt.SpeechToText();
   bool _speechAvailable = false;
@@ -394,13 +496,29 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
   @override
   void initState() {
     super.initState();
-    _introAnim = AnimationController(vsync: this, duration: const Duration(milliseconds: 1000))..forward();
-    _neonCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 2000))..repeat();
-    
+    _introAnim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    )..forward();
+    _neonCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 2000),
+    )..repeat();
+
+    final initialPro = (widget.initialProFilter ?? '').trim();
+    if (_proFilters.contains(initialPro)) {
+      _proFilter = initialPro;
+    }
+
+    final initialSort = (widget.initialSortBy ?? '').trim();
+    if (_sortOptions.contains(initialSort)) {
+      _sortBy = initialSort;
+    }
+
     _initSpeech();
     _loadTemplates();
     _loadSaved();
-    
+
     TemplatesService.refreshNotifier.addListener(_refreshListener);
     _searchController.addListener(_onSearchChanged);
 
@@ -472,9 +590,17 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
     });
 
     try {
+      String? token;
+      try {
+        token = context.read<AuthProvider>().token;
+      } catch (_) {
+        token = null;
+      }
+
       final res = await TemplatesService.listPublicTemplates(
         q: _searchController.text,
         category: _selectedCategory == 'All' ? null : _selectedCategory,
+        token: token,
       );
 
       if (!mounted) return;
@@ -482,7 +608,9 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
       if (res['success'] == true) {
         final List<dynamic> data = res['data'] is List ? res['data'] : [];
         setState(() {
-          _templates = data.map((e) => GameTemplate.fromMap(Map<String, dynamic>.from(e))).toList();
+          _templates = data
+              .map((e) => GameTemplate.fromMap(Map<String, dynamic>.from(e)))
+              .toList();
           _loading = false;
         });
       } else {
@@ -553,7 +681,8 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
 
   List<_CompatBadgeData> _compatBadges(GameTemplate t) {
     final b = <_CompatBadgeData>[];
-    if (t.category.contains('Mobile')) b.add(_CompatBadgeData('Mobile', Icons.smartphone));
+    if (t.category.contains('Mobile'))
+      b.add(_CompatBadgeData('Mobile', Icons.smartphone));
     if (t.tags.contains('2D')) b.add(_CompatBadgeData('2D', Icons.layers));
     if (t.tags.contains('3D')) b.add(_CompatBadgeData('3D', Icons.view_in_ar));
     return b;
@@ -561,12 +690,18 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
 
   IconData _getCategoryIcon(String category) {
     switch (category) {
-      case 'Action': return Icons.flash_on;
-      case 'RPG': return Icons.fort;
-      case 'Puzzle': return Icons.extension;
-      case 'Strategy': return Icons.map;
-      case 'Adventure': return Icons.explore;
-      default: return Icons.videogame_asset;
+      case 'Action':
+        return Icons.flash_on;
+      case 'RPG':
+        return Icons.fort;
+      case 'Puzzle':
+        return Icons.extension;
+      case 'Strategy':
+        return Icons.map;
+      case 'Adventure':
+        return Icons.explore;
+      default:
+        return Icons.videogame_asset;
     }
   }
 
@@ -642,7 +777,9 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
             return Container(
               decoration: BoxDecoration(
                 color: cs.surface,
-                borderRadius: const BorderRadius.vertical(top: Radius.circular(AppBorderRadius.xlarge)),
+                borderRadius: const BorderRadius.vertical(
+                  top: Radius.circular(AppBorderRadius.xlarge),
+                ),
                 border: Border.all(color: cs.outlineVariant.withOpacity(0.6)),
               ),
               child: ListView(
@@ -651,7 +788,12 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
                 children: [
                   Row(
                     children: [
-                      Text('Filters', style: AppTypography.subtitle1.copyWith(fontWeight: FontWeight.w900)),
+                      Text(
+                        'Filters',
+                        style: AppTypography.subtitle1.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
                       const Spacer(),
                       IconButton(
                         onPressed: () => Navigator.of(context).pop(),
@@ -660,7 +802,12 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
                     ],
                   ),
                   const SizedBox(height: 12),
-                  Text('Pro', style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant)),
+                  Text(
+                    'Pro',
+                    style: AppTypography.caption.copyWith(
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
                   const SizedBox(height: 10),
                   Wrap(
                     spacing: 10,
@@ -674,7 +821,12 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
                     }).toList(),
                   ),
                   const SizedBox(height: AppSpacing.lg),
-                  Text('Sort', style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant)),
+                  Text(
+                    'Sort',
+                    style: AppTypography.caption.copyWith(
+                      color: cs.onSurfaceVariant,
+                    ),
+                  ),
                   const SizedBox(height: 10),
                   Wrap(
                     spacing: 10,
@@ -732,9 +884,11 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
 
   List<GameTemplate> _getFilteredTemplates() {
     var list = _templates;
-    if (_showSavedOnly) list = list.where((t) => _savedTemplateIds.contains(t.id)).toList();
-    if (_selectedCategory != 'All') list = list.where((t) => t.category == _selectedCategory).toList();
-    
+    if (_showSavedOnly)
+      list = list.where((t) => _savedTemplateIds.contains(t.id)).toList();
+    if (_selectedCategory != 'All')
+      list = list.where((t) => t.category == _selectedCategory).toList();
+
     // Apply pro filters
     if (_proFilter != 'All') {
       switch (_proFilter) {
@@ -793,7 +947,8 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
 
   Widget _buildTopTemplatesCarousel() {
     final list = _getTopTemplates();
-    if (_loading || list.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
+    if (_loading || list.isEmpty)
+      return const SliverToBoxAdapter(child: SizedBox.shrink());
 
     return SliverToBoxAdapter(
       child: Padding(
@@ -806,7 +961,9 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
                 Text(
                   'Top Templates',
                   style: AppTypography.subtitle2.copyWith(
-                    color: Theme.of(context).brightness == Brightness.dark ? Colors.white : Theme.of(context).colorScheme.onSurface,
+                    color: Theme.of(context).brightness == Brightness.dark
+                        ? Colors.white
+                        : Theme.of(context).colorScheme.onSurface,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
@@ -831,7 +988,8 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
                 separatorBuilder: (_, __) => const SizedBox(width: 14),
                 itemBuilder: (context, i) {
                   final cs = Theme.of(context).colorScheme;
-                  final isDark = Theme.of(context).brightness == Brightness.dark;
+                  final isDark =
+                      Theme.of(context).brightness == Brightness.dark;
                   final t = list[i];
                   final coverUrl = _resolveMediaUrl(t.imageUrl);
                   return SizedBox(
@@ -847,20 +1005,31 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
                                   ? Image.network(
                                       coverUrl,
                                       fit: BoxFit.cover,
-                                      errorBuilder: (context, error, stackTrace) {
-                                        return Container(color: AppColors.primary.withOpacity(0.18));
-                                      },
+                                      errorBuilder:
+                                          (context, error, stackTrace) {
+                                            return Container(
+                                              color: AppColors.primary
+                                                  .withOpacity(0.18),
+                                            );
+                                          },
                                     )
-                                  : Container(color: AppColors.primary.withOpacity(0.18)),
+                                  : Container(
+                                      color: AppColors.primary.withOpacity(
+                                        0.18,
+                                      ),
+                                    ),
                             ),
                             Positioned.fill(
                               child: DecoratedBox(
                                 decoration: BoxDecoration(
                                   gradient: LinearGradient(
                                     colors: [
-                                      (isDark ? Colors.black : Colors.white).withOpacity(isDark ? 0.05 : 0.0),
-                                      (isDark ? Colors.black : Colors.white).withOpacity(isDark ? 0.55 : 0.45),
-                                      (isDark ? Colors.black : Colors.white).withOpacity(isDark ? 0.85 : 0.92),
+                                      (isDark ? Colors.black : Colors.white)
+                                          .withOpacity(isDark ? 0.05 : 0.0),
+                                      (isDark ? Colors.black : Colors.white)
+                                          .withOpacity(isDark ? 0.55 : 0.45),
+                                      (isDark ? Colors.black : Colors.white)
+                                          .withOpacity(isDark ? 0.85 : 0.92),
                                     ],
                                     begin: Alignment.topCenter,
                                     end: Alignment.bottomCenter,
@@ -869,9 +1038,17 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
                               ),
                             ),
                             if (t.isFeatured)
-                              const Positioned(top: 10, left: 10, child: _FeaturedBadge()),
+                              const Positioned(
+                                top: 10,
+                                left: 10,
+                                child: _FeaturedBadge(),
+                              ),
                             if (t.isDevOwner)
-                              const Positioned(top: 10, right: 10, child: _DevBadge.compact()),
+                              const Positioned(
+                                top: 10,
+                                right: 10,
+                                child: _DevBadge.compact(),
+                              ),
                             Positioned(
                               bottom: 12,
                               left: 12,
@@ -883,7 +1060,9 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
                                   Text(
                                     t.name,
                                     style: AppTypography.subtitle2.copyWith(
-                                      color: isDark ? Colors.white : cs.onSurface,
+                                      color: isDark
+                                          ? Colors.white
+                                          : cs.onSurface,
                                       fontWeight: FontWeight.w900,
                                     ),
                                     maxLines: 1,
@@ -893,7 +1072,9 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
                                   Text(
                                     t.category,
                                     style: AppTypography.caption.copyWith(
-                                      color: isDark ? Colors.white70 : cs.onSurfaceVariant,
+                                      color: isDark
+                                          ? Colors.white70
+                                          : cs.onSurfaceVariant,
                                       fontWeight: FontWeight.w800,
                                     ),
                                     maxLines: 1,
@@ -909,23 +1090,42 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
                               child: Row(
                                 children: [
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 6,
+                                    ),
                                     decoration: BoxDecoration(
-                                      color: (isDark ? Colors.black : cs.surfaceContainerHighest).withOpacity(isDark ? 0.35 : 0.75),
+                                      color:
+                                          (isDark
+                                                  ? Colors.black
+                                                  : cs.surfaceContainerHighest)
+                                              .withOpacity(
+                                                isDark ? 0.35 : 0.75,
+                                              ),
                                       borderRadius: BorderRadius.circular(999),
                                       border: Border.all(
-                                        color: isDark ? Colors.white.withOpacity(0.12) : cs.outlineVariant.withOpacity(0.85),
+                                        color: isDark
+                                            ? Colors.white.withOpacity(0.12)
+                                            : cs.outlineVariant.withOpacity(
+                                                0.85,
+                                              ),
                                       ),
                                     ),
                                     child: Row(
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
-                                        const Icon(Icons.star_rounded, size: 14, color: Colors.amber),
+                                        const Icon(
+                                          Icons.star_rounded,
+                                          size: 14,
+                                          color: Colors.amber,
+                                        ),
                                         const SizedBox(width: 4),
                                         Text(
                                           t.rating.toStringAsFixed(1),
                                           style: AppTypography.caption.copyWith(
-                                            color: isDark ? Colors.white : cs.onSurface,
+                                            color: isDark
+                                                ? Colors.white
+                                                : cs.onSurface,
                                             fontWeight: FontWeight.w900,
                                           ),
                                         ),
@@ -934,12 +1134,25 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
                                   ),
                                   const SizedBox(width: 10),
                                   Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 6,
+                                    ),
                                     decoration: BoxDecoration(
-                                      color: (isDark ? Colors.black : cs.surfaceContainerHighest).withOpacity(isDark ? 0.30 : 0.70),
+                                      color:
+                                          (isDark
+                                                  ? Colors.black
+                                                  : cs.surfaceContainerHighest)
+                                              .withOpacity(
+                                                isDark ? 0.30 : 0.70,
+                                              ),
                                       borderRadius: BorderRadius.circular(999),
                                       border: Border.all(
-                                        color: isDark ? Colors.white.withOpacity(0.10) : cs.outlineVariant.withOpacity(0.80),
+                                        color: isDark
+                                            ? Colors.white.withOpacity(0.10)
+                                            : cs.outlineVariant.withOpacity(
+                                                0.80,
+                                              ),
                                       ),
                                     ),
                                     child: Row(
@@ -948,13 +1161,17 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
                                         Icon(
                                           Icons.download_rounded,
                                           size: 14,
-                                          color: isDark ? Colors.white.withOpacity(0.85) : cs.onSurfaceVariant,
+                                          color: isDark
+                                              ? Colors.white.withOpacity(0.85)
+                                              : cs.onSurfaceVariant,
                                         ),
                                         const SizedBox(width: 4),
                                         Text(
                                           '${t.downloads}',
                                           style: AppTypography.caption.copyWith(
-                                            color: isDark ? Colors.white.withOpacity(0.95) : cs.onSurface,
+                                            color: isDark
+                                                ? Colors.white.withOpacity(0.95)
+                                                : cs.onSurface,
                                             fontWeight: FontWeight.w900,
                                           ),
                                         ),
@@ -984,7 +1201,8 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
 
   Widget _buildFeaturedCarousel() {
     final featured = _getFeaturedTemplates();
-    if (_loading || featured.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
+    if (_loading || featured.isEmpty)
+      return const SliverToBoxAdapter(child: SizedBox.shrink());
 
     return SliverToBoxAdapter(
       child: Padding(
@@ -995,7 +1213,9 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
             Text(
               'Featured',
               style: AppTypography.subtitle2.copyWith(
-                color: Theme.of(context).brightness == Brightness.dark ? Colors.white : Theme.of(context).colorScheme.onSurface,
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.white
+                    : Theme.of(context).colorScheme.onSurface,
                 fontWeight: FontWeight.w900,
               ),
             ),
@@ -1008,7 +1228,8 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
                 separatorBuilder: (_, __) => const SizedBox(width: 14),
                 itemBuilder: (context, i) {
                   final cs = Theme.of(context).colorScheme;
-                  final isDark = Theme.of(context).brightness == Brightness.dark;
+                  final isDark =
+                      Theme.of(context).brightness == Brightness.dark;
                   final t = featured[i];
                   final coverUrl = _resolveMediaUrl(t.imageUrl);
                   return SizedBox(
@@ -1024,11 +1245,19 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
                                   ? Image.network(
                                       coverUrl,
                                       fit: BoxFit.cover,
-                                      errorBuilder: (context, error, stackTrace) {
-                                        return Container(color: AppColors.primary.withOpacity(0.18));
-                                      },
+                                      errorBuilder:
+                                          (context, error, stackTrace) {
+                                            return Container(
+                                              color: AppColors.primary
+                                                  .withOpacity(0.18),
+                                            );
+                                          },
                                     )
-                                  : Container(color: AppColors.primary.withOpacity(0.18)),
+                                  : Container(
+                                      color: AppColors.primary.withOpacity(
+                                        0.18,
+                                      ),
+                                    ),
                             ),
                             Positioned.fill(
                               child: DecoratedBox(
@@ -1036,7 +1265,8 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
                                   gradient: LinearGradient(
                                     colors: [
                                       Colors.transparent,
-                                      (isDark ? Colors.black : Colors.white).withOpacity(isDark ? 0.78 : 0.92),
+                                      (isDark ? Colors.black : Colors.white)
+                                          .withOpacity(isDark ? 0.78 : 0.92),
                                     ],
                                     begin: Alignment.topCenter,
                                     end: Alignment.bottomCenter,
@@ -1044,9 +1274,17 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
                                 ),
                               ),
                             ),
-                            const Positioned(top: 10, left: 10, child: _FeaturedBadge()),
+                            const Positioned(
+                              top: 10,
+                              left: 10,
+                              child: _FeaturedBadge(),
+                            ),
                             if (t.isDevOwner)
-                              const Positioned(top: 10, right: 10, child: _DevBadge.compact()),
+                              const Positioned(
+                                top: 10,
+                                right: 10,
+                                child: _DevBadge.compact(),
+                              ),
                             Positioned(
                               left: 12,
                               right: 12,
@@ -1059,7 +1297,9 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
                                     maxLines: 1,
                                     overflow: TextOverflow.ellipsis,
                                     style: AppTypography.subtitle1.copyWith(
-                                      color: isDark ? Colors.white : cs.onSurface,
+                                      color: isDark
+                                          ? Colors.white
+                                          : cs.onSurface,
                                       fontWeight: FontWeight.w900,
                                     ),
                                   ),
@@ -1095,10 +1335,13 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
             child: Container(
               padding: const EdgeInsets.all(18),
               decoration: BoxDecoration(
-                color: (isDark ? Colors.white : cs.surfaceContainerHighest).withOpacity(isDark ? 0.05 : 0.55),
+                color: (isDark ? Colors.white : cs.surfaceContainerHighest)
+                    .withOpacity(isDark ? 0.05 : 0.55),
                 borderRadius: BorderRadius.circular(26),
                 border: Border.all(
-                  color: isDark ? Colors.white.withOpacity(0.10) : cs.outlineVariant.withOpacity(0.85),
+                  color: isDark
+                      ? Colors.white.withOpacity(0.10)
+                      : cs.outlineVariant.withOpacity(0.85),
                 ),
               ),
               child: Column(
@@ -1115,7 +1358,9 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
                   Text(
                     'Try clearing filters or searching with voice.',
                     style: AppTypography.body2.copyWith(
-                      color: isDark ? Colors.white.withOpacity(0.75) : cs.onSurfaceVariant,
+                      color: isDark
+                          ? Colors.white.withOpacity(0.75)
+                          : cs.onSurfaceVariant,
                     ),
                   ),
                   const SizedBox(height: 14),
@@ -1175,7 +1420,8 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
               _buildTopTemplatesCarousel(),
               _buildFeaturedCarousel(),
               if (!_loading && !hasResults) _buildEmptyState(),
-              if (_loading || hasResults) (_isGridView ? _buildTemplateGrid() : _buildTemplatesList()),
+              if (_loading || hasResults)
+                (_isGridView ? _buildTemplateGrid() : _buildTemplatesList()),
               const SliverToBoxAdapter(child: SizedBox(height: 120)),
             ],
           ),
@@ -1244,12 +1490,18 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
                       child: Container(
                         padding: const EdgeInsets.all(4),
                         decoration: BoxDecoration(
-                          color: (isDark ? Colors.white : cs.surfaceContainerHighest).withOpacity(isDark ? 0.05 : 0.55),
+                          color:
+                              (isDark
+                                      ? Colors.white
+                                      : cs.surfaceContainerHighest)
+                                  .withOpacity(isDark ? 0.05 : 0.55),
                           borderRadius: BorderRadius.circular(24),
                           border: Border.all(
                             color: _isListening
                                 ? AppColors.primary.withOpacity(0.55)
-                                : (isDark ? Colors.white.withOpacity(0.1) : cs.outlineVariant.withOpacity(0.85)),
+                                : (isDark
+                                      ? Colors.white.withOpacity(0.1)
+                                      : cs.outlineVariant.withOpacity(0.85)),
                             width: _isListening ? 1.6 : 1.0,
                           ),
                           boxShadow: _isListening
@@ -1265,29 +1517,48 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
                         ),
                         child: TextField(
                           controller: _searchController,
-                          style: TextStyle(color: isDark ? Colors.white : cs.onSurface),
+                          style: TextStyle(
+                            color: isDark ? Colors.white : cs.onSurface,
+                          ),
                           decoration: InputDecoration(
                             hintText: 'Search Neural Templates...',
                             hintStyle: TextStyle(
-                              color: isDark ? Colors.white.withOpacity(0.3) : cs.onSurfaceVariant,
+                              color: isDark
+                                  ? Colors.white.withOpacity(0.3)
+                                  : cs.onSurfaceVariant,
                             ),
-                            prefixIcon: Icon(Icons.search_rounded, color: AppColors.primary.withOpacity(0.7)),
+                            prefixIcon: Icon(
+                              Icons.search_rounded,
+                              color: AppColors.primary.withOpacity(0.7),
+                            ),
                             suffixIcon: Tooltip(
-                              message: _speechAvailable ? '' : 'Voice search not available',
+                              message: _speechAvailable
+                                  ? ''
+                                  : 'Voice search not available',
                               child: IconButton(
-                                onPressed: _speechAvailable ? () => _toggleVoiceSearch() : () => _initSpeech(),
+                                onPressed: _speechAvailable
+                                    ? () => _toggleVoiceSearch()
+                                    : () => _initSpeech(),
                                 icon: AnimatedSwitcher(
                                   duration: const Duration(milliseconds: 180),
                                   child: Icon(
-                                    _isListening ? Icons.mic_rounded : Icons.mic_none_rounded,
+                                    _isListening
+                                        ? Icons.mic_rounded
+                                        : Icons.mic_none_rounded,
                                     key: ValueKey(_isListening),
-                                    color: _isListening ? AppColors.primary : (isDark ? Colors.white70 : cs.onSurfaceVariant),
+                                    color: _isListening
+                                        ? AppColors.primary
+                                        : (isDark
+                                              ? Colors.white70
+                                              : cs.onSurfaceVariant),
                                   ),
                                 ),
                               ),
                             ),
                             border: InputBorder.none,
-                            contentPadding: const EdgeInsets.symmetric(vertical: 14),
+                            contentPadding: const EdgeInsets.symmetric(
+                              vertical: 14,
+                            ),
                           ),
                         ),
                       ),
@@ -1302,7 +1573,9 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
                 ),
                 _compactIconButton(
                   onPressed: () => setState(() => _isGridView = !_isGridView),
-                  icon: _isGridView ? Icons.grid_view_rounded : Icons.view_list_rounded,
+                  icon: _isGridView
+                      ? Icons.grid_view_rounded
+                      : Icons.view_list_rounded,
                   color: Colors.white,
                 ),
                 _compactIconButton(
@@ -1312,7 +1585,9 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
                 ),
                 _compactIconButton(
                   onPressed: _openSaved,
-                  icon: _showSavedOnly ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                  icon: _showSavedOnly
+                      ? Icons.favorite_rounded
+                      : Icons.favorite_border_rounded,
                   color: _showSavedOnly ? Colors.redAccent : Colors.white,
                 ),
               ],
@@ -1418,10 +1693,13 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
         child: Container(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
           decoration: BoxDecoration(
-            color: (isDark ? Colors.white : cs.surfaceContainerHighest).withOpacity(isDark ? 0.05 : 0.55),
+            color: (isDark ? Colors.white : cs.surfaceContainerHighest)
+                .withOpacity(isDark ? 0.05 : 0.55),
             borderRadius: BorderRadius.circular(16),
             border: Border.all(
-              color: isDark ? Colors.white.withOpacity(0.10) : cs.outlineVariant.withOpacity(0.85),
+              color: isDark
+                  ? Colors.white.withOpacity(0.10)
+                  : cs.outlineVariant.withOpacity(0.85),
             ),
           ),
           child: DropdownButtonHideUnderline(
@@ -1429,10 +1707,7 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
               dropdownColor: isDark ? const Color(0xFF0B0D14) : cs.surface,
               value: _sortBy,
               items: _sortOptions.map((o) {
-                return DropdownMenuItem(
-                  value: o,
-                  child: Text(o),
-                );
+                return DropdownMenuItem(value: o, child: Text(o));
               }).toList(),
               onChanged: (v) {
                 if (v == null) return;
@@ -1456,6 +1731,11 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
     return '\$$p';
   }
 
+  String _formatDiscountPercent(int percent) {
+    final p = percent < 0 ? 0 : (percent > 95 ? 95 : percent);
+    return '-$p%';
+  }
+
   Widget _buildMetaRow(GameTemplate t) {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -1466,28 +1746,75 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
-            color: (isDark ? Colors.black : cs.surfaceContainerHighest).withOpacity(isDark ? 0.28 : 0.70),
+            color: (isDark ? Colors.black : cs.surfaceContainerHighest)
+                .withOpacity(isDark ? 0.28 : 0.70),
             borderRadius: BorderRadius.circular(999),
             border: Border.all(
-              color: isDark ? Colors.white.withOpacity(0.12) : cs.outlineVariant.withOpacity(0.85),
+              color: isDark
+                  ? Colors.white.withOpacity(0.12)
+                  : cs.outlineVariant.withOpacity(0.85),
             ),
           ),
-          child: Text(
-            _formatPrice(t.price),
-            style: AppTypography.caption.copyWith(
-              color: isDark ? Colors.white : cs.onSurface,
-              fontWeight: FontWeight.w900,
-              letterSpacing: 0.2,
-            ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (t.isDiscounted && t.originalPrice > t.price) ...[
+                Text(
+                  _formatPrice(t.originalPrice),
+                  style: AppTypography.caption.copyWith(
+                    color: isDark
+                        ? Colors.white.withOpacity(0.55)
+                        : cs.onSurfaceVariant,
+                    fontWeight: FontWeight.w800,
+                    decoration: TextDecoration.lineThrough,
+                  ),
+                ),
+                const SizedBox(width: 6),
+              ],
+              Text(
+                _formatPrice(t.price),
+                style: AppTypography.caption.copyWith(
+                  color: isDark ? Colors.white : cs.onSurface,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 0.2,
+                ),
+              ),
+              if (t.isDiscounted && t.discountPercent > 0) ...[
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 7,
+                    vertical: 2,
+                  ),
+                  decoration: BoxDecoration(
+                    color: AppColors.success.withOpacity(0.22),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(
+                      color: AppColors.success.withOpacity(0.38),
+                    ),
+                  ),
+                  child: Text(
+                    _formatDiscountPercent(t.discountPercent),
+                    style: AppTypography.caption.copyWith(
+                      color: AppColors.success,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
-            color: (isDark ? Colors.black : cs.surfaceContainerHighest).withOpacity(isDark ? 0.22 : 0.65),
+            color: (isDark ? Colors.black : cs.surfaceContainerHighest)
+                .withOpacity(isDark ? 0.22 : 0.65),
             borderRadius: BorderRadius.circular(999),
             border: Border.all(
-              color: isDark ? Colors.white.withOpacity(0.10) : cs.outlineVariant.withOpacity(0.80),
+              color: isDark
+                  ? Colors.white.withOpacity(0.10)
+                  : cs.outlineVariant.withOpacity(0.80),
             ),
           ),
           child: Row(
@@ -1506,7 +1833,9 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
               Icon(
                 Icons.download_rounded,
                 size: 14,
-                color: isDark ? Colors.white.withOpacity(0.8) : cs.onSurfaceVariant,
+                color: isDark
+                    ? Colors.white.withOpacity(0.8)
+                    : cs.onSurfaceVariant,
               ),
               const SizedBox(width: 4),
               Text(
@@ -1561,10 +1890,14 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
         onTap: () => context.push('/template/${t.id}'),
         child: Container(
           decoration: BoxDecoration(
-            color: (isDark ? Colors.white : cs.onSurface).withOpacity(isDark ? 0.03 : 0.05),
+            color: (isDark ? Colors.white : cs.onSurface).withOpacity(
+              isDark ? 0.03 : 0.05,
+            ),
             borderRadius: BorderRadius.circular(24),
             border: Border.all(
-              color: isDark ? Colors.white.withOpacity(0.05) : cs.outlineVariant.withOpacity(0.8),
+              color: isDark
+                  ? Colors.white.withOpacity(0.05)
+                  : cs.outlineVariant.withOpacity(0.8),
             ),
           ),
           child: Column(
@@ -1581,10 +1914,14 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
                                 coverUrl,
                                 fit: BoxFit.cover,
                                 errorBuilder: (context, error, stackTrace) {
-                                  return Container(color: AppColors.primary.withOpacity(0.2));
+                                  return Container(
+                                    color: AppColors.primary.withOpacity(0.2),
+                                  );
                                 },
                               )
-                            : Container(color: AppColors.primary.withOpacity(0.2)),
+                            : Container(
+                                color: AppColors.primary.withOpacity(0.2),
+                              ),
                       ),
                       if (t.isDevOwner)
                         const Positioned(
@@ -1614,13 +1951,18 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
                               child: Container(
                                 padding: const EdgeInsets.all(4),
                                 decoration: BoxDecoration(
-                                  color: (isDark ? Colors.black : cs.surface).withOpacity(isDark ? 0.26 : 0.7),
+                                  color: (isDark ? Colors.black : cs.surface)
+                                      .withOpacity(isDark ? 0.26 : 0.7),
                                   shape: BoxShape.circle,
                                 ),
                                 child: Icon(
-                                  compared ? Icons.check_circle : Icons.compare_arrows,
+                                  compared
+                                      ? Icons.check_circle
+                                      : Icons.compare_arrows,
                                   size: 16,
-                                  color: compared ? AppColors.primary : (isDark ? Colors.white : cs.onSurface),
+                                  color: compared
+                                      ? AppColors.primary
+                                      : (isDark ? Colors.white : cs.onSurface),
                                 ),
                               ),
                             ),
@@ -1630,13 +1972,18 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
                               child: Container(
                                 padding: const EdgeInsets.all(4),
                                 decoration: BoxDecoration(
-                                  color: (isDark ? Colors.black : cs.surface).withOpacity(isDark ? 0.26 : 0.7),
+                                  color: (isDark ? Colors.black : cs.surface)
+                                      .withOpacity(isDark ? 0.26 : 0.7),
                                   shape: BoxShape.circle,
                                 ),
                                 child: Icon(
-                                  saved ? Icons.favorite : Icons.favorite_border,
+                                  saved
+                                      ? Icons.favorite
+                                      : Icons.favorite_border,
                                   size: 16,
-                                  color: saved ? Colors.redAccent : (isDark ? Colors.white : cs.onSurface),
+                                  color: saved
+                                      ? Colors.redAccent
+                                      : (isDark ? Colors.white : cs.onSurface),
                                 ),
                               ),
                             ),
@@ -1701,7 +2048,10 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
             ),
             TextButton(onPressed: _clearCompare, child: const Text('Clear')),
             const SizedBox(width: 8),
-            ElevatedButton(onPressed: _openCompareSheet, child: const Text('Compare')),
+            ElevatedButton(
+              onPressed: _openCompareSheet,
+              child: const Text('Compare'),
+            ),
           ],
         ),
       ),
@@ -1725,7 +2075,9 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
               builder: (context, scrollController) {
                 return Container(
                   decoration: BoxDecoration(
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(AppBorderRadius.xlarge)),
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(AppBorderRadius.xlarge),
+                    ),
                     color: cs.surface,
                     border: Border(top: BorderSide(color: cs.outlineVariant)),
                   ),
@@ -1743,7 +2095,11 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
                               icon: const Icon(Icons.close),
                               onPressed: () {
                                 _toggleCompare(compared[i]);
-                                setSheetState(() => compared = List<GameTemplate>.from(_compareSelection));
+                                setSheetState(
+                                  () => compared = List<GameTemplate>.from(
+                                    _compareSelection,
+                                  ),
+                                );
                                 if (compared.isEmpty) Navigator.pop(context);
                               },
                             ),
@@ -1791,10 +2147,14 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 24),
         child: Column(
-          children: list.map((t) => Padding(
-            padding: const EdgeInsets.only(bottom: 16),
-            child: _buildTemplateListItem(t),
-          )).toList(),
+          children: list
+              .map(
+                (t) => Padding(
+                  padding: const EdgeInsets.only(bottom: 16),
+                  child: _buildTemplateListItem(t),
+                ),
+              )
+              .toList(),
         ),
       ),
     );
@@ -1809,10 +2169,14 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: (isDark ? Colors.white : cs.onSurface).withOpacity(isDark ? 0.03 : 0.05),
+        color: (isDark ? Colors.white : cs.onSurface).withOpacity(
+          isDark ? 0.03 : 0.05,
+        ),
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: isDark ? Colors.white.withOpacity(0.05) : cs.outlineVariant.withOpacity(0.8),
+          color: isDark
+              ? Colors.white.withOpacity(0.05)
+              : cs.outlineVariant.withOpacity(0.8),
         ),
       ),
       child: Row(
@@ -1827,7 +2191,9 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
                       coverUrl,
                       fit: BoxFit.cover,
                       errorBuilder: (context, error, stackTrace) {
-                        return Container(color: AppColors.primary.withOpacity(0.2));
+                        return Container(
+                          color: AppColors.primary.withOpacity(0.2),
+                        );
                       },
                     )
                   : Container(color: AppColors.primary.withOpacity(0.2)),
@@ -1869,8 +2235,8 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
             onPressed: () => _toggleCompare(t),
             icon: Icon(
               compared ? Icons.check_circle : Icons.compare_arrows,
-              color: compared 
-                  ? AppColors.primary 
+              color: compared
+                  ? AppColors.primary
                   : (isDark ? Colors.white54 : cs.onSurface.withOpacity(0.54)),
             ),
           ),
@@ -1878,8 +2244,8 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen> w
             onPressed: () => _toggleSaved(t),
             icon: Icon(
               saved ? Icons.favorite : Icons.favorite_border,
-              color: saved 
-                  ? Colors.redAccent 
+              color: saved
+                  ? Colors.redAccent
                   : (isDark ? Colors.white54 : cs.onSurface.withOpacity(0.54)),
             ),
           ),
@@ -1910,13 +2276,17 @@ class _Shimmer extends StatefulWidget {
   State<_Shimmer> createState() => _ShimmerState();
 }
 
-class _ShimmerState extends State<_Shimmer> with SingleTickerProviderStateMixin {
+class _ShimmerState extends State<_Shimmer>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _c;
 
   @override
   void initState() {
     super.initState();
-    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))..repeat();
+    _c = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
   }
 
   @override
@@ -1987,17 +2357,37 @@ class _SkeletonTemplateCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _Shimmer(borderRadius: BorderRadius.circular(999), height: 14, width: 92),
+                  _Shimmer(
+                    borderRadius: BorderRadius.circular(999),
+                    height: 14,
+                    width: 92,
+                  ),
                   const SizedBox(height: 10),
-                  _Shimmer(borderRadius: BorderRadius.circular(8), height: 14, width: 140),
+                  _Shimmer(
+                    borderRadius: BorderRadius.circular(8),
+                    height: 14,
+                    width: 140,
+                  ),
                   const SizedBox(height: 8),
-                  _Shimmer(borderRadius: BorderRadius.circular(8), height: 14, width: 120),
+                  _Shimmer(
+                    borderRadius: BorderRadius.circular(8),
+                    height: 14,
+                    width: 120,
+                  ),
                   const SizedBox(height: 12),
                   Row(
                     children: [
-                      _Shimmer(borderRadius: BorderRadius.circular(999), height: 22, width: 62),
+                      _Shimmer(
+                        borderRadius: BorderRadius.circular(999),
+                        height: 22,
+                        width: 62,
+                      ),
                       const SizedBox(width: 8),
-                      _Shimmer(borderRadius: BorderRadius.circular(999), height: 22, width: 72),
+                      _Shimmer(
+                        borderRadius: BorderRadius.circular(999),
+                        height: 22,
+                        width: 72,
+                      ),
                     ],
                   ),
                 ],
@@ -2025,19 +2415,39 @@ class _SkeletonTemplateRow extends StatelessWidget {
       ),
       child: Row(
         children: [
-          _Shimmer(borderRadius: BorderRadius.circular(AppBorderRadius.medium), height: 78, width: 112),
+          _Shimmer(
+            borderRadius: BorderRadius.circular(AppBorderRadius.medium),
+            height: 78,
+            width: 112,
+          ),
           const SizedBox(width: AppSpacing.md),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                _Shimmer(borderRadius: BorderRadius.circular(8), height: 14, width: 160),
+                _Shimmer(
+                  borderRadius: BorderRadius.circular(8),
+                  height: 14,
+                  width: 160,
+                ),
                 const SizedBox(height: 8),
-                _Shimmer(borderRadius: BorderRadius.circular(8), height: 14, width: 120),
+                _Shimmer(
+                  borderRadius: BorderRadius.circular(8),
+                  height: 14,
+                  width: 120,
+                ),
                 const SizedBox(height: 10),
-                _Shimmer(borderRadius: BorderRadius.circular(8), height: 14, width: 220),
+                _Shimmer(
+                  borderRadius: BorderRadius.circular(8),
+                  height: 14,
+                  width: 220,
+                ),
                 const SizedBox(height: 8),
-                _Shimmer(borderRadius: BorderRadius.circular(8), height: 14, width: 190),
+                _Shimmer(
+                  borderRadius: BorderRadius.circular(8),
+                  height: 14,
+                  width: 190,
+                ),
               ],
             ),
           ),
@@ -2100,7 +2510,10 @@ class _DevBadge extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [cs.primary.withOpacity(0.95), cs.secondary.withOpacity(0.90)],
+          colors: [
+            cs.primary.withOpacity(0.95),
+            cs.secondary.withOpacity(0.90),
+          ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -2248,14 +2661,20 @@ class _AnimatedChoiceChipState extends State<_AnimatedChoiceChip> {
                   )
                 : LinearGradient(
                     colors: [
-                      cs.surfaceContainerHighest.withOpacity(isDark ? 0.22 : 0.55),
+                      cs.surfaceContainerHighest.withOpacity(
+                        isDark ? 0.22 : 0.55,
+                      ),
                       cs.surface.withOpacity(isDark ? 0.16 : 0.45),
                     ],
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                   ),
             borderRadius: BorderRadius.circular(br),
-            border: Border.all(color: sel ? cs.primary.withOpacity(0.38) : cs.outlineVariant.withOpacity(0.55)),
+            border: Border.all(
+              color: sel
+                  ? cs.primary.withOpacity(0.38)
+                  : cs.outlineVariant.withOpacity(0.55),
+            ),
             boxShadow: sel
                 ? [
                     BoxShadow(
@@ -2275,7 +2694,10 @@ class _AnimatedChoiceChipState extends State<_AnimatedChoiceChip> {
               ],
               Text(
                 widget.label,
-                style: AppTypography.caption.copyWith(color: fg, fontWeight: fw),
+                style: AppTypography.caption.copyWith(
+                  color: fg,
+                  fontWeight: fw,
+                ),
               ),
             ],
           ),
@@ -2293,6 +2715,8 @@ class GameTemplate {
   final double rating;
   final int downloads;
   final double price;
+  final double originalPrice;
+  final int discountPercent;
   final String? imageUrl;
   final String? previewVideoUrl;
   final List<String> tags;
@@ -2308,6 +2732,12 @@ class GameTemplate {
     return r == 'dev' || r == 'devl';
   }
 
+  bool get isDiscounted =>
+      discountPercent > 0 &&
+      originalPrice > 0 &&
+      price > 0 &&
+      price < originalPrice;
+
   GameTemplate({
     required this.id,
     required this.name,
@@ -2316,6 +2746,8 @@ class GameTemplate {
     required this.rating,
     required this.downloads,
     required this.price,
+    required this.originalPrice,
+    required this.discountPercent,
     this.imageUrl,
     this.previewVideoUrl,
     required this.tags,
@@ -2328,15 +2760,30 @@ class GameTemplate {
   });
 
   factory GameTemplate.fromMap(Map<String, dynamic> map) {
-    final rawImage = (map['imageUrl'] ??
-            map['previewImageUrl'] ??
-            map['previewImage'] ??
-            map['thumbnailUrl'] ??
-            map['thumbnail'] ??
-            map['coverUrl'])
+    final rawImage =
+        (map['imageUrl'] ??
+                map['previewImageUrl'] ??
+                map['previewImage'] ??
+                map['thumbnailUrl'] ??
+                map['thumbnail'] ??
+                map['coverUrl'])
+            ?.toString();
+
+    final rawVideo = (map['previewVideoUrl'] ?? map['previewVideo'])
         ?.toString();
 
-    final rawVideo = (map['previewVideoUrl'] ?? map['previewVideo'])?.toString();
+    final discountedPrice =
+        double.tryParse(
+          (map['discountedPrice'] ?? map['price'])?.toString() ?? '',
+        ) ??
+        0.0;
+    final originalPrice =
+        double.tryParse(
+          (map['originalPrice'] ?? map['price'])?.toString() ?? '',
+        ) ??
+        discountedPrice;
+    final discountPercent =
+        int.tryParse(map['discountPercent']?.toString() ?? '') ?? 0;
 
     return GameTemplate(
       id: map['_id']?.toString() ?? map['id']?.toString() ?? '',
@@ -2345,18 +2792,25 @@ class GameTemplate {
       description: map['description']?.toString() ?? '',
       rating: double.tryParse(map['rating']?.toString() ?? '') ?? 0.0,
       downloads: int.tryParse(map['downloads']?.toString() ?? '') ?? 0,
-      price: double.tryParse(map['price']?.toString() ?? '') ?? 0.0,
+      price: discountedPrice,
+      originalPrice: originalPrice,
+      discountPercent: discountPercent,
       imageUrl: ApiService.normalizeImageUrl(rawImage),
       previewVideoUrl: ApiService.normalizeImageUrl(rawVideo),
-      tags: (map['tags'] is List) 
+      tags: (map['tags'] is List)
           ? List<String>.from(map['tags'].map((e) => e.toString()))
-          : (map['tags']?.toString() ?? '').split(',').where((s) => s.trim().isNotEmpty).toList(),
+          : (map['tags']?.toString() ?? '')
+                .split(',')
+                .where((s) => s.trim().isNotEmpty)
+                .toList(),
       isFeatured: map['isFeatured'] == true,
       creator: map['creator']?.toString() ?? 'Anonymous',
       ownerRole: map['ownerRole']?.toString(),
       ownerUsername: map['ownerUsername']?.toString(),
       ownerAvatar: map['ownerAvatar']?.toString(),
-      createdAt: DateTime.tryParse(map['createdAt']?.toString() ?? '') ?? DateTime.now(),
+      createdAt:
+          DateTime.tryParse(map['createdAt']?.toString() ?? '') ??
+          DateTime.now(),
     );
   }
 }
@@ -2364,9 +2818,7 @@ class GameTemplate {
 class _VideoPlayerDialog extends StatefulWidget {
   final String url;
 
-  const _VideoPlayerDialog({
-    required this.url,
-  });
+  const _VideoPlayerDialog({required this.url});
 
   @override
   State<_VideoPlayerDialog> createState() => _VideoPlayerDialogState();
@@ -2426,7 +2878,11 @@ class _VideoPlayerDialogState extends State<_VideoPlayerDialog> {
                             color: Colors.black.withOpacity(0.45),
                             shape: BoxShape.circle,
                           ),
-                          child: const Icon(Icons.close, size: 18, color: Colors.white),
+                          child: const Icon(
+                            Icons.close,
+                            size: 18,
+                            color: Colors.white,
+                          ),
                         ),
                       ),
                     ),
@@ -2454,7 +2910,8 @@ class _MarketplaceMeshPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()..maskFilter = const MaskFilter.blur(BlurStyle.normal, 60);
+    final paint = Paint()
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 60);
     paint.color = color1;
     canvas.drawCircle(
       Offset(size.width * 0.1, size.height * (0.1 + 0.1 * progress)),

@@ -705,8 +705,18 @@ class MultiplayerController extends ChangeNotifier {
   }
 
   Future<void> voiceStop() async {
+    final s = _socket;
+    final t = (_token ?? '').trim();
+    final rid = (_room?.roomId ?? '').trim();
+    if (s != null && t.isNotEmpty && rid.isNotEmpty) {
+      s.emit('voice:leave', {
+        'token': t,
+        'roomId': rid,
+      });
+    }
     await _voiceRtc.stop();
     _voiceJoined = false;
+    _voicePeers.clear();
     notifyListeners();
   }
 

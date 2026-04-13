@@ -17,12 +17,22 @@ export default function AIDesignCoach() {
     { 
       id: "1", 
       role: "assistant", 
-      content: "Hello! I'm your Neural Design Coach. How can I help you forge your next masterpiece today?",
+      content: "Hello! I'm your GameForge AI Support Coach. How can I help you with the app today?",
       type: "text"
     }
   ]);
   const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+
+  const QUICK_PROMPTS = [
+    "Can't login / verify",
+    "Feed not loading",
+    "Game crashes on play",
+    "Build stuck in queue",
+    "Payment / subscription",
+  ];
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -30,48 +40,76 @@ export default function AIDesignCoach() {
     }
   }, [messages, isOpen]);
 
-  const handleSend = () => {
-    if (!input.trim()) return;
-
-    const userMsg: Message = { id: Date.now().toString(), role: "user", content: input };
-    setMessages(prev => [...prev, userMsg]);
-    setInput("");
-
-    // Mock AI Response based on keywords
-    setTimeout(() => {
-      let aiResponse: Message = {
-        id: (Date.now() + 1).toString(),
+  function resetChat() {
+    setMessages([
+      {
+        id: "1",
         role: "assistant",
-        content: "I'm analyzing your request using the Forge-V4 engine...",
-        type: "text"
-      };
+        content: "Hello! I'm your GameForge AI Support Coach. How can I help you with the app today?",
+        type: "text",
+      },
+    ]);
+    setError(null);
+    setInput("");
+  }
 
-      if (input.toLowerCase().includes("code") || input.toLowerCase().includes("script")) {
-        aiResponse = {
-          id: (Date.now() + 1).toString(),
-          role: "assistant",
-          content: "```javascript\n// AI-Generated Physics Controller\nfunction update(dt) {\n  this.velocity.y += global.gravity * dt;\n  this.position.add(this.velocity);\n}\n```",
-          type: "code"
-        };
-      } else if (input.toLowerCase().includes("tip") || input.toLowerCase().includes("help")) {
-        aiResponse = {
-          id: (Date.now() + 1).toString(),
-          role: "assistant",
-          content: "Pro Tip: Use 'Spatial Partitioning' to handle thousands of entities without dropping below 60FPS.",
-          type: "tip"
-        };
-      } else {
-        aiResponse = {
-          id: (Date.now() + 1).toString(),
-          role: "assistant",
-          content: "That's a great idea! We can implement that using the Neural Weaving module. Should I generate a blueprint?",
-          type: "text"
-        };
+  async function handleSend() {
+    const txt = input.trim();
+    if (!txt || loading) return;
+
+    setError(null);
+    const userMsg: Message = { id: Date.now().toString(), role: "user", content: txt };
+    setMessages((prev) => [...prev, userMsg]);
+    setInput("");
+    setLoading(true);
+
+    try {
+      const history = messages.slice(0).map((m) => ({
+        role: m.role,
+        content: m.content,
+      }));
+
+      const r = await fetch("/api/ollama/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          message: txt,
+          history,
+          context: {
+            page: typeof window !== "undefined" ? window.location.pathname : "",
+          },
+        }),
+      });
+
+      const j = (await r.json().catch(() => null)) as any;
+      if (!r.ok || !j?.success) {
+        throw new Error(j?.message || `Request failed (${r.status})`);
       }
 
-      setMessages(prev => [...prev, aiResponse]);
-    }, 1000);
-  };
+      const out = String(j?.data?.text || "");
+      const aiResponse: Message = {
+        id: (Date.now() + 1).toString(),
+        role: "assistant",
+        content: out || "I couldn't generate a response. Try rephrasing your question.",
+        type: "text",
+      };
+      setMessages((prev) => [...prev, aiResponse]);
+    } catch (e: any) {
+      setError(e?.message || "Failed to reach Ollama");
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: (Date.now() + 2).toString(),
+          role: "assistant",
+          content:
+            "I couldn't connect to the AI engine. Make sure Ollama is running and OLLAMA_BASE_URL is reachable from this app.",
+          type: "text",
+        },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  }
 
   return (
     <>
@@ -93,7 +131,7 @@ export default function AIDesignCoach() {
             initial={{ opacity: 0, scale: 0.9, y: 20, x: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0, x: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 20, x: 20 }}
-            className="fixed bottom-28 right-8 z-[101] w-[400px] h-[600px] gf-panel-strong gf-stroke-gradient rounded-[32px] shadow-2xl overflow-hidden flex flex-col bg-[#0a0b14]/95 backdrop-blur-2xl"
+            className="fixed bottom-28 right-8 z-[101] w-[min(420px,92vw)] h-[min(640px,78vh)] gf-panel-strong gf-stroke-gradient rounded-[32px] shadow-2xl overflow-hidden flex flex-col bg-[#0a0b14]/95 backdrop-blur-2xl"
           >
             {/* Header */}
             <div className="p-6 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
@@ -102,19 +140,29 @@ export default function AIDesignCoach() {
                   <Bot size={22} />
                 </div>
                 <div>
-                  <div className="text-sm font-black text-white uppercase tracking-tight">Neural Coach</div>
+                  <div className="text-sm font-black text-white uppercase tracking-tight">Support Coach</div>
                   <div className="flex items-center gap-1.5">
                     <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Forge-V4 Active</span>
+                    <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Ollama Active</span>
                   </div>
                 </div>
               </div>
-              <button 
-                onClick={() => setIsOpen(false)}
-                className="p-2 rounded-full hover:bg-white/5 text-zinc-500 hover:text-white transition-all"
-              >
-                <X size={20} />
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={resetChat}
+                  className="h-9 rounded-xl border border-white/10 bg-white/[0.03] px-3 text-[11px] font-black uppercase tracking-widest text-zinc-300 hover:text-white hover:border-white/20 transition-all"
+                  type="button"
+                >
+                  Clear
+                </button>
+                <button
+                  onClick={() => setIsOpen(false)}
+                  className="p-2 rounded-full hover:bg-white/5 text-zinc-500 hover:text-white transition-all"
+                  type="button"
+                >
+                  <X size={20} />
+                </button>
+              </div>
             </div>
 
             {/* Messages */}
@@ -122,6 +170,33 @@ export default function AIDesignCoach() {
               ref={scrollRef}
               className="flex-1 overflow-y-auto p-6 space-y-6 gf-scrollbar"
             >
+              {error ? (
+                <div className="rounded-2xl border border-rose-400/20 bg-rose-500/10 px-4 py-3 text-xs text-rose-100">
+                  {error}
+                </div>
+              ) : null}
+
+              {messages.length <= 1 ? (
+                <div className="space-y-3">
+                  <div className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Quick help</div>
+                  <div className="flex flex-wrap gap-2">
+                    {QUICK_PROMPTS.map((p) => (
+                      <button
+                        key={p}
+                        type="button"
+                        onClick={() => {
+                          setIsOpen(true);
+                          setInput(p);
+                        }}
+                        className="rounded-full border border-white/10 bg-white/[0.03] px-3 py-1.5 text-[12px] text-zinc-300 hover:text-white hover:border-white/20 transition"
+                      >
+                        {p}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+
               {messages.map((m) => (
                 <motion.div
                   key={m.id}
@@ -161,33 +236,52 @@ export default function AIDesignCoach() {
                   </div>
                 </motion.div>
               ))}
+              {loading ? (
+                <div className="flex justify-start">
+                  <div className="max-w-[85%] flex gap-3">
+                    <div className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0 bg-indigo-500/10 text-indigo-400">
+                      <Bot size={16} />
+                    </div>
+                    <div className="p-4 rounded-2xl text-sm leading-relaxed bg-white/[0.03] border border-white/5 text-zinc-300">
+                      Thinking…
+                    </div>
+                  </div>
+                </div>
+              ) : null}
             </div>
 
             {/* Input */}
             <div className="p-6 border-t border-white/5 bg-white/[0.01]">
               <div className="relative flex items-center gap-2">
-                <input 
+                <textarea
                   value={input}
                   onChange={(e) => setInput(e.target.value)}
-                  onKeyDown={(e) => e.key === "Enter" && handleSend()}
-                  placeholder="Ask for design tips or logic scripts..."
-                  className="w-full bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-sm text-white placeholder:text-zinc-600 outline-none focus:border-indigo-500/50 transition-all"
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && !e.shiftKey) {
+                      e.preventDefault();
+                      handleSend();
+                    }
+                  }}
+                  rows={2}
+                  placeholder="Ask about anything in the GameForge AI app… (Enter to send, Shift+Enter new line)"
+                  className="w-full resize-none bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-sm text-white placeholder:text-zinc-600 outline-none focus:border-indigo-500/50 transition-all"
                 />
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={handleSend}
-                  className="h-12 w-12 rounded-xl bg-indigo-500 text-white flex items-center justify-center shadow-lg"
+                  className="h-12 w-12 rounded-xl bg-indigo-500 text-white flex items-center justify-center shadow-lg disabled:opacity-50"
+                  disabled={loading || !input.trim()}
                 >
                   <Send size={18} />
                 </motion.button>
               </div>
               <div className="mt-4 flex items-center gap-4">
                 <div className="flex items-center gap-1.5 text-[9px] font-black text-zinc-600 uppercase tracking-widest">
-                  <Zap size={10} className="text-indigo-500" /> Neural Mode
+                  <Zap size={10} className="text-indigo-500" /> Support Mode
                 </div>
                 <div className="flex items-center gap-1.5 text-[9px] font-black text-zinc-600 uppercase tracking-widest">
-                  <Code size={10} className="text-fuchsia-500" /> Auto-Script
+                  <Code size={10} className="text-fuchsia-500" /> Troubleshoot
                 </div>
               </div>
             </div>

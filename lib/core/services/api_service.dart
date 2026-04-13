@@ -485,26 +485,27 @@ class ApiService {
   static Map<String, dynamic> _handleResponse(http.Response response) {
     try {
       final responseData = jsonDecode(response.body);
-      
+      final asMap = responseData is Map ? Map<String, dynamic>.from(responseData as Map) : null;
+
       if (response.statusCode >= 200 && response.statusCode < 300) {
         return {
           'success': true,
-          'data': responseData['data'] ?? responseData,
+          'data': asMap != null ? (asMap['data'] ?? asMap) : responseData,
           'statusCode': response.statusCode,
-        };
-      } else {
-        final message = _normalizeErrorMessage(
-          responseData['message'],
-          fallback: responseData['error'],
-          statusCode: response.statusCode,
-        );
-        return {
-          'success': false,
-          'message': message,
-          'statusCode': response.statusCode,
-          'data': responseData,
         };
       }
+
+      final message = _normalizeErrorMessage(
+        asMap != null ? asMap['message'] : null,
+        fallback: asMap != null ? asMap['error'] : null,
+        statusCode: response.statusCode,
+      );
+      return {
+        'success': false,
+        'message': message,
+        'statusCode': response.statusCode,
+        'data': responseData,
+      };
     } catch (e) {
       return {
         'success': false,

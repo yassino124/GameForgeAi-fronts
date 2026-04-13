@@ -731,6 +731,7 @@ class _AIConfigurationScreenState extends State<AIConfigurationScreen> with Sing
           type: 'texture',
           name: 'player_sprite',
         );
+        AppNotifier.showSuccess('Player sprite uploaded');
       }
       if (_backgroundImageFile != null) {
         AppNotifier.showSuccess('Uploading background image…');
@@ -740,6 +741,7 @@ class _AIConfigurationScreenState extends State<AIConfigurationScreen> with Sing
           type: 'texture',
           name: 'background_image',
         );
+        AppNotifier.showSuccess('Background image uploaded');
       }
       if (_soundFile != null) {
         AppNotifier.showSuccess('Uploading sound file…');
@@ -749,6 +751,7 @@ class _AIConfigurationScreenState extends State<AIConfigurationScreen> with Sing
           type: 'audio',
           name: 'background_sound',
         );
+        AppNotifier.showSuccess('Sound file uploaded');
       }
 
       // Append asset URLs to prompt so AI can embed them in game config
@@ -842,34 +845,49 @@ class _AIConfigurationScreenState extends State<AIConfigurationScreen> with Sing
   }
 
   /// Uploads [file] to the assets API and returns the public download URL.
-  /// Returns null if upload or URL fetch failed (non-blocking).
-  Future<String?> _uploadAssetFile({
+  /// Throws when upload or URL fetch fails (blocking), so selected assets
+  /// are never silently dropped from the AI create payload.
+  Future<String> _uploadAssetFile({
     required String token,
     required File file,
     required String type,
     String? name,
   }) async {
-    try {
-      final uploadRes = await AssetsService.uploadAsset(
-        token: token,
-        file: file,
-        type: type,
-        name: name,
-      );
-      if (uploadRes['success'] != true) return null;
-      final assetData = uploadRes['data'];
-      final assetId = (assetData is Map ? assetData['_id'] : null)?.toString();
-      if (assetId == null || assetId.isEmpty) return null;
+    final uploadRes = await AssetsService.uploadAsset(
+      token: token,
+      file: file,
+      type: type,
+      name: name,
+    );
 
-      final urlRes = await AssetsService.getDownloadUrl(token: token, assetId: assetId);
-      if (urlRes['success'] != true) return null;
-      final urlData = urlRes['data'];
-      final rawUrl = (urlData is Map ? urlData['url'] : null)?.toString();
-      if (rawUrl == null || rawUrl.isEmpty) return null;
-      return ApiService.normalizeImageUrl(rawUrl);
-    } catch (_) {
-      return null;
+    if (uploadRes['success'] != true) {
+      final msg = (uploadRes['message']?.toString() ?? 'Asset upload failed').trim();
+      throw Exception(msg);
     }
+
+    final assetData = uploadRes['data'];
+    final assetId = (assetData is Map ? assetData['_id'] : null)?.toString();
+    if (assetId == null || assetId.isEmpty) {
+      throw Exception('Asset uploaded but ID is missing');
+    }
+
+    final urlRes = await AssetsService.getDownloadUrl(token: token, assetId: assetId);
+    if (urlRes['success'] != true) {
+      final msg = (urlRes['message']?.toString() ?? 'Failed to get asset URL').trim();
+      throw Exception(msg);
+    }
+
+    final urlData = urlRes['data'];
+    final rawUrl = (urlData is Map ? urlData['url'] : null)?.toString();
+    if (rawUrl == null || rawUrl.isEmpty) {
+      throw Exception('Asset URL is empty');
+    }
+
+    final normalized = ApiService.normalizeImageUrl(rawUrl);
+    if (normalized.trim().isEmpty) {
+      throw Exception('Asset URL normalization failed');
+    }
+    return normalized;
   }
 
   String _friendlyError(String raw) {

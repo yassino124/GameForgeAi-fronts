@@ -4,10 +4,12 @@ import 'dart:ui';
 import 'package:flutter_stripe/flutter_stripe.dart';
 import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/billing_service.dart';
+import '../../../core/utils/app_refresh_bus.dart';
 import '../../widgets/widgets.dart';
 
 class SubscriptionScreen extends StatefulWidget {
@@ -38,6 +40,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
   late final AnimationController _appearController;
   late final Animation<double> _fadeIn;
   late final Animation<Offset> _slideUp;
+  late final VoidCallback _refreshListener;
 
   @override
   void initState() {
@@ -48,20 +51,56 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
       vsync: this,
       duration: const Duration(milliseconds: 650),
     );
-    _fadeIn = CurvedAnimation(parent: _appearController, curve: Curves.easeOutCubic);
-    _slideUp = Tween<Offset>(begin: const Offset(0, 0.06), end: Offset.zero).animate(
-      CurvedAnimation(parent: _appearController, curve: Curves.easeOutCubic),
+    _fadeIn = CurvedAnimation(
+      parent: _appearController,
+      curve: Curves.easeOutCubic,
     );
+    _slideUp = Tween<Offset>(begin: const Offset(0, 0.06), end: Offset.zero)
+        .animate(
+          CurvedAnimation(
+            parent: _appearController,
+            curve: Curves.easeOutCubic,
+          ),
+        );
+
+    _refreshListener = () {
+      if (!mounted) return;
+      _load();
+    };
+    AppRefreshBus.notifier.addListener(_refreshListener);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _load();
     });
   }
 
+  Future<String?> _resolveToken() async {
+    final authToken = context.read<AuthProvider>().token;
+    if (authToken != null && authToken.trim().isNotEmpty) {
+      return authToken;
+    }
+
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final storedToken = prefs.getString('auth_token');
+      if (storedToken != null && storedToken.trim().isNotEmpty) {
+        return storedToken;
+      }
+    } catch (_) {}
+
+    return null;
+  }
+
   List<String> _featuresFromPlan(Map<String, dynamic> plan) {
-    final ent = (plan['entitlements'] is Map) ? Map<String, dynamic>.from(plan['entitlements'] as Map) : <String, dynamic>{};
-    final limits = (ent['limits'] is Map) ? Map<String, dynamic>.from(ent['limits'] as Map) : <String, dynamic>{};
-    final flags = (ent['flags'] is Map) ? Map<String, dynamic>.from(ent['flags'] as Map) : <String, dynamic>{};
+    final ent = (plan['entitlements'] is Map)
+        ? Map<String, dynamic>.from(plan['entitlements'] as Map)
+        : <String, dynamic>{};
+    final limits = (ent['limits'] is Map)
+        ? Map<String, dynamic>.from(ent['limits'] as Map)
+        : <String, dynamic>{};
+    final flags = (ent['flags'] is Map)
+        ? Map<String, dynamic>.from(ent['flags'] as Map)
+        : <String, dynamic>{};
 
     int nInt(dynamic v) {
       if (v is int) return v;
@@ -84,8 +123,14 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
     if (maxProjects > 0) out.add('Up to $maxProjects projects');
     if (maxAssetsMb > 0) out.add('Up to ${maxAssetsMb}MB assets storage');
 
-    out.add(android ? 'Android (APK) export enabled' : 'Android (APK) export not included');
-    out.add(proTemplates ? 'Access to Pro templates' : 'Community templates only');
+    out.add(
+      android
+          ? 'Android (APK) export enabled'
+          : 'Android (APK) export not included',
+    );
+    out.add(
+      proTemplates ? 'Access to Pro templates' : 'Community templates only',
+    );
     if (priority) out.add('Priority build queue');
 
     if (out.isNotEmpty) return out;
@@ -94,7 +139,10 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
 
   bool _isNegativeFeature(String v) {
     final s = v.toLowerCase();
-    return s.contains('not included') || s.contains('only') || s.contains('no ') || s.contains('requires');
+    return s.contains('not included') ||
+        s.contains('only') ||
+        s.contains('no ') ||
+        s.contains('requires');
   }
 
   Widget _featureRow({
@@ -104,7 +152,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
   }) {
     final negative = _isNegativeFeature(feature);
     final icon = negative ? Icons.close_rounded : Icons.check_rounded;
-    final iconBg = negative ? cs.error.withOpacity(0.14) : accent.withOpacity(0.14);
+    final iconBg = negative
+        ? cs.error.withOpacity(0.14)
+        : accent.withOpacity(0.14);
     final iconFg = negative ? cs.error : accent;
 
     return Row(
@@ -116,7 +166,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
           decoration: BoxDecoration(
             color: iconBg,
             borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: (negative ? cs.error : accent).withOpacity(0.25)),
+            border: Border.all(
+              color: (negative ? cs.error : accent).withOpacity(0.25),
+            ),
           ),
           child: Icon(icon, size: 16, color: iconFg),
         ),
@@ -135,7 +187,11 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
     );
   }
 
-  Widget _quotaLine({required String label, required int used, required int limit}) {
+  Widget _quotaLine({
+    required String label,
+    required int used,
+    required int limit,
+  }) {
     final cs = Theme.of(context).colorScheme;
     final l = limit <= 0 ? 1 : limit;
     final progress = (used / l).clamp(0.0, 1.0);
@@ -148,12 +204,18 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
             Expanded(
               child: Text(
                 '$label: $remaining left',
-                style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w800),
+                style: AppTypography.caption.copyWith(
+                  color: cs.onSurfaceVariant,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
             ),
             Text(
               '$used/$limit',
-              style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w900),
+              style: AppTypography.caption.copyWith(
+                color: cs.onSurfaceVariant,
+                fontWeight: FontWeight.w900,
+              ),
             ),
           ],
         ),
@@ -182,19 +244,28 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
       throw Exception('Missing Stripe publishable key');
     }
 
-    final res = await BillingService.createPaymentSheet(token: token, priceId: priceId);
+    final res = await BillingService.createPaymentSheet(
+      token: token,
+      priceId: priceId,
+    );
     if (res['success'] != true) {
       throw Exception(res['message']?.toString() ?? 'Failed to start payment');
     }
 
-    final data = (res['data'] is Map) ? Map<String, dynamic>.from(res['data'] as Map) : <String, dynamic>{};
+    final data = (res['data'] is Map)
+        ? Map<String, dynamic>.from(res['data'] as Map)
+        : <String, dynamic>{};
     final customerId = data['customerId']?.toString() ?? '';
     final ephemeralKeySecret = data['ephemeralKeySecret']?.toString() ?? '';
-  // Backend returns a SetupIntent for PaymentSheet card collection.
-  final setupIntentClientSecret = data['setupIntentClientSecret']?.toString() ?? '';
-  final setupIntentId = data['setupIntentId']?.toString() ?? '';
+    // Backend returns a SetupIntent for PaymentSheet card collection.
+    final setupIntentClientSecret =
+        data['setupIntentClientSecret']?.toString() ?? '';
+    final setupIntentId = data['setupIntentId']?.toString() ?? '';
 
-    if (customerId.isEmpty || ephemeralKeySecret.isEmpty || setupIntentClientSecret.isEmpty || setupIntentId.isEmpty) {
+    if (customerId.isEmpty ||
+        ephemeralKeySecret.isEmpty ||
+        setupIntentClientSecret.isEmpty ||
+        setupIntentId.isEmpty) {
       throw Exception('Invalid PaymentSheet data from server');
     }
 
@@ -232,7 +303,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
       setupIntentId: setupIntentId,
     );
     if (subRes['success'] != true) {
-      throw Exception(subRes['message']?.toString() ?? 'Failed to activate subscription');
+      throw Exception(
+        subRes['message']?.toString() ?? 'Failed to activate subscription',
+      );
     }
 
     await _syncUntilConfirmed(token: token);
@@ -240,7 +313,10 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
 
   bool _isSyncNeeded() {
     final status = _subscriptionStatus();
-    return status == 'incomplete' || status == 'past_due' || status == 'unpaid' || status == 'incomplete_expired';
+    return status == 'incomplete' ||
+        status == 'past_due' ||
+        status == 'unpaid' ||
+        status == 'incomplete_expired';
   }
 
   Future<void> _syncOnce({required String token}) async {
@@ -308,19 +384,23 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
       final codeStr = code?.toString();
       final message = e.error.message;
       if (message != null && message.trim().isNotEmpty) {
-        return codeStr != null && codeStr.trim().isNotEmpty ? '$codeStr: $message' : message;
+        return codeStr != null && codeStr.trim().isNotEmpty
+            ? '$codeStr: $message'
+            : message;
       }
       if (codeStr != null && codeStr.trim().isNotEmpty) return codeStr;
       return 'Stripe error';
     }
     final msg = e.toString();
-    if (msg.startsWith('Exception: ')) return msg.replaceFirst('Exception: ', '');
+    if (msg.startsWith('Exception: '))
+      return msg.replaceFirst('Exception: ', '');
     return msg;
   }
 
   @override
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
+    AppRefreshBus.notifier.removeListener(_refreshListener);
     _appearController.dispose();
     try {
       _syncTimer?.cancel();
@@ -337,8 +417,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
   }
 
   Future<void> _load() async {
-    final auth = context.read<AuthProvider>();
-    final token = auth.token;
+    final token = await _resolveToken();
 
     if (token == null || token.isEmpty) {
       setState(() {
@@ -354,17 +433,19 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
     });
 
     try {
-      final plansRes = await BillingService.getPlans();
+      final plansRes = await BillingService.getPlans(token: token);
       if (plansRes['success'] != true) {
-        throw Exception(plansRes['message']?.toString() ?? 'Failed to load plans');
+        throw Exception(
+          plansRes['message']?.toString() ?? 'Failed to load plans',
+        );
       }
 
       final rawPlans = plansRes['data'];
       final plans = (rawPlans is List)
           ? rawPlans
-              .where((e) => e is Map)
-              .map((e) => Map<String, dynamic>.from(e as Map))
-              .toList()
+                .where((e) => e is Map)
+                .map((e) => Map<String, dynamic>.from(e as Map))
+                .toList()
           : <Map<String, dynamic>>[];
 
       final subRes = await BillingService.getMySubscription(token: token);
@@ -421,7 +502,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
     // - require a non-empty priceId
     Map<String, dynamic>? chosen;
     for (final p in _plans) {
-      final priceId = (p['priceId']?.toString() ?? p['stripePriceId']?.toString() ?? '').trim();
+      final priceId =
+          (p['priceId']?.toString() ?? p['stripePriceId']?.toString() ?? '')
+              .trim();
       if (priceId.isEmpty) continue;
       if (_isCurrentPlan(p)) continue;
       if (p['isPopular'] == true) {
@@ -429,15 +512,18 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
         break;
       }
     }
-    chosen ??= _plans.firstWhere(
-      (p) {
-        final priceId = (p['priceId']?.toString() ?? p['stripePriceId']?.toString() ?? '').trim();
-        return priceId.isNotEmpty && !_isCurrentPlan(p);
-      },
-      orElse: () => _plans.first,
-    );
+    chosen ??= _plans.firstWhere((p) {
+      final priceId =
+          (p['priceId']?.toString() ?? p['stripePriceId']?.toString() ?? '')
+              .trim();
+      return priceId.isNotEmpty && !_isCurrentPlan(p);
+    }, orElse: () => _plans.first);
 
-    final priceId = (chosen['priceId']?.toString() ?? chosen['stripePriceId']?.toString() ?? '').trim();
+    final priceId =
+        (chosen['priceId']?.toString() ??
+                chosen['stripePriceId']?.toString() ??
+                '')
+            .trim();
     if (priceId.isEmpty) return;
 
     try {
@@ -462,9 +548,10 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
     final start = (0.08 * index).clamp(0.0, 0.5);
     final interval = Interval(start, 1.0, curve: Curves.easeOutCubic);
     final fade = CurvedAnimation(parent: _appearController, curve: interval);
-    final slide = Tween<Offset>(begin: const Offset(0, 0.06), end: Offset.zero).animate(
-      CurvedAnimation(parent: _appearController, curve: interval),
-    );
+    final slide = Tween<Offset>(
+      begin: const Offset(0, 0.06),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(parent: _appearController, curve: interval));
     return FadeTransition(
       opacity: fade,
       child: SlideTransition(position: slide, child: child),
@@ -568,9 +655,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
                     padding: const EdgeInsets.only(top: 1),
                     child: Text(
                       feature,
-                      style: AppTypography.body2.copyWith(
-                        color: textColor,
-                      ),
+                      style: AppTypography.body2.copyWith(color: textColor),
                     ),
                   ),
                 ),
@@ -606,7 +691,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
     final plan = sub['plan'];
     if (plan is Map) {
       final planMap = Map<String, dynamic>.from(plan);
-      final planPriceId = planMap['priceId']?.toString().trim() ??
+      final planPriceId =
+          planMap['priceId']?.toString().trim() ??
           planMap['stripePriceId']?.toString().trim();
       if (planPriceId != null && planPriceId.isNotEmpty) return planPriceId;
     }
@@ -616,7 +702,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
   bool _isCurrentPlan(Map<String, dynamic> plan) {
     final current = _currentPriceId();
     if (current == null || current.isEmpty) return false;
-    final planPriceId = (plan['priceId']?.toString() ?? plan['stripePriceId']?.toString() ?? '').trim();
+    final planPriceId =
+        (plan['priceId']?.toString() ?? plan['stripePriceId']?.toString() ?? '')
+            .trim();
     if (planPriceId.isEmpty) return false;
     return planPriceId == current;
   }
@@ -653,7 +741,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
     final status = _subscriptionStatus();
     if (status == 'active' || status == 'trialing') return AppColors.success;
     if (status == 'past_due' || status == 'unpaid') return AppColors.warning;
-    if (status == 'canceled' || status == 'incomplete_expired') return AppColors.error;
+    if (status == 'canceled' || status == 'incomplete_expired')
+      return AppColors.error;
     return AppColors.info;
   }
 
@@ -776,15 +865,23 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
                 return FadeTransition(
                   opacity: anim,
                   child: SlideTransition(
-                    position: Tween<Offset>(begin: const Offset(0, 0.02), end: Offset.zero).animate(anim),
+                    position: Tween<Offset>(
+                      begin: const Offset(0, 0.02),
+                      end: Offset.zero,
+                    ).animate(anim),
                     child: child,
                   ),
                 );
               },
               child: isLoading
-                  ? KeyedSubtree(key: const ValueKey('current_skeleton'), child: _skeletonCard(height: 220))
+                  ? KeyedSubtree(
+                      key: const ValueKey('current_skeleton'),
+                      child: _skeletonCard(height: 220),
+                    )
                   : KeyedSubtree(
-                      key: ValueKey('current_${_planTitleFromSubscription()}_${_subscriptionStatus()}'),
+                      key: ValueKey(
+                        'current_${_planTitleFromSubscription()}_${_subscriptionStatus()}',
+                      ),
                       child: _buildCurrentPlan(context),
                     ),
             ),
@@ -797,9 +894,15 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
                   decoration: BoxDecoration(
                     color: colorScheme.primary.withOpacity(0.12),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: colorScheme.primary.withOpacity(0.18)),
+                    border: Border.all(
+                      color: colorScheme.primary.withOpacity(0.18),
+                    ),
                   ),
-                  child: Icon(Icons.view_carousel_rounded, color: colorScheme.primary, size: 18),
+                  child: Icon(
+                    Icons.view_carousel_rounded,
+                    color: colorScheme.primary,
+                    size: 18,
+                  ),
                 ),
                 const SizedBox(width: AppSpacing.md),
                 Expanded(
@@ -808,12 +911,18 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
                     children: [
                       Text(
                         'Available Plans',
-                        style: AppTypography.subtitle2.copyWith(color: colorScheme.onSurface, fontWeight: FontWeight.w900),
+                        style: AppTypography.subtitle2.copyWith(
+                          color: colorScheme.onSurface,
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
                       const SizedBox(height: 2),
                       Text(
                         'Upgrade to unlock higher limits and Android exports.',
-                        style: AppTypography.caption.copyWith(color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w700),
+                        style: AppTypography.caption.copyWith(
+                          color: colorScheme.onSurfaceVariant,
+                          fontWeight: FontWeight.w700,
+                        ),
                       ),
                     ],
                   ),
@@ -829,121 +938,165 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
                 return FadeTransition(
                   opacity: anim,
                   child: SlideTransition(
-                    position: Tween<Offset>(begin: const Offset(0, 0.02), end: Offset.zero).animate(anim),
+                    position: Tween<Offset>(
+                      begin: const Offset(0, 0.02),
+                      end: Offset.zero,
+                    ).animate(anim),
                     child: child,
                   ),
                 );
               },
               child: _loading
-                  ? KeyedSubtree(key: const ValueKey('plans_skeleton'), child: _plansSkeleton())
+                  ? KeyedSubtree(
+                      key: const ValueKey('plans_skeleton'),
+                      child: _plansSkeleton(),
+                    )
                   : (_error != null)
-                      ? KeyedSubtree(
-                          key: const ValueKey('plans_error'),
-                          child: Container(
-                            padding: EdgeInsets.all(AppSpacing.lg),
-                            decoration: BoxDecoration(
-                              color: colorScheme.surface,
-                              borderRadius: BorderRadius.circular(AppBorderRadius.large),
-                              border: Border.all(color: colorScheme.outlineVariant.withOpacity(0.65)),
-                              boxShadow: AppShadows.boxShadowSmall,
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                  ? KeyedSubtree(
+                      key: const ValueKey('plans_error'),
+                      child: Container(
+                        padding: EdgeInsets.all(AppSpacing.lg),
+                        decoration: BoxDecoration(
+                          color: colorScheme.surface,
+                          borderRadius: BorderRadius.circular(
+                            AppBorderRadius.large,
+                          ),
+                          border: Border.all(
+                            color: colorScheme.outlineVariant.withOpacity(0.65),
+                          ),
+                          boxShadow: AppShadows.boxShadowSmall,
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
                               children: [
-                                Row(
-                                  children: [
-                                    Icon(Icons.error_outline_rounded, color: colorScheme.error),
-                                    const SizedBox(width: AppSpacing.sm),
-                                    Expanded(
-                                      child: Text(
-                                        'Failed to load billing info',
-                                        style: AppTypography.subtitle2.copyWith(color: colorScheme.onSurface, fontWeight: FontWeight.w900),
-                                      ),
+                                Icon(
+                                  Icons.error_outline_rounded,
+                                  color: colorScheme.error,
+                                ),
+                                const SizedBox(width: AppSpacing.sm),
+                                Expanded(
+                                  child: Text(
+                                    'Failed to load billing info',
+                                    style: AppTypography.subtitle2.copyWith(
+                                      color: colorScheme.onSurface,
+                                      fontWeight: FontWeight.w900,
                                     ),
-                                  ],
-                                ),
-                                SizedBox(height: AppSpacing.sm),
-                                Text(
-                                  _error!,
-                                  style: AppTypography.caption.copyWith(color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w700),
-                                ),
-                                SizedBox(height: AppSpacing.lg),
-                                CustomButton(
-                                  text: 'Retry',
-                                  onPressed: _load,
-                                  type: ButtonType.primary,
-                                  isFullWidth: true,
+                                  ),
                                 ),
                               ],
                             ),
-                          ),
-                        )
-                      : (_plans.isEmpty)
-                          ? KeyedSubtree(
-                              key: const ValueKey('plans_empty'),
-                              child: Container(
-                                padding: EdgeInsets.all(AppSpacing.lg),
-                                decoration: BoxDecoration(
-                                  color: colorScheme.surface,
-                                  borderRadius: BorderRadius.circular(AppBorderRadius.large),
-                                  border: Border.all(color: colorScheme.outlineVariant.withOpacity(0.65)),
-                                  boxShadow: AppShadows.boxShadowSmall,
-                                ),
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.inbox_outlined, color: colorScheme.onSurfaceVariant),
-                                    const SizedBox(width: AppSpacing.md),
-                                    Expanded(
-                                      child: Text(
-                                        'No plans available right now.',
-                                        style: AppTypography.body2.copyWith(color: colorScheme.onSurface, fontWeight: FontWeight.w800),
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            )
-                          : KeyedSubtree(
-                              key: const ValueKey('plans_list'),
-                              child: Column(
-                                children: _plans.asMap().entries.map((entry) {
-                                  final idx = entry.key;
-                                  final plan = entry.value;
-                                  final name = plan['name']?.toString() ?? 'Plan';
-                                  final description = plan['description']?.toString() ?? '';
-                                  final price = (plan['priceMonthly'] is num)
-                                      ? (plan['priceMonthly'] as num).toDouble()
-                                      : 0.0;
-                                  final features = _featuresFromPlan(plan);
-
-                                  final priceId = (plan['priceId']?.toString() ?? plan['stripePriceId']?.toString() ?? '').trim();
-                                  final isCurrent = _isCurrentPlan(plan);
-                                  final isPopular = plan['isPopular'] == true;
-
-                                  final showGlow = price > 0 && !isCurrent;
-
-                                  return Padding(
-                                    padding: EdgeInsets.only(bottom: AppSpacing.lg),
-                                    child: _animatedEntry(
-                                      index: idx,
-                                      child: _planGlow(
-                                        enabled: showGlow,
-                                        child: _buildPlanCard(
-                                          context,
-                                          name,
-                                          description,
-                                          price,
-                                          features,
-                                          priceId: priceId,
-                                          isCurrent: isCurrent,
-                                          isPopular: isPopular,
-                                        ),
-                                      ),
-                                    ),
-                                  );
-                                }).toList(),
+                            SizedBox(height: AppSpacing.sm),
+                            Text(
+                              _error!,
+                              style: AppTypography.caption.copyWith(
+                                color: colorScheme.onSurfaceVariant,
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
+                            SizedBox(height: AppSpacing.lg),
+                            CustomButton(
+                              text: 'Retry',
+                              onPressed: _load,
+                              type: ButtonType.primary,
+                              isFullWidth: true,
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  : (_plans.isEmpty)
+                  ? KeyedSubtree(
+                      key: const ValueKey('plans_empty'),
+                      child: Container(
+                        padding: EdgeInsets.all(AppSpacing.lg),
+                        decoration: BoxDecoration(
+                          color: colorScheme.surface,
+                          borderRadius: BorderRadius.circular(
+                            AppBorderRadius.large,
+                          ),
+                          border: Border.all(
+                            color: colorScheme.outlineVariant.withOpacity(0.65),
+                          ),
+                          boxShadow: AppShadows.boxShadowSmall,
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.inbox_outlined,
+                              color: colorScheme.onSurfaceVariant,
+                            ),
+                            const SizedBox(width: AppSpacing.md),
+                            Expanded(
+                              child: Text(
+                                'No plans available right now.',
+                                style: AppTypography.body2.copyWith(
+                                  color: colorScheme.onSurface,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
+                  : KeyedSubtree(
+                      key: const ValueKey('plans_list'),
+                      child: Column(
+                        children: _plans.asMap().entries.map((entry) {
+                          final idx = entry.key;
+                          final plan = entry.value;
+                          final name = plan['name']?.toString() ?? 'Plan';
+                          final description =
+                              plan['description']?.toString() ?? '';
+                          final price = (plan['priceMonthly'] is num)
+                              ? (plan['priceMonthly'] as num).toDouble()
+                              : 0.0;
+                          final originalPrice =
+                              (plan['originalPriceMonthly'] is num)
+                              ? (plan['originalPriceMonthly'] as num).toDouble()
+                              : price;
+                          final discountPercent =
+                              (plan['discountPercent'] is num)
+                              ? (plan['discountPercent'] as num).toInt()
+                              : 0;
+                          final features = _featuresFromPlan(plan);
+
+                          final priceId =
+                              (plan['priceId']?.toString() ??
+                                      plan['stripePriceId']?.toString() ??
+                                      '')
+                                  .trim();
+                          final isCurrent = _isCurrentPlan(plan);
+                          final isPopular = plan['isPopular'] == true;
+
+                          final showGlow = price > 0 && !isCurrent;
+
+                          return Padding(
+                            padding: EdgeInsets.only(bottom: AppSpacing.lg),
+                            child: _animatedEntry(
+                              index: idx,
+                              child: _planGlow(
+                                enabled: showGlow,
+                                child: _buildPlanCard(
+                                  context,
+                                  name,
+                                  description,
+                                  price,
+                                  originalPrice,
+                                  discountPercent,
+                                  features,
+                                  priceId: priceId,
+                                  isCurrent: isCurrent,
+                                  isPopular: isPopular,
+                                ),
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ),
             ),
             SizedBox(height: AppSpacing.xxl),
           ],
@@ -964,16 +1117,34 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
         : 'Pull to refresh to sync the latest subscription status.';
 
     final ent = _entitlements;
-    final usage = (ent != null && ent['usage'] is Map) ? Map<String, dynamic>.from(ent['usage'] as Map) : <String, dynamic>{};
-    final entObj = (ent != null && ent['entitlements'] is Map) ? Map<String, dynamic>.from(ent['entitlements'] as Map) : <String, dynamic>{};
-    final limits = (entObj['limits'] is Map) ? Map<String, dynamic>.from(entObj['limits'] as Map) : <String, dynamic>{};
-    final aiLimit = (limits['aiGenerationsPerMonth'] is num) ? (limits['aiGenerationsPerMonth'] as num).toInt() : 0;
-    final buildLimit = (limits['buildMinutesPerMonth'] is num) ? (limits['buildMinutesPerMonth'] as num).toInt() : 0;
-    final aiUsed = (usage['aiGenerationsUsed'] is num) ? (usage['aiGenerationsUsed'] as num).toInt() : 0;
-    final buildUsed = (usage['buildMinutesUsed'] is num) ? (usage['buildMinutesUsed'] as num).toInt() : 0;
+    final usage = (ent != null && ent['usage'] is Map)
+        ? Map<String, dynamic>.from(ent['usage'] as Map)
+        : <String, dynamic>{};
+    final entObj = (ent != null && ent['entitlements'] is Map)
+        ? Map<String, dynamic>.from(ent['entitlements'] as Map)
+        : <String, dynamic>{};
+    final limits = (entObj['limits'] is Map)
+        ? Map<String, dynamic>.from(entObj['limits'] as Map)
+        : <String, dynamic>{};
+    final aiLimit = (limits['aiGenerationsPerMonth'] is num)
+        ? (limits['aiGenerationsPerMonth'] as num).toInt()
+        : 0;
+    final buildLimit = (limits['buildMinutesPerMonth'] is num)
+        ? (limits['buildMinutesPerMonth'] as num).toInt()
+        : 0;
+    final aiUsed = (usage['aiGenerationsUsed'] is num)
+        ? (usage['aiGenerationsUsed'] as num).toInt()
+        : 0;
+    final buildUsed = (usage['buildMinutesUsed'] is num)
+        ? (usage['buildMinutesUsed'] as num).toInt()
+        : 0;
     final canShowQuotas = aiLimit > 0 || buildLimit > 0;
     final canCancel = _isSubscriptionConfirmed();
-    final canSync = status == 'incomplete' || status == 'past_due' || status == 'unpaid' || status == 'incomplete_expired';
+    final canSync =
+        status == 'incomplete' ||
+        status == 'past_due' ||
+        status == 'unpaid' ||
+        status == 'incomplete_expired';
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(AppBorderRadius.large),
@@ -999,10 +1170,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
             children: [
               Row(
                 children: [
-                  Icon(
-                    Icons.workspace_premium,
-                    color: colorScheme.primary,
-                  ),
+                  Icon(Icons.workspace_premium, color: colorScheme.primary),
                   SizedBox(width: AppSpacing.md),
                   Expanded(
                     child: Text(
@@ -1020,10 +1188,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
                     child: FittedBox(
                       fit: BoxFit.scaleDown,
                       alignment: Alignment.centerRight,
-                      child: StatusBadge(
-                        text: status,
-                        color: _statusColor(),
-                      ),
+                      child: StatusBadge(text: status, color: _statusColor()),
                     ),
                   ),
                 ],
@@ -1031,9 +1196,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
               SizedBox(height: AppSpacing.md),
               Text(
                 amountText,
-                style: AppTypography.h3.copyWith(
-                  color: colorScheme.primary,
-                ),
+                style: AppTypography.h3.copyWith(color: colorScheme.primary),
               ),
               SizedBox(height: AppSpacing.sm),
               Text(
@@ -1046,9 +1209,17 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
               ),
               if (canShowQuotas) ...[
                 SizedBox(height: AppSpacing.lg),
-                _quotaLine(label: 'AI generations', used: aiUsed, limit: aiLimit <= 0 ? 1 : aiLimit),
+                _quotaLine(
+                  label: 'AI generations',
+                  used: aiUsed,
+                  limit: aiLimit <= 0 ? 1 : aiLimit,
+                ),
                 SizedBox(height: AppSpacing.md),
-                _quotaLine(label: 'Build minutes', used: buildUsed, limit: buildLimit <= 0 ? 1 : buildLimit),
+                _quotaLine(
+                  label: 'Build minutes',
+                  used: buildUsed,
+                  limit: buildLimit <= 0 ? 1 : buildLimit,
+                ),
               ],
               if (canSync) ...[
                 SizedBox(height: AppSpacing.lg),
@@ -1060,7 +1231,9 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
                     if (token == null || token.isEmpty) return;
 
                     try {
-                      final res = await BillingService.syncSubscription(token: token);
+                      final res = await BillingService.syncSubscription(
+                        token: token,
+                      );
                       if (res['success'] == true) {
                         await _load();
                         if (!context.mounted) return;
@@ -1069,16 +1242,21 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
                         );
                         return;
                       }
-                      final message = res['message']?.toString() ?? 'Failed to sync subscription';
+                      final message =
+                          res['message']?.toString() ??
+                          'Failed to sync subscription';
                       if (!context.mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(message), backgroundColor: AppColors.error),
+                        SnackBar(
+                          content: Text(message),
+                          backgroundColor: AppColors.error,
+                        ),
                       );
                     } catch (e) {
                       if (!context.mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text(_formatStripeError(e as Object)),
+                          content: Text(_formatStripeError(e)),
                           backgroundColor: AppColors.error,
                         ),
                       );
@@ -1098,25 +1276,36 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
                     if (token == null || token.isEmpty) return;
 
                     try {
-                      final res = await BillingService.cancelSubscription(token: token);
+                      final res = await BillingService.cancelSubscription(
+                        token: token,
+                      );
                       if (res['success'] == true) {
                         await _load();
                         if (!context.mounted) return;
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Subscription will cancel at period end')),
+                          const SnackBar(
+                            content: Text(
+                              'Subscription will cancel at period end',
+                            ),
+                          ),
                         );
                         return;
                       }
-                      final message = res['message']?.toString() ?? 'Failed to cancel subscription';
+                      final message =
+                          res['message']?.toString() ??
+                          'Failed to cancel subscription';
                       if (!context.mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(message), backgroundColor: AppColors.error),
+                        SnackBar(
+                          content: Text(message),
+                          backgroundColor: AppColors.error,
+                        ),
                       );
                     } catch (e) {
                       if (!context.mounted) return;
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text(_formatStripeError(e as Object)),
+                          content: Text(_formatStripeError(e)),
                           backgroundColor: AppColors.error,
                         ),
                       );
@@ -1138,6 +1327,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
     String name,
     String description,
     double price,
+    double originalPrice,
+    int discountPercent,
     List<String> features, {
     required String priceId,
     bool isCurrent = false,
@@ -1145,12 +1336,22 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
   }) {
     final colorScheme = Theme.of(context).colorScheme;
     final bool isFreePlan = price <= 0;
+    final hasDiscount =
+        !isFreePlan &&
+        discountPercent > 0 &&
+        originalPrice > 0 &&
+        price < originalPrice;
 
-    final accent = isCurrent ? colorScheme.primary : colorScheme.primary.withOpacity(0.85);
-    final isSelected = _upgrading && _upgradingPriceId != null && _upgradingPriceId == priceId;
+    final accent = isCurrent
+        ? colorScheme.primary
+        : colorScheme.primary.withOpacity(0.85);
+    final isSelected =
+        _upgrading && _upgradingPriceId != null && _upgradingPriceId == priceId;
     final isDisabled = _upgrading && !isSelected;
 
-    final baseBorderColor = isCurrent ? colorScheme.primary : colorScheme.outline.withOpacity(0.5);
+    final baseBorderColor = isCurrent
+        ? colorScheme.primary
+        : colorScheme.outline.withOpacity(0.5);
     final borderColor = isSelected ? accent : baseBorderColor;
     final borderWidth = isSelected ? 2.5 : (isCurrent ? 2.0 : 1.0);
 
@@ -1162,12 +1363,11 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
         duration: const Duration(milliseconds: 220),
         curve: Curves.easeOutCubic,
         decoration: BoxDecoration(
-          color: isDisabled ? colorScheme.surface.withOpacity(0.72) : colorScheme.surface,
+          color: isDisabled
+              ? colorScheme.surface.withOpacity(0.72)
+              : colorScheme.surface,
           borderRadius: BorderRadius.circular(AppBorderRadius.large),
-          border: Border.all(
-            color: borderColor,
-            width: borderWidth,
-          ),
+          border: Border.all(color: borderColor, width: borderWidth),
           boxShadow: [
             ...AppShadows.boxShadowSmall,
             if (isSelected)
@@ -1186,9 +1386,16 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Container(
-                padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.md),
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  AppSpacing.lg,
+                  AppSpacing.lg,
+                  AppSpacing.md,
+                ),
                 decoration: BoxDecoration(
-                  color: isPopular ? colorScheme.primary.withOpacity(0.08) : Colors.transparent,
+                  color: isPopular
+                      ? colorScheme.primary.withOpacity(0.08)
+                      : Colors.transparent,
                   borderRadius: BorderRadius.vertical(
                     top: Radius.circular(AppBorderRadius.large),
                   ),
@@ -1201,14 +1408,19 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
                         Text(
                           name,
                           style: AppTypography.subtitle1.copyWith(
-                            color: isCurrent ? colorScheme.primary : colorScheme.onSurface,
+                            color: isCurrent
+                                ? colorScheme.primary
+                                : colorScheme.onSurface,
                             fontWeight: FontWeight.w900,
                           ),
                         ),
                         const Spacer(),
                         if (isPopular)
                           Container(
-                            padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: AppSpacing.sm,
+                              vertical: AppSpacing.xs,
+                            ),
                             decoration: BoxDecoration(
                               color: colorScheme.primary,
                               borderRadius: BorderRadius.circular(999),
@@ -1234,26 +1446,92 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: AppSpacing.md),
-                    Text(
-                      price == 0.0 ? 'Free' : '\$${price.toStringAsFixed(2)}/month',
-                      style: AppTypography.h3.copyWith(
-                        color: isCurrent ? colorScheme.primary : colorScheme.onSurface,
-                        fontWeight: FontWeight.w900,
+                    if (!hasDiscount)
+                      Text(
+                        price == 0.0
+                            ? 'Free'
+                            : '\$${price.toStringAsFixed(2)}/month',
+                        style: AppTypography.h3.copyWith(
+                          color: isCurrent
+                              ? colorScheme.primary
+                              : colorScheme.onSurface,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      )
+                    else
+                      Column(
+                        children: [
+                          Text(
+                            '\$${originalPrice.toStringAsFixed(2)}/month',
+                            style: AppTypography.caption.copyWith(
+                              color: colorScheme.onSurfaceVariant,
+                              fontWeight: FontWeight.w800,
+                              decoration: TextDecoration.lineThrough,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                '\$${price.toStringAsFixed(2)}/month',
+                                style: AppTypography.h3.copyWith(
+                                  color: isCurrent
+                                      ? colorScheme.primary
+                                      : colorScheme.onSurface,
+                                  fontWeight: FontWeight.w900,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 8,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: AppColors.success.withOpacity(0.16),
+                                  borderRadius: BorderRadius.circular(999),
+                                  border: Border.all(
+                                    color: AppColors.success.withOpacity(0.3),
+                                  ),
+                                ),
+                                child: Text(
+                                  '-$discountPercent%',
+                                  style: AppTypography.labelSmall.copyWith(
+                                    color: AppColors.success,
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
-                    ),
                   ],
                 ),
               ),
 
               Padding(
-                padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.lg),
+                padding: const EdgeInsets.fromLTRB(
+                  AppSpacing.lg,
+                  AppSpacing.md,
+                  AppSpacing.lg,
+                  AppSpacing.lg,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: List.generate(features.length, (i) {
                     final feature = features[i];
                     return Padding(
-                      padding: EdgeInsets.only(bottom: i == features.length - 1 ? 0 : AppSpacing.md),
-                      child: _featureRow(feature: feature, cs: colorScheme, accent: accent),
+                      padding: EdgeInsets.only(
+                        bottom: i == features.length - 1 ? 0 : AppSpacing.md,
+                      ),
+                      child: _featureRow(
+                        feature: feature,
+                        cs: colorScheme,
+                        accent: accent,
+                      ),
                     );
                   }),
                 ),
@@ -1261,12 +1539,20 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
 
               if (!isFreePlan)
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(AppSpacing.lg, 0, AppSpacing.lg, AppSpacing.lg),
+                  padding: const EdgeInsets.fromLTRB(
+                    AppSpacing.lg,
+                    0,
+                    AppSpacing.lg,
+                    AppSpacing.lg,
+                  ),
                   child: SizedBox(
                     width: double.infinity,
                     child: CustomButton(
                       text: isCurrent ? 'Current Plan' : 'Upgrade to $name',
-                      onPressed: isDisabled || isCurrent || (price > 0 && priceId.trim().isEmpty)
+                      onPressed:
+                          isDisabled ||
+                              isCurrent ||
+                              (price > 0 && priceId.trim().isEmpty)
                           ? null
                           : () async {
                               final auth = context.read<AuthProvider>();
@@ -1278,13 +1564,16 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
                                   _upgrading = true;
                                   _upgradingPriceId = priceId;
                                 });
-                                await _startInAppSubscription(token: token, priceId: priceId);
+                                await _startInAppSubscription(
+                                  token: token,
+                                  priceId: priceId,
+                                );
                                 await _load();
                               } catch (e) {
                                 if (!context.mounted) return;
                                 ScaffoldMessenger.of(context).showSnackBar(
                                   SnackBar(
-                                    content: Text(_formatStripeError(e as Object)),
+                                    content: Text(_formatStripeError(e)),
                                     backgroundColor: AppColors.error,
                                   ),
                                 );

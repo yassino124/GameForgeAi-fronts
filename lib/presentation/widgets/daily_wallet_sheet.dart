@@ -6,7 +6,6 @@ import '../../core/constants/app_colors.dart';
 import '../../core/constants/app_typography.dart';
 import '../../core/services/app_notifier.dart';
 import '../../core/services/daily_rewards_service.dart';
-import '../../core/themes/app_theme.dart';
 
 class DailyWalletSheet extends StatefulWidget {
   final String token;
@@ -19,6 +18,7 @@ class DailyWalletSheet extends StatefulWidget {
 class _DailyWalletSheetState extends State<DailyWalletSheet> {
   bool _loading = true;
   List<Map<String, dynamic>> _items = const [];
+  String _emptyText = 'No rewards yet. Spin & open boxes to win.';
 
   @override
   void initState() {
@@ -27,29 +27,54 @@ class _DailyWalletSheetState extends State<DailyWalletSheet> {
   }
 
   Future<void> _load() async {
+    final token = widget.token.trim();
+    if (token.isEmpty) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _items = const [];
+        _emptyText = 'Sign in to see your rewards wallet.';
+      });
+      return;
+    }
+
     setState(() => _loading = true);
     try {
-      final res = await DailyRewardsService.wallet(token: widget.token);
+      final res = await DailyRewardsService.wallet(token: token);
       if (!mounted) return;
       if (res['success'] == true && res['data'] is Map) {
         final data = Map<String, dynamic>.from(res['data'] as Map);
-        final list = (data['items'] is List) ? (data['items'] as List) : const [];
+        final list = (data['items'] is List)
+            ? (data['items'] as List)
+            : const [];
         setState(() {
-          _items = list.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+          _items = list
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
+          _emptyText = 'No rewards yet. Spin & open boxes to win.';
           _loading = false;
         });
         return;
       }
-      setState(() => _loading = false);
+      setState(() {
+        _loading = false;
+        _emptyText = res['message']?.toString() ?? _emptyText;
+      });
     } catch (_) {
       if (!mounted) return;
-      setState(() => _loading = false);
+      setState(() {
+        _loading = false;
+        _emptyText = 'Could not load wallet right now. Try refresh.';
+      });
     }
   }
 
   String _titleFor(Map<String, dynamic> it) {
     final kind = (it['kind'] ?? '').toString();
-    final v = (it['value'] is num) ? (it['value'] as num).toInt() : int.tryParse(it['value']?.toString() ?? '') ?? 0;
+    final v = (it['value'] is num)
+        ? (it['value'] as num).toInt()
+        : int.tryParse(it['value']?.toString() ?? '') ?? 0;
     if (kind == 'discount_templates') return '$v% OFF Template';
     if (kind == 'discount_subscription') return '$v% OFF Subscription';
     if (kind == 'free_pro_day') return 'Free Pro Day (24h)';
@@ -71,7 +96,10 @@ class _DailyWalletSheetState extends State<DailyWalletSheet> {
     final id = (it['id'] ?? '').toString().trim();
     if (id.isEmpty) return;
     try {
-      final res = await DailyRewardsService.redeem(token: widget.token, walletItemId: id);
+      final res = await DailyRewardsService.redeem(
+        token: widget.token,
+        walletItemId: id,
+      );
       if (!mounted) return;
       if (res['success'] == true) {
         AppNotifier.showSuccess('Redeemed');
@@ -96,7 +124,13 @@ class _DailyWalletSheetState extends State<DailyWalletSheet> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(32),
           border: Border.all(color: Colors.white.withOpacity(0.10), width: 1.2),
-          boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.55), blurRadius: 40, offset: const Offset(0, 24))],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.55),
+              blurRadius: 40,
+              offset: const Offset(0, 24),
+            ),
+          ],
         ),
         child: ClipRRect(
           borderRadius: BorderRadius.circular(32),
@@ -110,9 +144,21 @@ class _DailyWalletSheetState extends State<DailyWalletSheet> {
                 children: [
                   Row(
                     children: [
-                      Text('REWARD WALLET', style: AppTypography.titleMedium.copyWith(color: Colors.white, fontWeight: FontWeight.w900)),
+                      Text(
+                        'REWARD WALLET',
+                        style: AppTypography.titleMedium.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
                       const Spacer(),
-                      IconButton(onPressed: () => Navigator.of(context).pop(), icon: const Icon(Icons.close_rounded, color: Colors.white70)),
+                      IconButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        icon: const Icon(
+                          Icons.close_rounded,
+                          color: Colors.white70,
+                        ),
+                      ),
                     ],
                   ),
                   const SizedBox(height: 10),
@@ -121,7 +167,11 @@ class _DailyWalletSheetState extends State<DailyWalletSheet> {
                       padding: const EdgeInsets.all(18),
                       child: Row(
                         children: const [
-                          SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2)),
+                          SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
                           SizedBox(width: 10),
                           Text('Loading…'),
                         ],
@@ -130,7 +180,12 @@ class _DailyWalletSheetState extends State<DailyWalletSheet> {
                   else if (_items.isEmpty)
                     Padding(
                       padding: const EdgeInsets.all(18),
-                      child: Text('No rewards yet. Spin & open boxes to win.', style: AppTypography.body2.copyWith(color: Colors.white70)),
+                      child: Text(
+                        _emptyText,
+                        style: AppTypography.body2.copyWith(
+                          color: Colors.white70,
+                        ),
+                      ),
                     )
                   else
                     ConstrainedBox(
@@ -143,13 +198,16 @@ class _DailyWalletSheetState extends State<DailyWalletSheet> {
                           final it = _items[i];
                           final kind = (it['kind'] ?? '').toString();
                           final status = (it['status'] ?? '').toString();
-                          final redeemable = status == 'available' && kind == 'free_pro_day';
+                          final redeemable =
+                              status == 'available' && kind == 'free_pro_day';
                           return Container(
                             padding: const EdgeInsets.all(14),
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(20),
                               color: cs.surface.withOpacity(0.10),
-                              border: Border.all(color: Colors.white.withOpacity(0.10)),
+                              border: Border.all(
+                                color: Colors.white.withOpacity(0.10),
+                              ),
                             ),
                             child: Row(
                               children: [
@@ -160,26 +218,40 @@ class _DailyWalletSheetState extends State<DailyWalletSheet> {
                                     borderRadius: BorderRadius.circular(16),
                                     gradient: AppColors.primaryGradient,
                                   ),
-                                  child: Icon(_iconFor(kind), color: Colors.white),
+                                  child: Icon(
+                                    _iconFor(kind),
+                                    color: Colors.white,
+                                  ),
                                 ),
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
                                     children: [
-                                      Text(_titleFor(it), style: AppTypography.subtitle1.copyWith(color: Colors.white, fontWeight: FontWeight.w900)),
+                                      Text(
+                                        _titleFor(it),
+                                        style: AppTypography.subtitle1.copyWith(
+                                          color: Colors.white,
+                                          fontWeight: FontWeight.w900,
+                                        ),
+                                      ),
                                       const SizedBox(height: 4),
                                       Text(
                                         status == 'available'
                                             ? (kind == 'discount_templates'
-                                                ? 'Auto-applies at checkout.'
-                                                : kind == 'discount_subscription'
-                                                    ? 'Auto-applies when subscribing.'
-                                                    : kind == 'free_pro_day'
-                                                        ? 'Tap redeem to activate.'
-                                                        : 'Available')
+                                                  ? 'Auto-applies at checkout.'
+                                                  : kind ==
+                                                        'discount_subscription'
+                                                  ? 'Auto-applies when subscribing.'
+                                                  : kind == 'free_pro_day'
+                                                  ? 'Tap redeem to activate.'
+                                                  : 'Available')
                                             : status,
-                                        style: AppTypography.caption.copyWith(color: Colors.white70, fontWeight: FontWeight.w700),
+                                        style: AppTypography.caption.copyWith(
+                                          color: Colors.white70,
+                                          fontWeight: FontWeight.w700,
+                                        ),
                                       ),
                                     ],
                                   ),
@@ -197,11 +269,24 @@ class _DailyWalletSheetState extends State<DailyWalletSheet> {
                                         color: Colors.transparent,
                                         child: InkWell(
                                           onTap: () => _redeem(it),
-                                          borderRadius: BorderRadius.circular(14),
+                                          borderRadius: BorderRadius.circular(
+                                            14,
+                                          ),
                                           child: Padding(
-                                            padding: const EdgeInsets.symmetric(horizontal: 14),
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 14,
+                                            ),
                                             child: Center(
-                                              child: Text('REDEEM', style: AppTypography.labelLarge.copyWith(color: Colors.white, fontWeight: FontWeight.w900, fontSize: 11)),
+                                              child: Text(
+                                                'REDEEM',
+                                                style: AppTypography.labelLarge
+                                                    .copyWith(
+                                                      color: Colors.white,
+                                                      fontWeight:
+                                                          FontWeight.w900,
+                                                      fontSize: 11,
+                                                    ),
+                                              ),
                                             ),
                                           ),
                                         ),
@@ -209,7 +294,10 @@ class _DailyWalletSheetState extends State<DailyWalletSheet> {
                                     ),
                                   )
                                 else
-                                  Icon(Icons.lock_open_rounded, color: Colors.white.withOpacity(0.45)),
+                                  Icon(
+                                    Icons.lock_open_rounded,
+                                    color: Colors.white.withOpacity(0.45),
+                                  ),
                               ],
                             ),
                           );
@@ -221,8 +309,18 @@ class _DailyWalletSheetState extends State<DailyWalletSheet> {
                     alignment: Alignment.centerRight,
                     child: TextButton.icon(
                       onPressed: _load,
-                      icon: const Icon(Icons.refresh_rounded, color: Colors.white70, size: 18),
-                      label: Text('REFRESH', style: AppTypography.labelLarge.copyWith(color: Colors.white70, fontWeight: FontWeight.w900)),
+                      icon: const Icon(
+                        Icons.refresh_rounded,
+                        color: Colors.white70,
+                        size: 18,
+                      ),
+                      label: Text(
+                        'REFRESH',
+                        style: AppTypography.labelLarge.copyWith(
+                          color: Colors.white70,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
                     ),
                   ),
                 ],

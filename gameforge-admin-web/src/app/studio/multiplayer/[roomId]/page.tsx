@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useMultiplayerSocket } from "@/lib/multiplayer";
 import { getUserToken } from "@/lib/userAuth";
+import { apiFetch } from "@/lib/api";
 import UserShell from "@/app/_components/UserShell";
 import { useToast } from "@/app/_components/ToastProvider";
 
@@ -32,26 +33,31 @@ export default function StudioMultiplayerRoom() {
   const [room, setRoom] = useState<any>(null);
   const [messages, setMessages] = useState<any[]>([]);
   const [chatInput, setChatInput] = useState("");
-  const [ready, setReady] = useState(false);
+  const [readyUserIds, setReadyUserIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [myUserId, setMyUserId] = useState<string | null>(null);
 
   // ─── Game session state ───────────────────────────────────────────────────
   const [gameUrl, setGameUrl] = useState<string | null>(null);
   const [sessionStarted, setSessionStarted] = useState(false);
+  const [showStartPicker, setShowStartPicker] = useState(false);
+  const [startingSession, setStartingSession] = useState(false);
+  const [loadingArcade, setLoadingArcade] = useState(false);
+  const [arcadeItems, setArcadeItems] = useState<any[]>([]);
 
   // ─── Voice chat state ─────────────────────────────────────────────────────
   const [voiceJoined, setVoiceJoined] = useState(false);
   const [voiceMuted, setVoiceMuted] = useState(false);
   const [voiceMembers, setVoiceMembers] = useState<string[]>([]); // userIds in voice
   const localStreamRef = useRef<MediaStream | null>(null);
-  const peerConnsRef = useRef<Map<string, RTCPeerConnection>>(new Map());
-  const remoteAudiosRef = useRef<Map<string, HTMLAudioElement>>(new Map());
+  const peerConnsRef = useRef<Map<string, RTCPeerConnection>>(new Map()); // key = peer socketId
+  const remoteAudiosRef = useRef<Map<string, HTMLAudioElement>>(new Map()); // key = peer socketId
+  const peerUserBySocketRef = useRef<Map<string, string>>(new Map());
 
   const members = (room?.members ?? []) as any[];
-  const readyUserIds = (room?.readyUserIds ?? []) as any[];
-  const allReady = members.length > 0 && members.every((m: any) => readyUserIds.includes(m?.userId));
-  const isHost = room?.hostUserId && members.find((m: any) => String(m.userId) === String(room.hostUserId));
+  const allReady = members.length > 0 && members.every((m: any) => readyUserIds.includes(String(m?.userId || "")));
+  const isHost = Boolean(myUserId && room?.hostUserId && String(room.hostUserId) === String(myUserId));
+  const iAmReady = Boolean(myUserId && readyUserIds.includes(String(myUserId)));
 
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -68,8 +74,11 @@ export default function StudioMultiplayerRoom() {
   }, [token, error, router, toast]);
 
   // ─── WebRTC helpers ───────────────────────────────────────────────────────
-  const createPeerConn = useCallback((targetUserId: string): RTCPeerConnection => {
+  const createPeerConn = useCallback((peerSocketId: string, peerUserId?: string): RTCPeerConnection => {
     const pc = new RTCPeerConnection(ICE_SERVERS);
+    if (peerUserId) {
+      peerUserBySocketRef.current.set(peerSocketId, String(peerUserId));
+    }
 
     // Add local tracks
     localStreamRef.current?.getTracks().forEach(t => pc.addTrack(t, localStreamRef.current!));
@@ -77,7 +86,16 @@ export default function StudioMultiplayerRoom() {
     // ICE candidates → send via socket
     pc.onicecandidate = (e) => {
       if (e.candidate && socket) {
-        socket.emit("voice:ice", { token, roomId: room?.roomId, targetUserId, candidate: e.candidate });
+        socket.emit("voice:ice", {
+          token,
+          roomId: room?.roomId,
+          to: peerSocketId,
+          data: {
+            candidate: e.candidate.candidate,
+            sdpMid: e.candidate.sdpMid,
+            sdpMLineIndex: e.candidate.sdpMLineIndex,
+          },
+        });
       }
     };
 
@@ -86,18 +104,79 @@ export default function StudioMultiplayerRoom() {
       const audio = new Audio();
       audio.srcObject = e.streams[0];
       audio.autoplay = true;
-      remoteAudiosRef.current.set(targetUserId, audio);
+      remoteAudiosRef.current.set(peerSocketId, audio);
     };
 
-    peerConnsRef.current.set(targetUserId, pc);
+    peerConnsRef.current.set(peerSocketId, pc);
     return pc;
   }, [socket, token, room?.roomId]);
 
-  const cleanupPeerConn = (userId: string) => {
-    peerConnsRef.current.get(userId)?.close();
-    peerConnsRef.current.delete(userId);
-    const el = remoteAudiosRef.current.get(userId);
-    if (el) { el.srcObject = null; remoteAudiosRef.current.delete(userId); }
+  const cleanupPeerConn = (peerSocketId: string) => {
+    peerConnsRef.current.get(peerSocketId)?.close();
+    peerConnsRef.current.delete(peerSocketId);
+    const el = remoteAudiosRef.current.get(peerSocketId);
+    if (el) {
+      el.srcObject = null;
+      remoteAudiosRef.current.delete(peerSocketId);
+    }
+    peerUserBySocketRef.current.delete(peerSocketId);
+  };
+
+  const recomputeVoiceMembers = useCallback(() => {
+    const ids = Array.from(peerUserBySocketRef.current.values()).filter(Boolean);
+    setVoiceMembers(Array.from(new Set(ids)));
+  }, []);
+
+  const extractPlayUrl = useCallback((it: any) => {
+    const raw =
+      it?.playUrl ||
+      it?.webglUrl ||
+      it?.previewUrl ||
+      it?.url ||
+      it?.gameUrl ||
+      it?.webUrl ||
+      "";
+    const s = String(raw || "").trim();
+    return s;
+  }, []);
+
+  const loadArcadeForStart = useCallback(async () => {
+    if (loadingArcade) return;
+    try {
+      setLoadingArcade(true);
+      const data = await apiFetch<any>("/game-feed", { method: "GET", token: token || undefined });
+      const list = Array.isArray(data) ? data : (Array.isArray(data?.items) ? data.items : []);
+      setArcadeItems(Array.isArray(list) ? list : []);
+    } catch {
+      setArcadeItems([]);
+      toast.error("Arcade unavailable", "Could not load arcade feed right now");
+    } finally {
+      setLoadingArcade(false);
+    }
+  }, [loadingArcade, token, toast]);
+
+  const startSessionWithArcade = useCallback(async (item: any) => {
+    if (!socket || !room) return;
+    const runtimeUrl = extractPlayUrl(item);
+    const arcadePostId = String(item?.id || item?._id || "").trim();
+    if (!runtimeUrl) {
+      toast.error("Missing game URL", "This arcade game does not provide a playable WebGL URL");
+      return;
+    }
+    try {
+      setStartingSession(true);
+      socket.emit("room:start", {
+        token,
+        roomId: room.roomId,
+        runtimeUrl,
+        ...(arcadePostId ? { arcadePostId } : {}),
+      });
+      setShowStartPicker(false);
+      toast.info("Starting session...", "Launching selected arcade game for all players");
+    } finally {
+      setStartingSession(false);
+    }
+  }, [socket, room, token, toast, extractPlayUrl]);
   };
 
   const leaveVoice = useCallback(() => {
@@ -105,6 +184,7 @@ export default function StudioMultiplayerRoom() {
     localStreamRef.current = null;
     peerConnsRef.current.forEach((_, uid) => cleanupPeerConn(uid));
     setVoiceJoined(false);
+    setVoiceMuted(false);
     setVoiceMembers([]);
     if (socket && room) socket.emit("voice:leave", { token, roomId: room.roomId });
   }, [socket, token, room]);
@@ -120,13 +200,24 @@ export default function StudioMultiplayerRoom() {
       }
     }, 9000);
 
-    // Room update (join, ready, member changes)
+    socket.emit("mp:auth", { token });
+
+    // Room update (join/member changes)
     const handleRoomUpdate = (payload: any) => {
       const updated = payload?.data?.room ?? payload?.room ?? payload;
       if (!updated || typeof updated !== "object") return;
       setRoom((prev: any) => ({ ...(prev ?? {}), ...updated }));
+      if (Array.isArray(updated?.readyUserIds)) {
+        setReadyUserIds(updated.readyUserIds.map((x: any) => String(x)));
+      }
       setLoading(false);
       window.clearTimeout(timeout);
+    };
+
+    const handleReadyUpdate = (payload: any) => {
+      const ids = payload?.data?.readyUserIds;
+      if (!Array.isArray(ids)) return;
+      setReadyUserIds(ids.map((x: any) => String(x)));
     };
 
     // Someone joined
@@ -150,8 +241,12 @@ export default function StudioMultiplayerRoom() {
         if (!prev) return prev;
         return { ...prev, members: (prev.members ?? []).filter((m: any) => String(m.userId) !== String(uid)) };
       });
-      cleanupPeerConn(String(uid));
-      setVoiceMembers(prev => prev.filter(id => id !== String(uid)));
+      const targetUserId = String(uid);
+      const peerSockets = Array.from(peerUserBySocketRef.current.entries())
+        .filter(([, userId]) => String(userId) === targetUserId)
+        .map(([socketId]) => socketId);
+      for (const sid of peerSockets) cleanupPeerConn(sid);
+      recomputeVoiceMembers();
     };
 
     // Chat
@@ -167,7 +262,13 @@ export default function StudioMultiplayerRoom() {
 
     // Game start → show game iframe for ALL players
     const handleGameStart = (payload: any) => {
-      const url = payload?.data?.gameUrl ?? payload?.gameUrl ?? payload?.url ?? null;
+      const url =
+        payload?.data?.runtimeUrl ??
+        payload?.runtimeUrl ??
+        payload?.data?.gameUrl ??
+        payload?.gameUrl ??
+        payload?.url ??
+        null;
       const sessionId = payload?.data?.sessionId ?? payload?.sessionId;
       setGameUrl(url);
       setSessionStarted(true);
@@ -175,50 +276,109 @@ export default function StudioMultiplayerRoom() {
     };
 
     // My identity
-    const handleMeInfo = (payload: any) => {
+    const handleAuthOk = (payload: any) => {
       const uid = payload?.data?.userId ?? payload?.userId ?? payload?.id;
       if (uid) setMyUserId(String(uid));
     };
 
     // ── Voice signaling ──────────────────────────────────────────────────────
-    const handleVoiceUserJoined = async (payload: any) => {
-      const uid = String(payload?.userId ?? "");
-      if (!uid || !localStreamRef.current) return;
-      setVoiceMembers(prev => [...new Set([...prev, uid])]);
-      // We initiate offer to the new joiner
-      const pc = createPeerConn(uid);
+    const handleVoiceJoined = async (payload: any) => {
+      const peers = payload?.data?.peers;
+      setVoiceJoined(true);
+      if (!Array.isArray(peers) || !localStreamRef.current) return;
+      for (const p of peers) {
+        const peerSocketId = String(p?.socketId || "").trim();
+        const peerUserId = String(p?.userId || "").trim();
+        if (!peerSocketId || peerSocketId === socket.id) continue;
+        if (!peerConnsRef.current.has(peerSocketId)) {
+          const pc = createPeerConn(peerSocketId, peerUserId);
+          const shouldOffer = String(socket.id || "").localeCompare(peerSocketId) < 0;
+          if (shouldOffer) {
+            const offer = await pc.createOffer();
+            await pc.setLocalDescription(offer);
+            socket.emit("voice:offer", {
+              token,
+              roomId: room?.roomId,
+              to: peerSocketId,
+              data: { type: offer.type, sdp: offer.sdp },
+            });
+          }
+        } else if (peerUserId) {
+          peerUserBySocketRef.current.set(peerSocketId, peerUserId);
+        }
+      }
+      recomputeVoiceMembers();
+    };
+
+    const handleVoicePeerJoined = async (payload: any) => {
+      const peerSocketId = String(payload?.data?.socketId || payload?.socketId || "").trim();
+      const peerUserId = String(payload?.data?.userId || payload?.userId || "").trim();
+      if (!peerSocketId || peerSocketId === socket.id || !localStreamRef.current) return;
+      if (peerConnsRef.current.has(peerSocketId)) {
+        if (peerUserId) peerUserBySocketRef.current.set(peerSocketId, peerUserId);
+        recomputeVoiceMembers();
+        return;
+      }
+      const pc = createPeerConn(peerSocketId, peerUserId);
+      const shouldOffer = String(socket.id || "").localeCompare(peerSocketId) < 0;
+      if (!shouldOffer) {
+        recomputeVoiceMembers();
+        return;
+      }
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
-      socket.emit("voice:offer", { token, roomId: room?.roomId, targetUserId: uid, sdp: offer });
+      socket.emit("voice:offer", {
+        token,
+        roomId: room?.roomId,
+        to: peerSocketId,
+        data: { type: offer.type, sdp: offer.sdp },
+      });
+      recomputeVoiceMembers();
     };
 
     const handleVoiceOffer = async (payload: any) => {
-      const { fromUserId, sdp } = payload;
-      if (!fromUserId || !localStreamRef.current) return;
-      setVoiceMembers(prev => [...new Set([...prev, String(fromUserId)])]);
-      const pc = createPeerConn(String(fromUserId));
+      const from = String(payload?.data?.from || payload?.from || "").trim();
+      const sdp = payload?.data?.data || payload?.data || payload?.sdp;
+      if (!from || !localStreamRef.current || !sdp) return;
+      const pc = peerConnsRef.current.get(from) ?? createPeerConn(from);
       await pc.setRemoteDescription(new RTCSessionDescription(sdp));
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
-      socket.emit("voice:answer", { token, roomId: room?.roomId, targetUserId: fromUserId, sdp: answer });
+      socket.emit("voice:answer", {
+        token,
+        roomId: room?.roomId,
+        to: from,
+        data: { type: answer.type, sdp: answer.sdp },
+      });
     };
 
     const handleVoiceAnswer = async (payload: any) => {
-      const { fromUserId, sdp } = payload;
-      const pc = peerConnsRef.current.get(String(fromUserId));
-      if (pc) await pc.setRemoteDescription(new RTCSessionDescription(sdp));
+      const from = String(payload?.data?.from || payload?.from || "").trim();
+      const sdp = payload?.data?.data || payload?.data || payload?.sdp;
+      const pc = peerConnsRef.current.get(from);
+      if (pc && sdp) await pc.setRemoteDescription(new RTCSessionDescription(sdp));
     };
 
     const handleVoiceIce = async (payload: any) => {
-      const { fromUserId, candidate } = payload;
-      const pc = peerConnsRef.current.get(String(fromUserId));
-      if (pc && candidate) await pc.addIceCandidate(new RTCIceCandidate(candidate));
+      const from = String(payload?.data?.from || payload?.from || "").trim();
+      const candidate = payload?.data?.data || payload?.data || payload?.candidate;
+      const pc = peerConnsRef.current.get(from);
+      if (pc && candidate) {
+        await pc.addIceCandidate(
+          new RTCIceCandidate({
+            candidate: candidate?.candidate,
+            sdpMid: candidate?.sdpMid,
+            sdpMLineIndex: candidate?.sdpMLineIndex,
+          }),
+        );
+      }
     };
 
-    const handleVoiceUserLeft = (payload: any) => {
-      const uid = String(payload?.userId ?? "");
-      cleanupPeerConn(uid);
-      setVoiceMembers(prev => prev.filter(id => id !== uid));
+    const handleVoicePeerLeft = (payload: any) => {
+      const peerSocketId = String(payload?.data?.socketId || payload?.socketId || "").trim();
+      if (!peerSocketId) return;
+      cleanupPeerConn(peerSocketId);
+      recomputeVoiceMembers();
     };
 
     const handleMpError = (payload: any) => {
@@ -227,41 +387,45 @@ export default function StudioMultiplayerRoom() {
     };
 
     // Join / Create / Matchmake
-    if (mode === "matchmaking") socket.emit("matchmaking:queue");
-    else if (mode === "create") socket.emit("room:create", { name: initialName });
-    else if (roomId) socket.emit("room:join", { roomId });
+  if (mode === "matchmaking") socket.emit("matchmaking:queue", { token });
+  else if (mode === "create") socket.emit("room:create", { token, name: initialName });
+  else if (roomId) socket.emit("room:join", { token, roomId });
 
     socket.on("room:update", handleRoomUpdate);
+  socket.on("room:ready:update", handleReadyUpdate);
     socket.on("member:joined", handleMemberJoined);
     socket.on("member:left", handleMemberLeft);
     socket.on("chat:history", handleChatHistory);
     socket.on("chat:message", handleChatMessage);
     socket.on("game:start", handleGameStart);
-    socket.on("me", handleMeInfo);
-    socket.on("voice:user-joined", handleVoiceUserJoined);
+  socket.on("mp:auth:ok", handleAuthOk);
+  socket.on("voice:joined", handleVoiceJoined);
+  socket.on("voice:peer:joined", handleVoicePeerJoined);
     socket.on("voice:offer", handleVoiceOffer);
     socket.on("voice:answer", handleVoiceAnswer);
     socket.on("voice:ice", handleVoiceIce);
-    socket.on("voice:user-left", handleVoiceUserLeft);
+  socket.on("voice:peer:left", handleVoicePeerLeft);
     socket.on("mp:error", handleMpError);
 
     return () => {
       window.clearTimeout(timeout);
       socket.off("room:update", handleRoomUpdate);
+      socket.off("room:ready:update", handleReadyUpdate);
       socket.off("member:joined", handleMemberJoined);
       socket.off("member:left", handleMemberLeft);
       socket.off("chat:history", handleChatHistory);
       socket.off("chat:message", handleChatMessage);
       socket.off("game:start", handleGameStart);
-      socket.off("me", handleMeInfo);
-      socket.off("voice:user-joined", handleVoiceUserJoined);
+      socket.off("mp:auth:ok", handleAuthOk);
+      socket.off("voice:joined", handleVoiceJoined);
+      socket.off("voice:peer:joined", handleVoicePeerJoined);
       socket.off("voice:offer", handleVoiceOffer);
       socket.off("voice:answer", handleVoiceAnswer);
       socket.off("voice:ice", handleVoiceIce);
-      socket.off("voice:user-left", handleVoiceUserLeft);
+      socket.off("voice:peer:left", handleVoicePeerLeft);
       socket.off("mp:error", handleMpError);
     };
-  }, [socket, connected, roomId, mode, initialName, toast, router, createPeerConn, room?.roomId]);
+  }, [socket, connected, roomId, mode, initialName, toast, router, createPeerConn, room?.roomId, token, recomputeVoiceMembers]);
 
   // Auto-scroll chat
   useEffect(() => {
@@ -279,16 +443,25 @@ export default function StudioMultiplayerRoom() {
   };
 
   const toggleReady = () => {
-    if (!socket || !room) return;
-    const next = !ready;
+    if (!socket || !room || !myUserId) return;
+    const next = !iAmReady;
     socket.emit("room:ready", { token, ready: next, roomId: room.roomId });
-    setReady(next);
   };
 
-  const handleStartSession = () => {
-    if (!socket || !room) return;
-    socket.emit("game:start", { token, roomId: room.roomId });
-    toast.info("Starting session...", "Synchronizing all players");
+  const handleOpenStartSession = async () => {
+    if (!room) return;
+    if (!isHost) {
+      toast.info("Host only", "Only the room host can start the session");
+      return;
+    }
+    if (!allReady) {
+      toast.info("Waiting players", "All room members must be ready before starting");
+      return;
+    }
+    setShowStartPicker(true);
+    if (!arcadeItems.length) {
+      await loadArcadeForStart();
+    }
   };
 
   const handleLeave = () => {
@@ -301,7 +474,6 @@ export default function StudioMultiplayerRoom() {
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
       localStreamRef.current = stream;
-      setVoiceJoined(true);
       socket?.emit("voice:join", { token, roomId: room?.roomId });
       toast.success("Voice connected", "You're now in the voice channel");
     } catch {
@@ -468,7 +640,7 @@ export default function StudioMultiplayerRoom() {
                   key={member.userId}
                   member={member}
                   isHost={room?.hostUserId === member.userId}
-                  isReady={readyUserIds.includes(member.userId)}
+                  isReady={readyUserIds.includes(String(member.userId))}
                   inVoice={voiceMembers.includes(String(member.userId))}
                 />
               ))
@@ -560,18 +732,18 @@ export default function StudioMultiplayerRoom() {
                   whileHover={{ scale: 1.03 }}
                   whileTap={{ scale: 0.97 }}
                   onClick={toggleReady}
-                  className={`flex-1 group relative p-6 rounded-[28px] border-2 transition-all overflow-hidden ${ready
+                  className={`flex-1 group relative p-6 rounded-[28px] border-2 transition-all overflow-hidden ${iAmReady
                       ? "bg-emerald-500/10 border-emerald-500/40 text-emerald-400"
                       : "bg-white/[0.04] border-white/10 hover:border-white/20 text-zinc-300"
                     }`}
                 >
-                  {ready && <div className="absolute inset-0 bg-emerald-500/5 animate-pulse" />}
+                  {iAmReady && <div className="absolute inset-0 bg-emerald-500/5 animate-pulse" />}
                   <div className="relative z-10 flex flex-col items-center gap-3">
-                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${ready ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/30" : "bg-white/10 group-hover:bg-white/20"}`}>
-                      {ready ? <CheckCircle2 className="w-6 h-6" /> : <Circle className="w-6 h-6" />}
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center transition-all ${iAmReady ? "bg-emerald-500 text-white shadow-lg shadow-emerald-500/30" : "bg-white/10 group-hover:bg-white/20"}`}>
+                      {iAmReady ? <CheckCircle2 className="w-6 h-6" /> : <Circle className="w-6 h-6" />}
                     </div>
                     <div>
-                      <div className="text-base font-black tracking-tight text-center">{ready ? "I AM READY" : "PREPARE READY"}</div>
+                      <div className="text-base font-black tracking-tight text-center">{iAmReady ? "I AM READY" : "PREPARE READY"}</div>
                       <div className="text-[10px] font-bold opacity-50 uppercase tracking-widest mt-0.5 text-center">Status Sync</div>
                     </div>
                   </div>
@@ -581,8 +753,8 @@ export default function StudioMultiplayerRoom() {
                 <motion.button
                   whileHover={{ scale: 1.03 }}
                   whileTap={{ scale: 0.97 }}
-                  onClick={handleStartSession}
-                  disabled={!room}
+                  onClick={handleOpenStartSession}
+                  disabled={!room || !isHost || !allReady || startingSession}
                   className="flex-1 group relative p-6 rounded-[28px] bg-gradient-to-br from-indigo-500 via-indigo-600 to-fuchsia-600 text-white shadow-2xl shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all disabled:opacity-25 disabled:pointer-events-none overflow-hidden"
                 >
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
@@ -592,7 +764,9 @@ export default function StudioMultiplayerRoom() {
                     </div>
                     <div>
                       <div className="text-base font-black tracking-tight text-center">START SESSION</div>
-                      <div className="text-[10px] font-bold opacity-70 uppercase tracking-widest mt-0.5 text-center">Initialize Game</div>
+                      <div className="text-[10px] font-bold opacity-70 uppercase tracking-widest mt-0.5 text-center">
+                        {isHost ? (allReady ? "Choose Arcade Game" : "Waiting Members") : "Host Only"}
+                      </div>
                     </div>
                   </div>
                 </motion.button>
@@ -661,6 +835,75 @@ export default function StudioMultiplayerRoom() {
           </div>
         </div>
       </div>
+
+      <AnimatePresence>
+        {showStartPicker && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50"
+          >
+            <button
+              onClick={() => setShowStartPicker(false)}
+              className="absolute inset-0 bg-black/70 backdrop-blur-sm"
+              aria-label="Close"
+            />
+            <motion.div
+              initial={{ opacity: 0, y: 20, scale: 0.96 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 20, scale: 0.96 }}
+              className="absolute left-1/2 top-1/2 w-[min(860px,92vw)] -translate-x-1/2 -translate-y-1/2 rounded-3xl border border-white/10 bg-[#0c0d14] shadow-2xl overflow-hidden"
+            >
+              <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between">
+                <div>
+                  <h3 className="text-white font-black text-lg tracking-tight">Start Session from Arcade</h3>
+                  <p className="text-zinc-500 text-xs uppercase tracking-widest mt-1">All players will launch the same game</p>
+                </div>
+                <button
+                  onClick={() => setShowStartPicker(false)}
+                  className="p-2 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-zinc-400"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+
+              <div className="p-6 max-h-[65vh] overflow-y-auto space-y-3">
+                {loadingArcade ? (
+                  <div className="py-12 text-center text-zinc-400 text-sm font-bold uppercase tracking-widest">Loading arcade feed…</div>
+                ) : arcadeItems.length === 0 ? (
+                  <div className="py-12 text-center text-zinc-500 text-sm">No arcade games available right now.</div>
+                ) : (
+                  arcadeItems.slice(0, 16).map((it: any, idx: number) => {
+                    const title = String(it?.title || it?.name || `Game ${idx + 1}`);
+                    const creator = String(it?.ownerUsername || it?.creatorUsername || it?.creator || "creator");
+                    const playUrl = extractPlayUrl(it);
+                    const playable = playUrl.trim().length > 0;
+                    return (
+                      <button
+                        key={String(it?.id || it?._id || idx)}
+                        disabled={!playable || startingSession}
+                        onClick={() => startSessionWithArcade(it)}
+                        className="w-full text-left p-4 rounded-2xl border border-white/10 bg-white/[0.03] hover:bg-indigo-500/10 hover:border-indigo-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <div className="text-white font-black text-sm tracking-tight">{title}</div>
+                            <div className="text-zinc-500 text-xs mt-1">by {creator}</div>
+                          </div>
+                          <div className="text-[10px] font-black uppercase tracking-widest text-zinc-500">
+                            {playable ? "Launch" : "No URL"}
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </UserShell>
   );
 }

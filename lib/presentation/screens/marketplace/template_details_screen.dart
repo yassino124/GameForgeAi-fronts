@@ -22,10 +22,7 @@ import '../../widgets/widgets.dart';
 class TemplateDetailsScreen extends StatefulWidget {
   final String templateId;
 
-  const TemplateDetailsScreen({
-    super.key,
-    required this.templateId,
-  });
+  const TemplateDetailsScreen({super.key, required this.templateId});
 
   @override
   State<TemplateDetailsScreen> createState() => _TemplateDetailsScreenState();
@@ -79,18 +76,28 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
     final token = _getToken();
     if (token == null || token.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: const Text('Please sign in.'), backgroundColor: cs.error),
+        SnackBar(
+          content: const Text('Please sign in.'),
+          backgroundColor: cs.error,
+        ),
       );
       return;
     }
 
     try {
-      final res = await TemplatesService.getTemplateDownloadUrl(token: token, id: widget.templateId);
+      final res = await TemplatesService.getTemplateDownloadUrl(
+        token: token,
+        id: widget.templateId,
+      );
       if (!mounted) return;
       if (res['success'] != true) {
-        throw Exception(res['message']?.toString() ?? 'Failed to get download link');
+        throw Exception(
+          res['message']?.toString() ?? 'Failed to get download link',
+        );
       }
-      final url = (res['data'] is Map) ? (res['data'] as Map)['url']?.toString() : null;
+      final url = (res['data'] is Map)
+          ? (res['data'] as Map)['url']?.toString()
+          : null;
       if (url == null || url.trim().isEmpty) {
         throw Exception('No download link returned');
       }
@@ -101,13 +108,19 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
       final ok = await launchUrl(u, mode: LaunchMode.externalApplication);
       if (!ok && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: const Text('Could not open download link'), backgroundColor: cs.error),
+          SnackBar(
+            content: const Text('Could not open download link'),
+            backgroundColor: cs.error,
+          ),
         );
       }
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(e.toString().replaceFirst('Exception: ', '')), backgroundColor: cs.error),
+        SnackBar(
+          content: Text(e.toString().replaceFirst('Exception: ', '')),
+          backgroundColor: cs.error,
+        ),
       );
     }
   }
@@ -116,14 +129,18 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
     final cs = Theme.of(context).colorScheme;
 
     final apiBase = ApiService.baseUrl; // e.g. http://127.0.0.1:3000/api
-    final templateApiUrl = '${apiBase.replaceAll(RegExp(r"/+$"), '')}/templates/${widget.templateId}';
+    final templateApiUrl =
+        '${apiBase.replaceAll(RegExp(r"/+$"), '')}/templates/${widget.templateId}';
 
     String? resolvedZipUrl = downloadUrl;
     if (resolvedZipUrl == null || resolvedZipUrl.trim().isEmpty) {
       try {
         final token = _getToken();
         if (token != null && token.trim().isNotEmpty) {
-          final res = await TemplatesService.getTemplateDownloadUrl(token: token, id: widget.templateId);
+          final res = await TemplatesService.getTemplateDownloadUrl(
+            token: token,
+            id: widget.templateId,
+          );
           if (res['success'] == true && res['data'] is Map) {
             resolvedZipUrl = (res['data'] as Map)['url']?.toString();
           }
@@ -133,14 +150,21 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
       }
     }
 
-    final zipLine = (resolvedZipUrl != null && resolvedZipUrl.trim().isNotEmpty) ? resolvedZipUrl!.trim() : null;
-    final text = zipLine != null ? '${templateApiUrl}\n${zipLine}' : templateApiUrl;
+    final zipLine = (resolvedZipUrl != null && resolvedZipUrl.trim().isNotEmpty)
+        ? resolvedZipUrl!.trim()
+        : null;
+    final text = zipLine != null
+        ? '${templateApiUrl}\n${zipLine}'
+        : templateApiUrl;
 
     try {
       await Clipboard.setData(ClipboardData(text: text));
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: const Text('Link copied'), backgroundColor: cs.primary),
+        SnackBar(
+          content: const Text('Link copied'),
+          backgroundColor: cs.primary,
+        ),
       );
     } catch (e) {
       if (!mounted) return;
@@ -163,16 +187,24 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
       final res = await AiService.listModels(token: token);
       if (!mounted) return;
 
-      final data = (res['data'] is Map) ? Map<String, dynamic>.from(res['data'] as Map) : <String, dynamic>{};
-      final v1beta = (data['v1beta'] is Map) ? Map<String, dynamic>.from(data['v1beta'] as Map) : null;
-      final v1 = (data['v1'] is Map) ? Map<String, dynamic>.from(data['v1'] as Map) : null;
+      final data = (res['data'] is Map)
+          ? Map<String, dynamic>.from(res['data'] as Map)
+          : <String, dynamic>{};
+      final v1beta = (data['v1beta'] is Map)
+          ? Map<String, dynamic>.from(data['v1beta'] as Map)
+          : null;
+      final v1 = (data['v1'] is Map)
+          ? Map<String, dynamic>.from(data['v1'] as Map)
+          : null;
 
       String formatModels(Map<String, dynamic>? payload) {
         if (payload == null) return 'No data';
         if (payload['ok'] != true) {
           return 'Error (${payload['status']}): ${payload['error'] ?? ''}';
         }
-        final models = (payload['models'] is List) ? (payload['models'] as List) : const [];
+        final models = (payload['models'] is List)
+            ? (payload['models'] as List)
+            : const [];
         if (models.isEmpty) return 'No models returned';
 
         final lines = <String>[];
@@ -180,10 +212,15 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
           if (m is! Map) continue;
           final name = m['name']?.toString() ?? '';
           final methods = (m['supportedGenerationMethods'] is List)
-              ? (m['supportedGenerationMethods'] as List).map((e) => e?.toString() ?? '').where((e) => e.isNotEmpty).toList()
+              ? (m['supportedGenerationMethods'] as List)
+                    .map((e) => e?.toString() ?? '')
+                    .where((e) => e.isNotEmpty)
+                    .toList()
               : <String>[];
           if (name.isEmpty) continue;
-          lines.add('${name}${methods.isEmpty ? '' : '  (${methods.join(', ')})'}');
+          lines.add(
+            '${name}${methods.isEmpty ? '' : '  (${methods.join(', ')})'}',
+          );
         }
         return lines.isEmpty ? 'No usable models' : lines.join('\n');
       }
@@ -203,11 +240,21 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
                   children: [
                     Text('v1beta', style: AppTypography.subtitle2),
                     const SizedBox(height: AppSpacing.xs),
-                    Text(formatModels(v1beta), style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant)),
+                    Text(
+                      formatModels(v1beta),
+                      style: AppTypography.caption.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
                     const SizedBox(height: AppSpacing.lg),
                     Text('v1', style: AppTypography.subtitle2),
                     const SizedBox(height: AppSpacing.xs),
-                    Text(formatModels(v1), style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant)),
+                    Text(
+                      formatModels(v1),
+                      style: AppTypography.caption.copyWith(
+                        color: cs.onSurfaceVariant,
+                      ),
+                    ),
                   ],
                 ),
               ),
@@ -251,14 +298,21 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
 
       if (res['success'] != true) {
         setState(() {
-          _pendingError = res['message']?.toString() ?? 'Failed to load pending reviews';
+          _pendingError =
+              res['message']?.toString() ?? 'Failed to load pending reviews';
           _pendingReviews = [];
         });
         return;
       }
 
       final data = (res['data'] is List)
-          ? (res['data'] as List).map((e) => e is Map ? Map<String, dynamic>.from(e) : <String, dynamic>{}).toList()
+          ? (res['data'] as List)
+                .map(
+                  (e) => e is Map
+                      ? Map<String, dynamic>.from(e)
+                      : <String, dynamic>{},
+                )
+                .toList()
           : <Map<String, dynamic>>[];
 
       setState(() {
@@ -302,7 +356,9 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
       if (res['success'] != true) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(res['message']?.toString() ?? 'Failed to approve review'),
+            content: Text(
+              res['message']?.toString() ?? 'Failed to approve review',
+            ),
             backgroundColor: cs.error,
           ),
         );
@@ -310,7 +366,10 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: const Text('Review approved.'), backgroundColor: cs.primary),
+        SnackBar(
+          content: const Text('Review approved.'),
+          backgroundColor: cs.primary,
+        ),
       );
 
       await _load();
@@ -364,10 +423,15 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
     });
 
     try {
-      final res = await TemplatesService.getTemplateAccess(token: token, templateId: widget.templateId);
+      final res = await TemplatesService.getTemplateAccess(
+        token: token,
+        templateId: widget.templateId,
+      );
       if (!mounted) return;
       final data = res['data'];
-      final has = (res['success'] == true && data is Map) ? (data['hasAccess'] == true) : false;
+      final has = (res['success'] == true && data is Map)
+          ? (data['hasAccess'] == true)
+          : false;
       setState(() {
         _hasAccess = has;
       });
@@ -392,13 +456,16 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
       final codeStr = code?.toString();
       final message = e.error.message;
       if (message != null && message.trim().isNotEmpty) {
-        return codeStr != null && codeStr.trim().isNotEmpty ? '$codeStr: $message' : message;
+        return codeStr != null && codeStr.trim().isNotEmpty
+            ? '$codeStr: $message'
+            : message;
       }
       if (codeStr != null && codeStr.trim().isNotEmpty) return codeStr;
       return 'Stripe error';
     }
     final msg = e.toString();
-    if (msg.startsWith('Exception: ')) return msg.replaceFirst('Exception: ', '');
+    if (msg.startsWith('Exception: '))
+      return msg.replaceFirst('Exception: ', '');
     return msg;
   }
 
@@ -410,14 +477,20 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
     final token = _getToken();
     if (token == null || token.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: const Text('Please sign in to purchase.'), backgroundColor: cs.error),
+        SnackBar(
+          content: const Text('Please sign in to purchase.'),
+          backgroundColor: cs.error,
+        ),
       );
       return;
     }
 
     if (Stripe.publishableKey.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: const Text('Stripe is not configured.'), backgroundColor: cs.error),
+        SnackBar(
+          content: const Text('Stripe is not configured.'),
+          backgroundColor: cs.error,
+        ),
       );
       return;
     }
@@ -432,10 +505,14 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
         templateId: widget.templateId,
       );
       if (res['success'] != true) {
-        throw Exception(res['message']?.toString() ?? 'Failed to start purchase');
+        throw Exception(
+          res['message']?.toString() ?? 'Failed to start purchase',
+        );
       }
 
-      final data = (res['data'] is Map) ? Map<String, dynamic>.from(res['data'] as Map) : <String, dynamic>{};
+      final data = (res['data'] is Map)
+          ? Map<String, dynamic>.from(res['data'] as Map)
+          : <String, dynamic>{};
       final clientSecret = data['paymentIntentClientSecret']?.toString() ?? '';
       final paymentIntentId = data['paymentIntentId']?.toString() ?? '';
 
@@ -474,7 +551,9 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
         paymentIntentId: paymentIntentId,
       );
       if (confirmRes['success'] != true) {
-        throw Exception(confirmRes['message']?.toString() ?? 'Purchase confirmation failed');
+        throw Exception(
+          confirmRes['message']?.toString() ?? 'Purchase confirmation failed',
+        );
       }
 
       if (!mounted) return;
@@ -482,7 +561,9 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
         _hasAccess = true;
       });
 
-      final template = (confirmRes['data'] is Map) ? (confirmRes['data'] as Map)['template'] : null;
+      final template = (confirmRes['data'] is Map)
+          ? (confirmRes['data'] as Map)['template']
+          : null;
       if (template is Map) {
         setState(() {
           _template = Map<String, dynamic>.from(template);
@@ -490,12 +571,18 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
       }
 
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: const Text('Purchase successful. Template unlocked.'), backgroundColor: cs.primary),
+        SnackBar(
+          content: const Text('Purchase successful. Template unlocked.'),
+          backgroundColor: cs.primary,
+        ),
       );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(_formatStripeError(e)), backgroundColor: cs.error),
+        SnackBar(
+          content: Text(_formatStripeError(e)),
+          backgroundColor: cs.error,
+        ),
       );
     } finally {
       if (!mounted) return;
@@ -515,7 +602,13 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
       final res = await TemplatesService.listTemplateReviews(widget.templateId);
       if (!mounted) return;
       final data = (res['success'] == true && res['data'] is List)
-          ? (res['data'] as List).map((e) => e is Map ? Map<String, dynamic>.from(e) : <String, dynamic>{}).toList()
+          ? (res['data'] as List)
+                .map(
+                  (e) => e is Map
+                      ? Map<String, dynamic>.from(e)
+                      : <String, dynamic>{},
+                )
+                .toList()
           : <Map<String, dynamic>>[];
 
       setState(() {
@@ -530,7 +623,10 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
   }
 
   Future<void> _pickNewPreviewImage() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.image, withData: false);
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      withData: false,
+    );
     if (result == null || result.files.isEmpty) return;
     final p = result.files.single.path;
     if (p == null || p.isEmpty) return;
@@ -540,7 +636,11 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
   }
 
   Future<void> _pickNewScreenshots() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.image, allowMultiple: true, withData: false);
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.image,
+      allowMultiple: true,
+      withData: false,
+    );
     if (result == null || result.files.isEmpty) return;
     final files = result.files
         .map((f) => f.path)
@@ -555,7 +655,10 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
   }
 
   Future<void> _pickNewPreviewVideo() async {
-    final result = await FilePicker.platform.pickFiles(type: FileType.video, withData: false);
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.video,
+      withData: false,
+    );
     if (result == null || result.files.isEmpty) return;
     final p = result.files.single.path;
     if (p == null || p.isEmpty) return;
@@ -569,7 +672,9 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
     final token = _getToken();
     if (token == null || token.trim().isEmpty) return;
 
-    if (_newPreviewImage == null && _newPreviewVideo == null && _newScreenshots.isEmpty) {
+    if (_newPreviewImage == null &&
+        _newPreviewVideo == null &&
+        _newScreenshots.isEmpty) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: const Text('Please select at least one media file')),
@@ -598,12 +703,14 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
           _newScreenshots = [];
           _newPreviewVideo = null;
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: const Text('Media updated')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: const Text('Media updated')));
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(res['message']?.toString() ?? 'Upload failed')),
+          SnackBar(
+            content: Text(res['message']?.toString() ?? 'Upload failed'),
+          ),
         );
       }
     } finally {
@@ -626,9 +733,14 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
     });
 
     try {
-      final res = await TemplatesService.getTemplate(widget.templateId);
+      final res = await TemplatesService.getTemplate(
+        widget.templateId,
+        token: _getToken(),
+      );
       if (!mounted) return;
-      final data = (res['success'] == true && res['data'] is Map) ? Map<String, dynamic>.from(res['data'] as Map) : null;
+      final data = (res['success'] == true && res['data'] is Map)
+          ? Map<String, dynamic>.from(res['data'] as Map)
+          : null;
       if (data == null) {
         setState(() {
           _error = 'Failed to load template';
@@ -694,7 +806,10 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
     String out = s;
     for (final w in badWords) {
       final re = RegExp('\\b${RegExp.escape(w)}\\b', caseSensitive: false);
-      out = out.replaceAllMapped(re, (m) => '*' * (m.group(0)?.length ?? w.length));
+      out = out.replaceAllMapped(
+        re,
+        (m) => '*' * (m.group(0)?.length ?? w.length),
+      );
     }
     return out;
   }
@@ -757,10 +872,14 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
         comment: sanitized,
       );
       if (res['success'] != true) {
-        throw Exception(res['message']?.toString() ?? 'Failed to submit review');
+        throw Exception(
+          res['message']?.toString() ?? 'Failed to submit review',
+        );
       }
 
-      final data = (res['data'] is Map) ? Map<String, dynamic>.from(res['data'] as Map) : <String, dynamic>{};
+      final data = (res['data'] is Map)
+          ? Map<String, dynamic>.from(res['data'] as Map)
+          : <String, dynamic>{};
       final status = data['reviewStatus']?.toString() ?? '';
 
       final msg = status == 'pending'
@@ -769,12 +888,9 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
 
       await _loadReviews();
 
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(msg),
-          backgroundColor: cs.primary,
-        ),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(msg), backgroundColor: cs.primary));
 
       setState(() {
         _userRating = 0;
@@ -810,12 +926,16 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
         setState(() {
           _template = Map<String, dynamic>.from(res['data'] as Map);
         });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: const Text('AI metadata generated')),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: const Text('AI metadata generated')));
       } else {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(res['message']?.toString() ?? 'Failed to generate AI metadata')),
+          SnackBar(
+            content: Text(
+              res['message']?.toString() ?? 'Failed to generate AI metadata',
+            ),
+          ),
         );
       }
     } finally {
@@ -834,21 +954,39 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
     final name = t?['name']?.toString() ?? 'Template';
     final desc = t?['description']?.toString() ?? '';
     final category = t?['category']?.toString() ?? 'General';
-    final rating = (t?['rating'] is num) ? (t?['rating'] as num).toDouble() : 4.7;
-    final downloads = (t?['downloads'] is num) ? (t?['downloads'] as num).toInt() : 0;
+    final rating = (t?['rating'] is num)
+        ? (t?['rating'] as num).toDouble()
+        : 4.7;
+    final downloads = (t?['downloads'] is num)
+        ? (t?['downloads'] as num).toInt()
+        : 0;
     final price = (t?['price'] is num) ? (t?['price'] as num).toDouble() : 0.0;
+    final originalPrice = (t?['originalPrice'] is num)
+        ? (t?['originalPrice'] as num).toDouble()
+        : price;
+    final discountPercent = (t?['discountPercent'] is num)
+        ? (t?['discountPercent'] as num).toInt()
+        : 0;
+    final isDiscounted =
+        discountPercent > 0 && originalPrice > 0 && price < originalPrice;
     final isPaid = price > 0.0;
     final canUse = !isPaid || _hasAccess;
 
     final coverUrl = _resolveMediaUrl(t?['previewImageUrl']?.toString());
     final screenshotUrlsRaw = t?['screenshotUrls'];
     final screenshotUrls = (screenshotUrlsRaw is List)
-        ? screenshotUrlsRaw.map((x) => _resolveMediaUrl(x?.toString()) ?? '').where((x) => x.isNotEmpty).toList()
+        ? screenshotUrlsRaw
+              .map((x) => _resolveMediaUrl(x?.toString()) ?? '')
+              .where((x) => x.isNotEmpty)
+              .toList()
         : const <String>[];
     final previewVideoUrl = _resolveMediaUrl(t?['previewVideoUrl']?.toString());
     final tagsRaw = t?['tags'];
     final tags = (tagsRaw is List)
-        ? tagsRaw.map((e) => e?.toString() ?? '').where((e) => e.trim().isNotEmpty).toList()
+        ? tagsRaw
+              .map((e) => e?.toString() ?? '')
+              .where((e) => e.trim().isNotEmpty)
+              .toList()
         : <String>[];
     final compatBadges = _compatBadges(tags);
 
@@ -861,13 +999,23 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
     final auth = context.watch<AuthProvider>();
     final canEditMedia = auth.isAdmin || auth.isDevl;
 
-    final ai = (t?['aiMetadata'] is Map) ? Map<String, dynamic>.from(t?['aiMetadata'] as Map) : null;
+    final ai = (t?['aiMetadata'] is Map)
+        ? Map<String, dynamic>.from(t?['aiMetadata'] as Map)
+        : null;
     final aiTags = (ai?['tags'] is List)
-        ? (ai?['tags'] as List).map((e) => e?.toString() ?? '').where((e) => e.isNotEmpty).toList()
+        ? (ai?['tags'] as List)
+              .map((e) => e?.toString() ?? '')
+              .where((e) => e.isNotEmpty)
+              .toList()
         : <String>[];
-    final mediaPrompts = (ai?['mediaPrompts'] is Map) ? Map<String, dynamic>.from(ai?['mediaPrompts'] as Map) : null;
+    final mediaPrompts = (ai?['mediaPrompts'] is Map)
+        ? Map<String, dynamic>.from(ai?['mediaPrompts'] as Map)
+        : null;
     final shotPrompts = (mediaPrompts?['screenshots'] is List)
-        ? (mediaPrompts?['screenshots'] as List).map((e) => e?.toString() ?? '').where((e) => e.isNotEmpty).toList()
+        ? (mediaPrompts?['screenshots'] as List)
+              .map((e) => e?.toString() ?? '')
+              .where((e) => e.isNotEmpty)
+              .toList()
         : <String>[];
 
     final heroMedia = <String>[
@@ -881,6 +1029,8 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
             canUse: canUse,
             isPaidLocked: isPaid && !canUse,
             price: price,
+            originalPrice: originalPrice,
+            discountPercent: discountPercent,
             purchasing: _purchasing,
             forking: _forking,
             onDownload: canUse ? _downloadTemplateZip : null,
@@ -932,390 +1082,547 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
                 child: _loading
                     ? const _TemplateDetailsSkeleton()
                     : (_error != null)
-                        ? Center(
-                            child: Padding(
-                              padding: const EdgeInsets.all(AppSpacing.lg),
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  Text(_error!, style: AppTypography.body2.copyWith(color: cs.error)),
-                                  const SizedBox(height: AppSpacing.md),
-                                  CustomButton(text: 'Retry', onPressed: _load),
-                                ],
+                    ? Center(
+                        child: Padding(
+                          padding: const EdgeInsets.all(AppSpacing.lg),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(
+                                _error!,
+                                style: AppTypography.body2.copyWith(
+                                  color: cs.error,
+                                ),
+                              ),
+                              const SizedBox(height: AppSpacing.md),
+                              CustomButton(text: 'Retry', onPressed: _load),
+                            ],
+                          ),
+                        ),
+                      )
+                    : (t == null)
+                    ? const SizedBox.shrink()
+                    : SingleChildScrollView(
+                        padding: EdgeInsets.fromLTRB(
+                          AppSpacing.lg,
+                          AppSpacing.md,
+                          AppSpacing.lg,
+                          (bottomCta == null
+                              ? AppSpacing.xxxl
+                              : (AppSpacing.xxxl + 88)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _buildHeroCarousel(
+                              cs: cs,
+                              mediaUrls: heroMedia,
+                              previewVideoUrl: previewVideoUrl,
+                              onPlay:
+                                  previewVideoUrl == null ||
+                                      previewVideoUrl.trim().isEmpty
+                                  ? null
+                                  : () async {
+                                      await _openVideoPlayer(previewVideoUrl);
+                                    },
+                            ),
+                            if (heroMedia.length > 1) ...[
+                              const SizedBox(height: AppSpacing.md),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: List.generate(heroMedia.length, (i) {
+                                  final sel = i == _heroIndex;
+                                  return GestureDetector(
+                                    onTap: () {
+                                      _heroController.animateToPage(
+                                        i,
+                                        duration: const Duration(
+                                          milliseconds: 240,
+                                        ),
+                                        curve: Curves.easeOut,
+                                      );
+                                    },
+                                    child: AnimatedContainer(
+                                      duration: const Duration(
+                                        milliseconds: 220,
+                                      ),
+                                      curve: Curves.easeOut,
+                                      margin: const EdgeInsets.symmetric(
+                                        horizontal: 3,
+                                      ),
+                                      height: 6,
+                                      width: sel ? 18 : 6,
+                                      decoration: BoxDecoration(
+                                        color: sel
+                                            ? cs.primary
+                                            : cs.onSurface.withOpacity(0.16),
+                                        borderRadius: BorderRadius.circular(99),
+                                      ),
+                                    ),
+                                  );
+                                }),
+                              ),
+                              const SizedBox(height: AppSpacing.sm),
+                              SizedBox(
+                                height: 54,
+                                child: ListView.separated(
+                                  scrollDirection: Axis.horizontal,
+                                  itemCount: heroMedia.length,
+                                  separatorBuilder: (_, __) =>
+                                      const SizedBox(width: 10),
+                                  itemBuilder: (context, i) {
+                                    final u = heroMedia[i];
+                                    final sel = i == _heroIndex;
+                                    return GestureDetector(
+                                      onTap: () {
+                                        _heroController.animateToPage(
+                                          i,
+                                          duration: const Duration(
+                                            milliseconds: 240,
+                                          ),
+                                          curve: Curves.easeOut,
+                                        );
+                                      },
+                                      child: AnimatedContainer(
+                                        duration: const Duration(
+                                          milliseconds: 220,
+                                        ),
+                                        curve: Curves.easeOut,
+                                        width: 86,
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(
+                                            AppBorderRadius.medium,
+                                          ),
+                                          border: Border.all(
+                                            color: sel
+                                                ? cs.primary
+                                                : cs.outlineVariant.withOpacity(
+                                                    0.55,
+                                                  ),
+                                            width: sel ? 2 : 1,
+                                          ),
+                                        ),
+                                        clipBehavior: Clip.antiAlias,
+                                        child: Image.network(
+                                          u,
+                                          fit: BoxFit.cover,
+                                          errorBuilder:
+                                              (context, error, stackTrace) {
+                                                return Container(
+                                                  decoration:
+                                                      const BoxDecoration(
+                                                        gradient: AppColors
+                                                            .primaryGradient,
+                                                      ),
+                                                  child: const Center(
+                                                    child: Icon(
+                                                      Icons.image,
+                                                      color: Colors.white70,
+                                                      size: 20,
+                                                    ),
+                                                  ),
+                                                );
+                                              },
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: AppSpacing.lg),
+                            Text(
+                              name,
+                              style: AppTypography.h3.copyWith(
+                                fontWeight: FontWeight.w900,
                               ),
                             ),
-                          )
-                        : (t == null)
-                            ? const SizedBox.shrink()
-                            : SingleChildScrollView(
-                                padding: EdgeInsets.fromLTRB(
-                                  AppSpacing.lg,
-                                  AppSpacing.md,
-                                  AppSpacing.lg,
-                                  (bottomCta == null ? AppSpacing.xxxl : (AppSpacing.xxxl + 88)),
+                            const SizedBox(height: AppSpacing.xs),
+                            Text(
+                              category,
+                              style: AppTypography.caption.copyWith(
+                                color: cs.onSurfaceVariant,
+                              ),
+                            ),
+                            if (ownerId.trim().isNotEmpty ||
+                                ownerUsername.trim().isNotEmpty) ...[
+                              const SizedBox(height: AppSpacing.md),
+                              _PublisherTile(
+                                ownerId: ownerId,
+                                username: ownerUsername,
+                                avatarUrl: ownerAvatar,
+                                showDevBadge: isDevOwner,
+                                onTap: (ownerId.trim().isEmpty)
+                                    ? null
+                                    : () {
+                                        context.push(
+                                          '/creator/${Uri.encodeComponent(ownerId)}',
+                                        );
+                                      },
+                              ),
+                            ],
+                            if (compatBadges.isNotEmpty) ...[
+                              const SizedBox(height: AppSpacing.sm),
+                              Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: compatBadges
+                                    .take(3)
+                                    .map(
+                                      (b) => _DetailsBadgeChip(
+                                        label: b.label,
+                                        icon: b.icon,
+                                      ),
+                                    )
+                                    .toList(),
+                              ),
+                            ],
+                            const SizedBox(height: AppSpacing.md),
+                            Wrap(
+                              spacing: 10,
+                              runSpacing: 10,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              children: [
+                                _DetailsStatChip(
+                                  icon: Icons.star_rounded,
+                                  iconColor: AppColors.warning,
+                                  label: rating.toStringAsFixed(1),
+                                ),
+                                _DetailsStatChip(
+                                  icon: Icons.download_rounded,
+                                  label: '$downloads',
+                                  suffix: 'downloads',
+                                ),
+                                _DetailsPriceChip(
+                                  price: price,
+                                  originalPrice: originalPrice,
+                                  discountPercent: discountPercent,
+                                ),
+                                if (isDiscounted)
+                                  _DetailsBadgeChip(
+                                    label: '$discountPercent% OFF',
+                                    icon: Icons.local_offer_rounded,
+                                  ),
+                              ],
+                            ),
+                            if (desc.trim().isNotEmpty) ...[
+                              const SizedBox(height: AppSpacing.xl),
+                              Text('About', style: AppTypography.subtitle2),
+                              const SizedBox(height: AppSpacing.sm),
+                              Text(
+                                desc,
+                                style: AppTypography.body2.copyWith(
+                                  color: cs.onSurfaceVariant,
+                                  height: 1.35,
+                                ),
+                              ),
+                            ],
+                            if (canEditMedia) ...[
+                              const SizedBox(height: AppSpacing.xl),
+                              Text('Media', style: AppTypography.subtitle1),
+                              const SizedBox(height: AppSpacing.md),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(AppSpacing.lg),
+                                decoration: BoxDecoration(
+                                  color: cs.surface,
+                                  borderRadius: BorderRadius.circular(
+                                    AppBorderRadius.large,
+                                  ),
+                                  border: Border.all(
+                                    color: cs.outlineVariant.withOpacity(0.6),
+                                  ),
                                 ),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    _buildHeroCarousel(
-                                      cs: cs,
-                                      mediaUrls: heroMedia,
-                                      previewVideoUrl: previewVideoUrl,
-                                      onPlay: previewVideoUrl == null || previewVideoUrl.trim().isEmpty
-                                          ? null
-                                          : () async {
-                                              await _openVideoPlayer(previewVideoUrl);
-                                            },
-                                    ),
-                                    if (heroMedia.length > 1) ...[
-                                      const SizedBox(height: AppSpacing.md),
-                                      Row(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: List.generate(
-                                          heroMedia.length,
-                                          (i) {
-                                            final sel = i == _heroIndex;
-                                            return GestureDetector(
-                                              onTap: () {
-                                                _heroController.animateToPage(
-                                                  i,
-                                                  duration: const Duration(milliseconds: 240),
-                                                  curve: Curves.easeOut,
-                                                );
-                                              },
-                                              child: AnimatedContainer(
-                                                duration: const Duration(milliseconds: 220),
-                                                curve: Curves.easeOut,
-                                                margin: const EdgeInsets.symmetric(horizontal: 3),
-                                                height: 6,
-                                                width: sel ? 18 : 6,
-                                                decoration: BoxDecoration(
-                                                  color: sel ? cs.primary : cs.onSurface.withOpacity(0.16),
-                                                  borderRadius: BorderRadius.circular(99),
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                      ),
-                                      const SizedBox(height: AppSpacing.sm),
-                                      SizedBox(
-                                        height: 54,
-                                        child: ListView.separated(
-                                          scrollDirection: Axis.horizontal,
-                                          itemCount: heroMedia.length,
-                                          separatorBuilder: (_, __) => const SizedBox(width: 10),
-                                          itemBuilder: (context, i) {
-                                            final u = heroMedia[i];
-                                            final sel = i == _heroIndex;
-                                            return GestureDetector(
-                                              onTap: () {
-                                                _heroController.animateToPage(
-                                                  i,
-                                                  duration: const Duration(milliseconds: 240),
-                                                  curve: Curves.easeOut,
-                                                );
-                                              },
-                                              child: AnimatedContainer(
-                                                duration: const Duration(milliseconds: 220),
-                                                curve: Curves.easeOut,
-                                                width: 86,
-                                                decoration: BoxDecoration(
-                                                  borderRadius: BorderRadius.circular(AppBorderRadius.medium),
-                                                  border: Border.all(
-                                                    color: sel ? cs.primary : cs.outlineVariant.withOpacity(0.55),
-                                                    width: sel ? 2 : 1,
-                                                  ),
-                                                ),
-                                                clipBehavior: Clip.antiAlias,
-                                                child: Image.network(
-                                                  u,
-                                                  fit: BoxFit.cover,
-                                                  errorBuilder: (context, error, stackTrace) {
-                                                    return Container(
-                                                      decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
-                                                      child: const Center(
-                                                        child: Icon(Icons.image, color: Colors.white70, size: 20),
-                                                      ),
-                                                    );
-                                                  },
-                                                ),
-                                              ),
-                                            );
-                                          },
-                                        ),
-                                      ),
-                                    ],
-                                    const SizedBox(height: AppSpacing.lg),
-                                    Text(name, style: AppTypography.h3.copyWith(fontWeight: FontWeight.w900)),
-                                    const SizedBox(height: AppSpacing.xs),
-                                    Text(category, style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant)),
-                                    if (ownerId.trim().isNotEmpty || ownerUsername.trim().isNotEmpty) ...[
-                                      const SizedBox(height: AppSpacing.md),
-                                      _PublisherTile(
-                                        ownerId: ownerId,
-                                        username: ownerUsername,
-                                        avatarUrl: ownerAvatar,
-                                        showDevBadge: isDevOwner,
-                                        onTap: (ownerId.trim().isEmpty)
-                                            ? null
-                                            : () {
-                                                context.push('/creator/${Uri.encodeComponent(ownerId)}');
-                                              },
-                                      ),
-                                    ],
-                                    if (compatBadges.isNotEmpty) ...[
-                                      const SizedBox(height: AppSpacing.sm),
-                                      Wrap(
-                                        spacing: 8,
-                                        runSpacing: 8,
-                                        children: compatBadges
-                                            .take(3)
-                                            .map((b) => _DetailsBadgeChip(label: b.label, icon: b.icon))
-                                            .toList(),
-                                      ),
-                                    ],
-                                    const SizedBox(height: AppSpacing.md),
-                                    Wrap(
-                                      spacing: 10,
-                                      runSpacing: 10,
-                                      crossAxisAlignment: WrapCrossAlignment.center,
+                                    Row(
                                       children: [
-                                        _DetailsStatChip(
-                                          icon: Icons.star_rounded,
-                                          iconColor: AppColors.warning,
-                                          label: rating.toStringAsFixed(1),
+                                        Expanded(
+                                          child: Text(
+                                            _newPreviewImage?.path
+                                                    .split('/')
+                                                    .last ??
+                                                'No new preview image',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: AppTypography.body2.copyWith(
+                                              color: cs.onSurface,
+                                            ),
+                                          ),
                                         ),
-                                        _DetailsStatChip(
-                                          icon: Icons.download_rounded,
-                                          label: '$downloads',
-                                          suffix: 'downloads',
+                                        const SizedBox(width: AppSpacing.sm),
+                                        CustomButton(
+                                          text: 'Image',
+                                          onPressed: _uploadingMedia
+                                              ? null
+                                              : _pickNewPreviewImage,
+                                          isFullWidth: false,
                                         ),
-                                        _DetailsPriceChip(price: price),
                                       ],
                                     ),
-                                    if (desc.trim().isNotEmpty) ...[
-                                      const SizedBox(height: AppSpacing.xl),
-                                      Text('About', style: AppTypography.subtitle2),
-                                      const SizedBox(height: AppSpacing.sm),
-                                      Text(desc, style: AppTypography.body2.copyWith(color: cs.onSurfaceVariant, height: 1.35)),
-                                    ],
-                                    if (canEditMedia) ...[
-                                      const SizedBox(height: AppSpacing.xl),
-                                      Text('Media', style: AppTypography.subtitle1),
-                                      const SizedBox(height: AppSpacing.md),
-                                      Container(
-                                        width: double.infinity,
-                                        padding: const EdgeInsets.all(AppSpacing.lg),
-                                        decoration: BoxDecoration(
-                                          color: cs.surface,
-                                          borderRadius: BorderRadius.circular(AppBorderRadius.large),
-                                          border: Border.all(color: cs.outlineVariant.withOpacity(0.6)),
+                                    const SizedBox(height: AppSpacing.sm),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            _newScreenshots.isEmpty
+                                                ? 'No new screenshots'
+                                                : '${_newScreenshots.length} new screenshot(s)',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: AppTypography.body2.copyWith(
+                                              color: cs.onSurface,
+                                            ),
+                                          ),
                                         ),
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Row(
-                                              children: [
-                                                Expanded(
-                                                  child: Text(
-                                                    _newPreviewImage?.path.split('/').last ?? 'No new preview image',
-                                                    maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
-                                                    style: AppTypography.body2.copyWith(color: cs.onSurface),
-                                                  ),
-                                                ),
-                                                const SizedBox(width: AppSpacing.sm),
-                                                CustomButton(
-                                                  text: 'Image',
-                                                  onPressed: _uploadingMedia ? null : _pickNewPreviewImage,
-                                                  isFullWidth: false,
-                                                ),
-                                              ],
-                                            ),
-                                            const SizedBox(height: AppSpacing.sm),
-                                            Row(
-                                              children: [
-                                                Expanded(
-                                                  child: Text(
-                                                    _newScreenshots.isEmpty
-                                                        ? 'No new screenshots'
-                                                        : '${_newScreenshots.length} new screenshot(s)',
-                                                    maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
-                                                    style: AppTypography.body2.copyWith(color: cs.onSurface),
-                                                  ),
-                                                ),
-                                                const SizedBox(width: AppSpacing.sm),
-                                                CustomButton(
-                                                  text: 'Shots',
-                                                  onPressed: _uploadingMedia ? null : _pickNewScreenshots,
-                                                  isFullWidth: false,
-                                                ),
-                                              ],
-                                            ),
-                                            const SizedBox(height: AppSpacing.sm),
-                                            Row(
-                                              children: [
-                                                Expanded(
-                                                  child: Text(
-                                                    _newPreviewVideo?.path.split('/').last ?? 'No new preview video',
-                                                    maxLines: 1,
-                                                    overflow: TextOverflow.ellipsis,
-                                                    style: AppTypography.body2.copyWith(color: cs.onSurface),
-                                                  ),
-                                                ),
-                                                const SizedBox(width: AppSpacing.sm),
-                                                CustomButton(
-                                                  text: 'Video',
-                                                  onPressed: _uploadingMedia ? null : _pickNewPreviewVideo,
-                                                  isFullWidth: false,
-                                                ),
-                                              ],
-                                            ),
-                                            const SizedBox(height: AppSpacing.lg),
-                                            CustomButton(
-                                              text: _uploadingMedia ? 'Uploading…' : 'Upload Media',
-                                              onPressed: _uploadingMedia ? null : _uploadMedia,
-                                              isFullWidth: true,
-                                            ),
-                                          ],
+                                        const SizedBox(width: AppSpacing.sm),
+                                        CustomButton(
+                                          text: 'Shots',
+                                          onPressed: _uploadingMedia
+                                              ? null
+                                              : _pickNewScreenshots,
+                                          isFullWidth: false,
                                         ),
-                                      ),
-                                    ],
-                                    if (canEditMedia) ...[
-                                      Text('AI', style: AppTypography.subtitle1),
-                                      const SizedBox(height: AppSpacing.md),
-                                      Container(
-                                        width: double.infinity,
-                                        padding: const EdgeInsets.all(AppSpacing.lg),
-                                        decoration: BoxDecoration(
-                                          color: cs.surface,
-                                          borderRadius: BorderRadius.circular(AppBorderRadius.large),
-                                          border: Border.all(color: cs.outlineVariant.withOpacity(0.6)),
+                                      ],
+                                    ),
+                                    const SizedBox(height: AppSpacing.sm),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            _newPreviewVideo?.path
+                                                    .split('/')
+                                                    .last ??
+                                                'No new preview video',
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: AppTypography.body2.copyWith(
+                                              color: cs.onSurface,
+                                            ),
+                                          ),
                                         ),
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Align(
-                                              alignment: Alignment.centerRight,
-                                              child: TextButton(
-                                                onPressed: _listingModels ? null : _showAiModels,
-                                                child: Text(_listingModels ? 'Loading…' : 'List models'),
-                                              ),
-                                            ),
-                                            TextField(
-                                              controller: _aiNotesController,
-                                              minLines: 2,
-                                              maxLines: 4,
-                                              decoration: const InputDecoration(labelText: 'Notes (optional)'),
-                                            ),
-                                            const SizedBox(height: AppSpacing.md),
-                                            Row(
-                                              children: [
-                                                Expanded(
-                                                  child: Text(
-                                                    'Overwrite template fields',
-                                                    style: AppTypography.body2.copyWith(fontWeight: FontWeight.w600),
-                                                  ),
-                                                ),
-                                                Switch(
-                                                  value: _aiOverwrite,
-                                                  onChanged: _generatingAi
-                                                      ? null
-                                                      : (v) {
-                                                          setState(() {
-                                                            _aiOverwrite = v;
-                                                          });
-                                                        },
-                                                ),
-                                              ],
-                                            ),
-                                            const SizedBox(height: AppSpacing.md),
-                                            CustomButton(
-                                              text: _generatingAi ? 'Generating…' : 'Generate with Gemini',
-                                              onPressed: _generatingAi ? null : _generateAiMetadata,
-                                              isFullWidth: true,
-                                            ),
-                                            if (ai != null) ...[
-                                              const SizedBox(height: AppSpacing.lg),
-                                              Text('Generated', style: AppTypography.subtitle2),
-                                              const SizedBox(height: AppSpacing.sm),
-                                              if ((ai['description']?.toString() ?? '').trim().isNotEmpty)
-                                                Text(
-                                                  ai['description'].toString(),
-                                                  style: AppTypography.body2.copyWith(color: cs.onSurfaceVariant, height: 1.35),
-                                                ),
-                                              if (aiTags.isNotEmpty) ...[
-                                                const SizedBox(height: AppSpacing.sm),
-                                                Text('Tags: ${aiTags.join(', ')}', style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant)),
-                                              ],
-                                              if (mediaPrompts != null) ...[
-                                                const SizedBox(height: AppSpacing.md),
-                                                if ((mediaPrompts['cover']?.toString() ?? '').trim().isNotEmpty)
-                                                  Text('Cover prompt: ${mediaPrompts['cover']}', style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant)),
-                                                if (shotPrompts.isNotEmpty) ...[
-                                                  const SizedBox(height: AppSpacing.xs),
-                                                  Text('Screenshot prompts:', style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant)),
-                                                  const SizedBox(height: 6),
-                                                  ...shotPrompts.map(
-                                                    (p) => Padding(
-                                                      padding: const EdgeInsets.only(bottom: 4),
-                                                      child: Text('- $p', style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant)),
-                                                    ),
-                                                  ),
-                                                ],
-                                              ],
-                                            ],
-                                          ],
+                                        const SizedBox(width: AppSpacing.sm),
+                                        CustomButton(
+                                          text: 'Video',
+                                          onPressed: _uploadingMedia
+                                              ? null
+                                              : _pickNewPreviewVideo,
+                                          isFullWidth: false,
                                         ),
-                                      ),
-                                      const SizedBox(height: AppSpacing.xl),
-                                    ],
-                                    const SizedBox(height: AppSpacing.xl),
-                                    _UserReviewCard(
-                                      rating: _userRating,
-                                      onRatingChanged: (v) {
-                                        setState(() {
-                                          _userRating = v;
-                                        });
-                                      },
-                                      controller: _reviewController,
-                                      submitting: _submittingReview,
-                                      onSubmit: _submitReview,
+                                      ],
                                     ),
                                     const SizedBox(height: AppSpacing.lg),
-                                    Text('Reviews', style: AppTypography.subtitle2),
-                                    const SizedBox(height: AppSpacing.sm),
-                                    if (_reviewsLoading)
-                                      const Padding(
-                                        padding: EdgeInsets.symmetric(vertical: AppSpacing.md),
-                                        child: Center(child: CircularProgressIndicator()),
-                                      )
-                                    else if (_reviews.isEmpty)
-                                      Text('No reviews yet.', style: AppTypography.body2.copyWith(color: cs.onSurfaceVariant))
-                                    else
-                                      Column(
-                                        children: _reviews
-                                            .take(6)
-                                            .map((r) => Padding(
-                                                  padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                                                  child: _ReviewListItem(review: r),
-                                                ))
-                                            .toList(),
-                                      ),
-                                    const SizedBox(height: AppSpacing.xxxl),
+                                    CustomButton(
+                                      text: _uploadingMedia
+                                          ? 'Uploading…'
+                                          : 'Upload Media',
+                                      onPressed: _uploadingMedia
+                                          ? null
+                                          : _uploadMedia,
+                                      isFullWidth: true,
+                                    ),
                                   ],
                                 ),
                               ),
+                            ],
+                            if (canEditMedia) ...[
+                              Text('AI', style: AppTypography.subtitle1),
+                              const SizedBox(height: AppSpacing.md),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(AppSpacing.lg),
+                                decoration: BoxDecoration(
+                                  color: cs.surface,
+                                  borderRadius: BorderRadius.circular(
+                                    AppBorderRadius.large,
+                                  ),
+                                  border: Border.all(
+                                    color: cs.outlineVariant.withOpacity(0.6),
+                                  ),
+                                ),
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Align(
+                                      alignment: Alignment.centerRight,
+                                      child: TextButton(
+                                        onPressed: _listingModels
+                                            ? null
+                                            : _showAiModels,
+                                        child: Text(
+                                          _listingModels
+                                              ? 'Loading…'
+                                              : 'List models',
+                                        ),
+                                      ),
+                                    ),
+                                    TextField(
+                                      controller: _aiNotesController,
+                                      minLines: 2,
+                                      maxLines: 4,
+                                      decoration: const InputDecoration(
+                                        labelText: 'Notes (optional)',
+                                      ),
+                                    ),
+                                    const SizedBox(height: AppSpacing.md),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: Text(
+                                            'Overwrite template fields',
+                                            style: AppTypography.body2.copyWith(
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                        ),
+                                        Switch(
+                                          value: _aiOverwrite,
+                                          onChanged: _generatingAi
+                                              ? null
+                                              : (v) {
+                                                  setState(() {
+                                                    _aiOverwrite = v;
+                                                  });
+                                                },
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: AppSpacing.md),
+                                    CustomButton(
+                                      text: _generatingAi
+                                          ? 'Generating…'
+                                          : 'Generate with Gemini',
+                                      onPressed: _generatingAi
+                                          ? null
+                                          : _generateAiMetadata,
+                                      isFullWidth: true,
+                                    ),
+                                    if (ai != null) ...[
+                                      const SizedBox(height: AppSpacing.lg),
+                                      Text(
+                                        'Generated',
+                                        style: AppTypography.subtitle2,
+                                      ),
+                                      const SizedBox(height: AppSpacing.sm),
+                                      if ((ai['description']?.toString() ?? '')
+                                          .trim()
+                                          .isNotEmpty)
+                                        Text(
+                                          ai['description'].toString(),
+                                          style: AppTypography.body2.copyWith(
+                                            color: cs.onSurfaceVariant,
+                                            height: 1.35,
+                                          ),
+                                        ),
+                                      if (aiTags.isNotEmpty) ...[
+                                        const SizedBox(height: AppSpacing.sm),
+                                        Text(
+                                          'Tags: ${aiTags.join(', ')}',
+                                          style: AppTypography.caption.copyWith(
+                                            color: cs.onSurfaceVariant,
+                                          ),
+                                        ),
+                                      ],
+                                      if (mediaPrompts != null) ...[
+                                        const SizedBox(height: AppSpacing.md),
+                                        if ((mediaPrompts['cover']
+                                                    ?.toString() ??
+                                                '')
+                                            .trim()
+                                            .isNotEmpty)
+                                          Text(
+                                            'Cover prompt: ${mediaPrompts['cover']}',
+                                            style: AppTypography.caption
+                                                .copyWith(
+                                                  color: cs.onSurfaceVariant,
+                                                ),
+                                          ),
+                                        if (shotPrompts.isNotEmpty) ...[
+                                          const SizedBox(height: AppSpacing.xs),
+                                          Text(
+                                            'Screenshot prompts:',
+                                            style: AppTypography.caption
+                                                .copyWith(
+                                                  color: cs.onSurfaceVariant,
+                                                ),
+                                          ),
+                                          const SizedBox(height: 6),
+                                          ...shotPrompts.map(
+                                            (p) => Padding(
+                                              padding: const EdgeInsets.only(
+                                                bottom: 4,
+                                              ),
+                                              child: Text(
+                                                '- $p',
+                                                style: AppTypography.caption
+                                                    .copyWith(
+                                                      color:
+                                                          cs.onSurfaceVariant,
+                                                    ),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ],
+                                    ],
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: AppSpacing.xl),
+                            ],
+                            const SizedBox(height: AppSpacing.xl),
+                            _UserReviewCard(
+                              rating: _userRating,
+                              onRatingChanged: (v) {
+                                setState(() {
+                                  _userRating = v;
+                                });
+                              },
+                              controller: _reviewController,
+                              submitting: _submittingReview,
+                              onSubmit: _submitReview,
+                            ),
+                            const SizedBox(height: AppSpacing.lg),
+                            Text('Reviews', style: AppTypography.subtitle2),
+                            const SizedBox(height: AppSpacing.sm),
+                            if (_reviewsLoading)
+                              const Padding(
+                                padding: EdgeInsets.symmetric(
+                                  vertical: AppSpacing.md,
+                                ),
+                                child: Center(
+                                  child: CircularProgressIndicator(),
+                                ),
+                              )
+                            else if (_reviews.isEmpty)
+                              Text(
+                                'No reviews yet.',
+                                style: AppTypography.body2.copyWith(
+                                  color: cs.onSurfaceVariant,
+                                ),
+                              )
+                            else
+                              Column(
+                                children: _reviews
+                                    .take(6)
+                                    .map(
+                                      (r) => Padding(
+                                        padding: const EdgeInsets.only(
+                                          bottom: AppSpacing.md,
+                                        ),
+                                        child: _ReviewListItem(review: r),
+                                      ),
+                                    )
+                                    .toList(),
+                              ),
+                            const SizedBox(height: AppSpacing.xxxl),
+                          ],
+                        ),
+                      ),
               ),
               if (bottomCta != null)
-                Positioned(
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  child: bottomCta,
-                ),
+                Positioned(left: 0, right: 0, bottom: 0, child: bottomCta),
             ],
           ),
         ),
@@ -1329,7 +1636,9 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
     required String? previewVideoUrl,
     required VoidCallback? onPlay,
   }) {
-    final items = mediaUrls.isEmpty ? <String?>[null] : mediaUrls.map<String?>((e) => e).toList();
+    final items = mediaUrls.isEmpty
+        ? <String?>[null]
+        : mediaUrls.map<String?>((e) => e).toList();
 
     return ClipRRect(
       borderRadius: BorderRadius.circular(AppBorderRadius.large),
@@ -1349,8 +1658,16 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
                   final u = items[i];
                   if (u == null || u.trim().isEmpty) {
                     return Container(
-                      decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
-                      child: const Center(child: Icon(Icons.games, color: Colors.white70, size: 44)),
+                      decoration: const BoxDecoration(
+                        gradient: AppColors.primaryGradient,
+                      ),
+                      child: const Center(
+                        child: Icon(
+                          Icons.games,
+                          color: Colors.white70,
+                          size: 44,
+                        ),
+                      ),
                     );
                   }
                   return Image.network(
@@ -1358,8 +1675,16 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
                     fit: BoxFit.cover,
                     errorBuilder: (context, error, stackTrace) {
                       return Container(
-                        decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
-                        child: const Center(child: Icon(Icons.image, color: Colors.white70, size: 44)),
+                        decoration: const BoxDecoration(
+                          gradient: AppColors.primaryGradient,
+                        ),
+                        child: const Center(
+                          child: Icon(
+                            Icons.image,
+                            color: Colors.white70,
+                            size: 44,
+                          ),
+                        ),
                       );
                     },
                   );
@@ -1390,18 +1715,32 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
                   child: BackdropFilter(
                     filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         color: cs.surface.withOpacity(0.52),
                         borderRadius: BorderRadius.circular(999),
-                        border: Border.all(color: Colors.white.withOpacity(0.10)),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.10),
+                        ),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.auto_awesome_rounded, size: 16, color: cs.primary),
+                          Icon(
+                            Icons.auto_awesome_rounded,
+                            size: 16,
+                            color: cs.primary,
+                          ),
                           const SizedBox(width: 8),
-                          Text('Preview', style: AppTypography.caption.copyWith(fontWeight: FontWeight.w900)),
+                          Text(
+                            'Preview',
+                            style: AppTypography.caption.copyWith(
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -1416,7 +1755,10 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
                 child: _DetailsPressableGlow(
                   onTap: onPlay,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
                     decoration: BoxDecoration(
                       color: cs.primary,
                       borderRadius: BorderRadius.circular(999),
@@ -1433,7 +1775,13 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
                       children: [
                         Icon(Icons.play_arrow_rounded, color: cs.onPrimary),
                         const SizedBox(width: 6),
-                        Text('Play', style: AppTypography.caption.copyWith(color: cs.onPrimary, fontWeight: FontWeight.w900)),
+                        Text(
+                          'Play',
+                          style: AppTypography.caption.copyWith(
+                            color: cs.onPrimary,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
                       ],
                     ),
                   ),
@@ -1454,9 +1802,11 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
     final is3d = hasAny({'3d', '3d-ready', '3d_only'});
     final mobile = hasAny({'mobile', 'mobile-ready', 'android', 'ios'});
 
-    if (is2d) out.add(const _CompatBadge(label: '2D', icon: Icons.layers_outlined));
+    if (is2d)
+      out.add(const _CompatBadge(label: '2D', icon: Icons.layers_outlined));
     if (is3d) out.add(const _CompatBadge(label: '3D', icon: Icons.view_in_ar));
-    if (mobile) out.add(const _CompatBadge(label: 'Mobile', icon: Icons.phone_iphone));
+    if (mobile)
+      out.add(const _CompatBadge(label: 'Mobile', icon: Icons.phone_iphone));
 
     return out;
   }
@@ -1472,7 +1822,10 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
     final token = context.read<AuthProvider>().token;
     if (token == null || token.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: const Text('Please sign in to fork.'), backgroundColor: cs.error),
+        SnackBar(
+          content: const Text('Please sign in to fork.'),
+          backgroundColor: cs.error,
+        ),
       );
       return;
     }
@@ -1499,7 +1852,9 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
               TextField(
                 controller: descController,
                 maxLines: 3,
-                decoration: const InputDecoration(labelText: 'Description (optional)'),
+                decoration: const InputDecoration(
+                  labelText: 'Description (optional)',
+                ),
               ),
             ],
           ),
@@ -1537,7 +1892,9 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
         token: token,
         templateId: templateId,
         name: resultName!,
-        description: (resultDesc != null && resultDesc!.isNotEmpty) ? resultDesc : null,
+        description: (resultDesc != null && resultDesc!.isNotEmpty)
+            ? resultDesc
+            : null,
       );
 
       final data = created['data'];
@@ -1545,8 +1902,12 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
           ? (data['_id']?.toString() ?? data['id']?.toString())
           : null;
 
-      if (created['success'] != true || projectId == null || projectId.trim().isEmpty) {
-        throw Exception(created['message']?.toString() ?? 'Failed to fork template');
+      if (created['success'] != true ||
+          projectId == null ||
+          projectId.trim().isEmpty) {
+        throw Exception(
+          created['message']?.toString() ?? 'Failed to fork template',
+        );
       }
 
       if (!mounted) return;
@@ -1585,14 +1946,30 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) {
                           return Container(
-                            decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
-                            child: const Center(child: Icon(Icons.games, color: Colors.white70, size: 44)),
+                            decoration: const BoxDecoration(
+                              gradient: AppColors.primaryGradient,
+                            ),
+                            child: const Center(
+                              child: Icon(
+                                Icons.games,
+                                color: Colors.white70,
+                                size: 44,
+                              ),
+                            ),
                           );
                         },
                       )
                     : Container(
-                        decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
-                        child: const Center(child: Icon(Icons.games, color: Colors.white70, size: 44)),
+                        decoration: const BoxDecoration(
+                          gradient: AppColors.primaryGradient,
+                        ),
+                        child: const Center(
+                          child: Icon(
+                            Icons.games,
+                            color: Colors.white70,
+                            size: 44,
+                          ),
+                        ),
                       ),
               ),
               Positioned.fill(
@@ -1617,18 +1994,32 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
                   child: BackdropFilter(
                     filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                       decoration: BoxDecoration(
                         color: cs.surface.withOpacity(0.52),
                         borderRadius: BorderRadius.circular(999),
-                        border: Border.all(color: Colors.white.withOpacity(0.10)),
+                        border: Border.all(
+                          color: Colors.white.withOpacity(0.10),
+                        ),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.auto_awesome_rounded, size: 16, color: cs.primary),
+                          Icon(
+                            Icons.auto_awesome_rounded,
+                            size: 16,
+                            color: cs.primary,
+                          ),
                           const SizedBox(width: 8),
-                          Text('Preview', style: AppTypography.caption.copyWith(fontWeight: FontWeight.w900)),
+                          Text(
+                            'Preview',
+                            style: AppTypography.caption.copyWith(
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -1642,7 +2033,10 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
                   child: _DetailsPressableGlow(
                     onTap: onPlay,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
                       decoration: BoxDecoration(
                         color: cs.primary,
                         borderRadius: BorderRadius.circular(999),
@@ -1659,7 +2053,13 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
                         children: [
                           Icon(Icons.play_arrow_rounded, color: cs.onPrimary),
                           const SizedBox(width: 6),
-                          Text('Play', style: AppTypography.caption.copyWith(color: cs.onPrimary, fontWeight: FontWeight.w900)),
+                          Text(
+                            'Play',
+                            style: AppTypography.caption.copyWith(
+                              color: cs.onPrimary,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -1692,8 +2092,12 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
                   fit: BoxFit.cover,
                   errorBuilder: (context, error, stackTrace) {
                     return Container(
-                      decoration: const BoxDecoration(gradient: AppColors.primaryGradient),
-                      child: const Center(child: Icon(Icons.image, color: Colors.white70)),
+                      decoration: const BoxDecoration(
+                        gradient: AppColors.primaryGradient,
+                      ),
+                      child: const Center(
+                        child: Icon(Icons.image, color: Colors.white70),
+                      ),
                     );
                   },
                 ),
@@ -1734,10 +2138,16 @@ class _DetailsStatChip extends StatelessWidget {
         children: [
           Icon(icon, size: 16, color: iconColor ?? cs.primary),
           const SizedBox(width: 6),
-          Text(label, style: AppTypography.caption.copyWith(fontWeight: FontWeight.w900)),
+          Text(
+            label,
+            style: AppTypography.caption.copyWith(fontWeight: FontWeight.w900),
+          ),
           if (suffix != null && suffix!.trim().isNotEmpty) ...[
             const SizedBox(width: 4),
-            Text(suffix!, style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant)),
+            Text(
+              suffix!,
+              style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant),
+            ),
           ],
         ],
       ),
@@ -1747,28 +2157,70 @@ class _DetailsStatChip extends StatelessWidget {
 
 class _DetailsPriceChip extends StatelessWidget {
   final double price;
-  const _DetailsPriceChip({required this.price});
+  final double originalPrice;
+  final int discountPercent;
+
+  const _DetailsPriceChip({
+    required this.price,
+    this.originalPrice = 0,
+    this.discountPercent = 0,
+  });
 
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final isPaid = price > 0.0;
+    final hasDiscount =
+        discountPercent > 0 &&
+        originalPrice > 0 &&
+        isPaid &&
+        price < originalPrice;
     final label = isPaid ? '\$${price.toStringAsFixed(2)}' : 'FREE';
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        gradient: isPaid ? null : LinearGradient(colors: [cs.primary, cs.secondary]),
+        gradient: isPaid
+            ? null
+            : LinearGradient(colors: [cs.primary, cs.secondary]),
         color: isPaid ? cs.surface.withOpacity(0.72) : null,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: (isPaid ? cs.outlineVariant : Colors.white).withOpacity(0.35)),
-      ),
-      child: Text(
-        label,
-        style: AppTypography.caption.copyWith(
-          color: isPaid ? cs.onSurface : cs.onPrimary,
-          fontWeight: FontWeight.w900,
+        border: Border.all(
+          color: (isPaid ? cs.outlineVariant : Colors.white).withOpacity(0.35),
         ),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (hasDiscount) ...[
+            Text(
+              '\$${originalPrice.toStringAsFixed(2)}',
+              style: AppTypography.caption.copyWith(
+                color: cs.onSurfaceVariant,
+                fontWeight: FontWeight.w700,
+                decoration: TextDecoration.lineThrough,
+              ),
+            ),
+            const SizedBox(width: 6),
+          ],
+          Text(
+            label,
+            style: AppTypography.caption.copyWith(
+              color: isPaid ? cs.onSurface : cs.onPrimary,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
+          if (hasDiscount) ...[
+            const SizedBox(width: 6),
+            Text(
+              '-$discountPercent%',
+              style: AppTypography.caption.copyWith(
+                color: Colors.green,
+                fontWeight: FontWeight.w900,
+              ),
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -1778,6 +2230,8 @@ class _BottomCtaBar extends StatelessWidget {
   final bool canUse;
   final bool isPaidLocked;
   final double price;
+  final double originalPrice;
+  final int discountPercent;
   final bool purchasing;
   final bool forking;
   final VoidCallback? onDownload;
@@ -1789,6 +2243,8 @@ class _BottomCtaBar extends StatelessWidget {
     required this.canUse,
     required this.isPaidLocked,
     required this.price,
+    this.originalPrice = 0,
+    this.discountPercent = 0,
     required this.purchasing,
     required this.forking,
     required this.onDownload,
@@ -1800,29 +2256,53 @@ class _BottomCtaBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
+    final hasDiscount =
+        discountPercent > 0 &&
+        originalPrice > 0 &&
+        price > 0 &&
+        price < originalPrice;
+    final buyLabel = hasDiscount
+        ? 'Buy \$${price.toStringAsFixed(2)} (-$discountPercent%)'
+        : 'Buy \$${price.toStringAsFixed(2)}';
 
     return SafeArea(
       top: false,
       child: ClipRRect(
-        borderRadius: const BorderRadius.vertical(top: Radius.circular(AppBorderRadius.large)),
+        borderRadius: const BorderRadius.vertical(
+          top: Radius.circular(AppBorderRadius.large),
+        ),
         child: BackdropFilter(
           filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
           child: Container(
-            padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.md),
+            padding: const EdgeInsets.fromLTRB(
+              AppSpacing.lg,
+              AppSpacing.md,
+              AppSpacing.lg,
+              AppSpacing.md,
+            ),
             decoration: BoxDecoration(
               color: cs.surface.withOpacity(0.78),
-              border: Border(top: BorderSide(color: cs.outlineVariant.withOpacity(0.55))),
+              border: Border(
+                top: BorderSide(color: cs.outlineVariant.withOpacity(0.55)),
+              ),
             ),
             child: Row(
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
                     onPressed: onFork,
-                    icon: Icon(Icons.fork_right_rounded, color: (onFork == null) ? cs.onSurfaceVariant : cs.primary),
+                    icon: Icon(
+                      Icons.fork_right_rounded,
+                      color: (onFork == null)
+                          ? cs.onSurfaceVariant
+                          : cs.primary,
+                    ),
                     label: Text(
                       forking ? 'Forking…' : 'Fork',
                       style: AppTypography.buttonSmall.copyWith(
-                        color: (onFork == null) ? cs.onSurfaceVariant : cs.primary,
+                        color: (onFork == null)
+                            ? cs.onSurfaceVariant
+                            : cs.primary,
                         fontWeight: FontWeight.w900,
                       ),
                     ),
@@ -1835,19 +2315,33 @@ class _BottomCtaBar extends StatelessWidget {
                     child: Text(
                       purchasing
                           ? 'Processing…'
-                          : (isPaidLocked ? 'Buy \$${price.toStringAsFixed(2)}' : (canUse ? 'Use template' : 'Unavailable')),
-                      style: AppTypography.buttonSmall.copyWith(fontWeight: FontWeight.w900),
+                          : (isPaidLocked
+                                ? buyLabel
+                                : (canUse ? 'Use template' : 'Unavailable')),
+                      style: AppTypography.buttonSmall.copyWith(
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
                   ),
                 ),
                 const SizedBox(width: AppSpacing.md),
                 IconButton(
                   onPressed: onCopy,
-                  icon: Icon(Icons.link_rounded, color: (onCopy == null) ? cs.onSurfaceVariant : cs.onSurface),
+                  icon: Icon(
+                    Icons.link_rounded,
+                    color: (onCopy == null)
+                        ? cs.onSurfaceVariant
+                        : cs.onSurface,
+                  ),
                 ),
                 IconButton(
                   onPressed: onDownload,
-                  icon: Icon(Icons.download_rounded, color: (onDownload == null) ? cs.onSurfaceVariant : cs.onSurface),
+                  icon: Icon(
+                    Icons.download_rounded,
+                    color: (onDownload == null)
+                        ? cs.onSurfaceVariant
+                        : cs.onSurface,
+                  ),
                 ),
               ],
             ),
@@ -1879,7 +2373,9 @@ class _PublisherTile extends StatelessWidget {
     final handle = username.trim().isNotEmpty ? '@${username.trim()}' : ownerId;
 
     final avatar = (avatarUrl ?? '').trim();
-    final initial = username.trim().isNotEmpty ? username.trim().substring(0, 1).toUpperCase() : '';
+    final initial = username.trim().isNotEmpty
+        ? username.trim().substring(0, 1).toUpperCase()
+        : '';
 
     final tile = Container(
       width: double.infinity,
@@ -1911,7 +2407,10 @@ class _PublisherTile extends StatelessWidget {
                                   fontWeight: FontWeight.w900,
                                 ),
                               )
-                            : Icon(Icons.person_rounded, color: cs.onSurfaceVariant),
+                            : Icon(
+                                Icons.person_rounded,
+                                color: cs.onSurfaceVariant,
+                              ),
                       )
                     : Image.network(
                         avatar,
@@ -1926,7 +2425,10 @@ class _PublisherTile extends StatelessWidget {
                                       fontWeight: FontWeight.w900,
                                     ),
                                   )
-                                : Icon(Icons.person_rounded, color: cs.onSurfaceVariant),
+                                : Icon(
+                                    Icons.person_rounded,
+                                    color: cs.onSurfaceVariant,
+                                  ),
                           );
                         },
                       ),
@@ -1938,9 +2440,19 @@ class _PublisherTile extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text('Publisher', style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant)),
+                Text(
+                  'Publisher',
+                  style: AppTypography.caption.copyWith(
+                    color: cs.onSurfaceVariant,
+                  ),
+                ),
                 const SizedBox(height: 4),
-                Text(handle, style: AppTypography.body2.copyWith(fontWeight: FontWeight.w900)),
+                Text(
+                  handle,
+                  style: AppTypography.body2.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
               ],
             ),
           ),
@@ -1949,7 +2461,10 @@ class _PublisherTile extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [cs.primary.withOpacity(0.95), cs.secondary.withOpacity(0.90)],
+                  colors: [
+                    cs.primary.withOpacity(0.95),
+                    cs.secondary.withOpacity(0.90),
+                  ],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
@@ -1996,11 +2511,21 @@ class _TemplateDetailsSkeleton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.md, AppSpacing.lg, AppSpacing.xxxl),
+      padding: const EdgeInsets.fromLTRB(
+        AppSpacing.lg,
+        AppSpacing.md,
+        AppSpacing.lg,
+        AppSpacing.xxxl,
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const _DetailsShimmer(borderRadius: BorderRadius.all(Radius.circular(AppBorderRadius.large)), height: 210),
+          const _DetailsShimmer(
+            borderRadius: BorderRadius.all(
+              Radius.circular(AppBorderRadius.large),
+            ),
+            height: 210,
+          ),
           const SizedBox(height: AppSpacing.md),
           SizedBox(
             height: 170,
@@ -2009,28 +2534,60 @@ class _TemplateDetailsSkeleton extends StatelessWidget {
               itemCount: 3,
               separatorBuilder: (_, __) => const SizedBox(width: AppSpacing.md),
               itemBuilder: (_, __) => const _DetailsShimmer(
-                borderRadius: BorderRadius.all(Radius.circular(AppBorderRadius.medium)),
+                borderRadius: BorderRadius.all(
+                  Radius.circular(AppBorderRadius.medium),
+                ),
                 height: 170,
                 width: 240,
               ),
             ),
           ),
           const SizedBox(height: AppSpacing.lg),
-          const _DetailsShimmer(borderRadius: BorderRadius.all(Radius.circular(10)), height: 18, width: 240),
+          const _DetailsShimmer(
+            borderRadius: BorderRadius.all(Radius.circular(10)),
+            height: 18,
+            width: 240,
+          ),
           const SizedBox(height: 10),
-          const _DetailsShimmer(borderRadius: BorderRadius.all(Radius.circular(10)), height: 14, width: 140),
+          const _DetailsShimmer(
+            borderRadius: BorderRadius.all(Radius.circular(10)),
+            height: 14,
+            width: 140,
+          ),
           const SizedBox(height: AppSpacing.lg),
-          const _DetailsShimmer(borderRadius: BorderRadius.all(Radius.circular(999)), height: 28, width: 96),
+          const _DetailsShimmer(
+            borderRadius: BorderRadius.all(Radius.circular(999)),
+            height: 28,
+            width: 96,
+          ),
           const SizedBox(height: 10),
-          const _DetailsShimmer(borderRadius: BorderRadius.all(Radius.circular(999)), height: 28, width: 120),
+          const _DetailsShimmer(
+            borderRadius: BorderRadius.all(Radius.circular(999)),
+            height: 28,
+            width: 120,
+          ),
           const SizedBox(height: AppSpacing.xl),
-          const _DetailsShimmer(borderRadius: BorderRadius.all(Radius.circular(10)), height: 16, width: 160),
+          const _DetailsShimmer(
+            borderRadius: BorderRadius.all(Radius.circular(10)),
+            height: 16,
+            width: 160,
+          ),
           const SizedBox(height: 10),
-          const _DetailsShimmer(borderRadius: BorderRadius.all(Radius.circular(10)), height: 14),
+          const _DetailsShimmer(
+            borderRadius: BorderRadius.all(Radius.circular(10)),
+            height: 14,
+          ),
           const SizedBox(height: 8),
-          const _DetailsShimmer(borderRadius: BorderRadius.all(Radius.circular(10)), height: 14),
+          const _DetailsShimmer(
+            borderRadius: BorderRadius.all(Radius.circular(10)),
+            height: 14,
+          ),
           const SizedBox(height: 8),
-          const _DetailsShimmer(borderRadius: BorderRadius.all(Radius.circular(10)), height: 14, width: 260),
+          const _DetailsShimmer(
+            borderRadius: BorderRadius.all(Radius.circular(10)),
+            height: 14,
+            width: 260,
+          ),
         ],
       ),
     );
@@ -2104,7 +2661,13 @@ class _DetailsBadgeChip extends StatelessWidget {
         children: [
           Icon(icon, size: 14, color: cs.primary),
           const SizedBox(width: 6),
-          Text(label, style: AppTypography.caption.copyWith(color: cs.primary, fontWeight: FontWeight.w900)),
+          Text(
+            label,
+            style: AppTypography.caption.copyWith(
+              color: cs.primary,
+              fontWeight: FontWeight.w900,
+            ),
+          ),
         ],
       ),
     );
@@ -2115,19 +2678,27 @@ class _DetailsShimmer extends StatefulWidget {
   final BorderRadius borderRadius;
   final double height;
   final double? width;
-  const _DetailsShimmer({required this.borderRadius, required this.height, this.width});
+  const _DetailsShimmer({
+    required this.borderRadius,
+    required this.height,
+    this.width,
+  });
 
   @override
   State<_DetailsShimmer> createState() => _DetailsShimmerState();
 }
 
-class _DetailsShimmerState extends State<_DetailsShimmer> with SingleTickerProviderStateMixin {
+class _DetailsShimmerState extends State<_DetailsShimmer>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _c;
 
   @override
   void initState() {
     super.initState();
-    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 1200))..repeat();
+    _c = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
   }
 
   @override
@@ -2179,10 +2750,7 @@ class _CompatBadge {
   final String label;
   final IconData icon;
 
-  const _CompatBadge({
-    required this.label,
-    required this.icon,
-  });
+  const _CompatBadge({required this.label, required this.icon});
 }
 
 class _ReviewListItem extends StatelessWidget {
@@ -2194,8 +2762,12 @@ class _ReviewListItem extends StatelessWidget {
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
     final usernameRaw = review['username']?.toString();
-    final username = (usernameRaw != null && usernameRaw.trim().isNotEmpty) ? usernameRaw : 'User';
-    final rating = (review['rating'] is num) ? (review['rating'] as num).toInt() : 0;
+    final username = (usernameRaw != null && usernameRaw.trim().isNotEmpty)
+        ? usernameRaw
+        : 'User';
+    final rating = (review['rating'] is num)
+        ? (review['rating'] as num).toInt()
+        : 0;
     final comment = review['comment']?.toString() ?? '';
 
     return Container(
@@ -2214,7 +2786,9 @@ class _ReviewListItem extends StatelessWidget {
               Expanded(
                 child: Text(
                   username,
-                  style: AppTypography.subtitle2.copyWith(fontWeight: FontWeight.w700),
+                  style: AppTypography.subtitle2.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -2235,7 +2809,10 @@ class _ReviewListItem extends StatelessWidget {
           const SizedBox(height: AppSpacing.sm),
           Text(
             comment,
-            style: AppTypography.body2.copyWith(color: cs.onSurfaceVariant, height: 1.25),
+            style: AppTypography.body2.copyWith(
+              color: cs.onSurfaceVariant,
+              height: 1.25,
+            ),
           ),
         ],
       ),
@@ -2280,23 +2857,26 @@ class _UserReviewCard extends StatelessWidget {
               Text('Your rating', style: AppTypography.subtitle2),
               const Spacer(),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: AppSpacing.sm, vertical: AppSpacing.xs),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: AppSpacing.sm,
+                  vertical: AppSpacing.xs,
+                ),
                 decoration: BoxDecoration(
                   color: cs.primary.withOpacity(0.12),
                   borderRadius: AppBorderRadius.allSmall,
                 ),
                 child: Text(
                   rating == 0 ? 'Tap stars' : '$rating/5',
-                  style: AppTypography.caption.copyWith(color: cs.primary, fontWeight: FontWeight.w700),
+                  style: AppTypography.caption.copyWith(
+                    color: cs.primary,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
               ),
             ],
           ),
           const SizedBox(height: AppSpacing.md),
-          _StarRatingInput(
-            value: rating,
-            onChanged: onRatingChanged,
-          ),
+          _StarRatingInput(value: rating, onChanged: onRatingChanged),
           const SizedBox(height: AppSpacing.lg),
           TextField(
             controller: controller,
@@ -2309,15 +2889,22 @@ class _UserReviewCard extends StatelessWidget {
               fillColor: cs.surfaceVariant.withOpacity(0.35),
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(AppBorderRadius.large),
-                borderSide: BorderSide(color: cs.outlineVariant.withOpacity(0.6)),
+                borderSide: BorderSide(
+                  color: cs.outlineVariant.withOpacity(0.6),
+                ),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(AppBorderRadius.large),
-                borderSide: BorderSide(color: cs.outlineVariant.withOpacity(0.6)),
+                borderSide: BorderSide(
+                  color: cs.outlineVariant.withOpacity(0.6),
+                ),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(AppBorderRadius.large),
-                borderSide: BorderSide(color: cs.primary.withOpacity(0.8), width: 1.5),
+                borderSide: BorderSide(
+                  color: cs.primary.withOpacity(0.8),
+                  width: 1.5,
+                ),
               ),
             ),
           ),
@@ -2350,10 +2937,7 @@ class _StarRatingInput extends StatelessWidget {
   final int value;
   final ValueChanged<int> onChanged;
 
-  const _StarRatingInput({
-    required this.value,
-    required this.onChanged,
-  });
+  const _StarRatingInput({required this.value, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -2382,9 +2966,7 @@ class _StarRatingInput extends StatelessWidget {
 class _VideoPlayerDialog extends StatefulWidget {
   final String url;
 
-  const _VideoPlayerDialog({
-    required this.url,
-  });
+  const _VideoPlayerDialog({required this.url});
 
   @override
   State<_VideoPlayerDialog> createState() => _VideoPlayerDialogState();
@@ -2421,14 +3003,18 @@ class _VideoPlayerDialogState extends State<_VideoPlayerDialog> {
         child: FutureBuilder<void>(
           future: _init,
           builder: (context, snapshot) {
-            final ready = snapshot.connectionState == ConnectionState.done && _controller.value.isInitialized;
+            final ready =
+                snapshot.connectionState == ConnectionState.done &&
+                _controller.value.isInitialized;
             return Stack(
               children: [
                 Positioned.fill(
                   child: ready
                       ? Center(
                           child: AspectRatio(
-                            aspectRatio: _controller.value.aspectRatio == 0 ? 16 / 9 : _controller.value.aspectRatio,
+                            aspectRatio: _controller.value.aspectRatio == 0
+                                ? 16 / 9
+                                : _controller.value.aspectRatio,
                             child: VideoPlayer(_controller),
                           ),
                         )
@@ -2473,7 +3059,9 @@ class _VideoPlayerDialogState extends State<_VideoPlayerDialog> {
                                 });
                               },
                               icon: Icon(
-                                _controller.value.isPlaying ? Icons.pause : Icons.play_arrow,
+                                _controller.value.isPlaying
+                                    ? Icons.pause
+                                    : Icons.play_arrow,
                                 color: Colors.white,
                               ),
                             ),

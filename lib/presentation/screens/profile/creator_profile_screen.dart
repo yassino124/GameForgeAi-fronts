@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:provider/provider.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:video_player/video_player.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/providers/auth_provider.dart';
@@ -30,6 +31,197 @@ class CreatorProfileScreen extends StatefulWidget {
   State<CreatorProfileScreen> createState() => _CreatorProfileScreenState();
 }
 
+class _VideoPreviewSheet extends StatefulWidget {
+  final String url;
+
+  const _VideoPreviewSheet({required this.url});
+
+  @override
+  State<_VideoPreviewSheet> createState() => _VideoPreviewSheetState();
+}
+
+class _VideoPreviewSheetState extends State<_VideoPreviewSheet> {
+  VideoPlayerController? _ctrl;
+  bool _init = false;
+  bool _failed = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _boot();
+  }
+
+  Future<void> _boot() async {
+    final url = widget.url.trim();
+    if (url.isEmpty) return;
+    final ctrl = VideoPlayerController.networkUrl(Uri.parse(url));
+    _ctrl = ctrl;
+    try {
+      await ctrl.initialize();
+      await ctrl.setLooping(true);
+      await ctrl.play();
+      if (!mounted) return;
+      setState(() => _init = true);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _failed = true;
+        _init = true;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final maxH = MediaQuery.of(context).size.height * 0.82;
+
+    return SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: 620, maxHeight: maxH),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(28),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: (isDark ? const Color(0xFF05060A) : cs.surface).withOpacity(0.92),
+                  border: Border.all(color: isDark ? Colors.white.withOpacity(0.10) : cs.outlineVariant.withOpacity(0.8), width: 1.2),
+                  boxShadow: [
+                    BoxShadow(
+                      color: isDark ? Colors.black.withOpacity(0.55) : Colors.black.withOpacity(0.12),
+                      blurRadius: 30,
+                      offset: const Offset(0, 18),
+                    ),
+                  ],
+                ),
+                child: Stack(
+                  children: [
+                    Positioned.fill(
+                      child: !_init
+                          ? Center(child: CircularProgressIndicator(color: cs.primary))
+                          : _failed
+                              ? Center(
+                                  child: Icon(Icons.video_library_rounded, size: 56, color: isDark ? Colors.white24 : cs.onSurfaceVariant.withOpacity(0.4)),
+                                )
+                              : GestureDetector(
+                                  onTap: () {
+                                    final c = _ctrl;
+                                    if (c == null) return;
+                                    if (c.value.isPlaying) {
+                                      c.pause();
+                                    } else {
+                                      c.play();
+                                    }
+                                    setState(() {});
+                                  },
+                                  child: FittedBox(
+                                    fit: BoxFit.cover,
+                                    child: SizedBox(
+                                      width: _ctrl!.value.size.width,
+                                      height: _ctrl!.value.size.height,
+                                      child: VideoPlayer(_ctrl!),
+                                    ),
+                                  ),
+                                ),
+                    ),
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                Colors.black.withOpacity(0.15),
+                                Colors.transparent,
+                                Colors.black.withOpacity(0.65),
+                              ],
+                              stops: const [0.0, 0.55, 1.0],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      top: 10,
+                      left: 10,
+                      right: 10,
+                      child: Row(
+                        children: [
+                          IconButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            icon: Icon(Icons.close_rounded, color: isDark ? Colors.white70 : cs.onSurfaceVariant),
+                          ),
+                          const Spacer(),
+                          if (_ctrl != null && _init && !_failed)
+                            IconButton(
+                              onPressed: () {
+                                final c = _ctrl;
+                                if (c == null) return;
+                                if (c.value.volume > 0) {
+                                  c.setVolume(0);
+                                } else {
+                                  c.setVolume(1);
+                                }
+                                setState(() {});
+                              },
+                              icon: Icon(
+                                (_ctrl?.value.volume ?? 0) > 0 ? Icons.volume_up_rounded : Icons.volume_off_rounded,
+                                color: isDark ? Colors.white70 : cs.onSurfaceVariant,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    if (_ctrl != null && _init && !_failed)
+                      Positioned(
+                        bottom: 14,
+                        left: 14,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(999),
+                            color: Colors.black.withOpacity(0.35),
+                            border: Border.all(color: Colors.white.withOpacity(0.12)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                (_ctrl?.value.isPlaying ?? false) ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                                size: 18,
+                                color: Colors.white,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                (_ctrl?.value.isPlaying ?? false) ? 'Playing' : 'Paused',
+                                style: AppTypography.caption.copyWith(color: Colors.white, fontWeight: FontWeight.w900),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _CreatorProfileScreenState extends State<CreatorProfileScreen> {
   bool _loading = true;
   String? _error;
@@ -43,6 +235,145 @@ class _CreatorProfileScreenState extends State<CreatorProfileScreen> {
 
   String _resolveAvatarUrl(String raw) {
     return ApiService.normalizeImageUrl(raw);
+  }
+
+  Widget _videoCard(Map<String, dynamic> post) {
+    final title = _toStr(post['title'] ?? post['name'] ?? 'Video');
+    final thumb = _resolvePostThumb(post);
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return GestureDetector(
+      onTap: () => _openVideoPreview(post),
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AppBorderRadius.large),
+          boxShadow: [
+            BoxShadow(
+              color: (isDark ? Colors.black : cs.shadow).withOpacity(isDark ? 0.55 : 0.12),
+              blurRadius: 24,
+              offset: const Offset(0, 14),
+            ),
+          ],
+        ),
+        child: _glass(
+          padding: EdgeInsets.zero,
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(AppBorderRadius.large),
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                Container(
+                  color: Colors.white.withOpacity(0.06),
+                  child: thumb.isEmpty
+                      ? Icon(Icons.video_library_rounded, color: Colors.white.withOpacity(0.6), size: 34)
+                      : Image.network(
+                          thumb,
+                          fit: BoxFit.cover,
+                          errorBuilder: (_, __, ___) => Icon(
+                            Icons.video_library_rounded,
+                            color: Colors.white.withOpacity(0.6),
+                            size: 34,
+                          ),
+                        ),
+                ),
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Colors.transparent, Colors.black.withOpacity(0.62)],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        stops: const [0.55, 1.0],
+                      ),
+                    ),
+                  ),
+                ),
+                Center(
+                  child: Container(
+                    width: 54,
+                    height: 54,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.black.withOpacity(0.30),
+                      border: Border.all(color: Colors.white.withOpacity(0.16)),
+                    ),
+                    child: const Center(
+                      child: Icon(Icons.play_arrow_rounded, color: Colors.white, size: 30),
+                    ),
+                  ),
+                ),
+                Positioned(
+                  left: 12,
+                  right: 12,
+                  bottom: 12,
+                  child: Text(
+                    title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTypography.subtitle2.copyWith(color: Colors.white, fontWeight: FontWeight.w900),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  String _resolvePostThumb(Map<String, dynamic> post) {
+    dynamic v = post['previewImageUrl'] ?? post['previewImage'] ?? post['thumbnailUrl'];
+    if (v is Map) {
+      v = v['url'] ?? v['secure_url'] ?? v['src'] ?? v['path'];
+    }
+    if (v is List && v.isNotEmpty) {
+      final first = v.first;
+      if (first is String) v = first;
+      if (first is Map) {
+        v = first['url'] ?? first['secure_url'] ?? first['src'] ?? first['path'];
+      }
+    }
+
+    final s = (v ?? '').toString();
+    return ApiService.normalizeImageUrl(s);
+  }
+
+  String _resolvePostVideo(Map<String, dynamic> post) {
+    dynamic v = post['previewVideoUrl'] ?? post['trailerVideoUrl'] ?? post['videoUrl'];
+    if (v == null && post['reel'] is Map) {
+      final r = post['reel'] as Map;
+      v = r['previewVideoUrl'] ?? r['trailerVideoUrl'] ?? r['videoUrl'];
+    }
+    if (v is Map) {
+      v = v['url'] ?? v['secure_url'] ?? v['src'] ?? v['path'];
+    }
+    final s = (v ?? '').toString();
+    return ApiService.normalizeImageUrl(s);
+  }
+
+  bool _isVideoPost(Map<String, dynamic> post) {
+    if (post['isReel'] == true) return true;
+    return _resolvePostVideo(post).trim().isNotEmpty;
+  }
+
+  Future<void> _openVideoPreview(Map<String, dynamic> post) async {
+    final url = _resolvePostVideo(post).trim();
+    if (url.isEmpty) return;
+
+    try {
+      await HapticFeedback.selectionClick();
+    } catch (_) {}
+
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (sheetCtx) {
+        return _VideoPreviewSheet(url: url);
+      },
+    );
   }
 
   int _toInt(dynamic v) {
@@ -588,15 +919,29 @@ class _CreatorProfileScreenState extends State<CreatorProfileScreen> {
 
   Widget _gameCard(Map<String, dynamic> post) {
     final title = _toStr(post['title'] ?? post['name'] ?? 'Game');
-    final preview = _toStr(post['previewImageUrl'] ?? post['previewImage']);
+    final preview = _resolvePostThumb(post);
     final likes = _toInt(post['likeCount']);
     final plays = _toInt(post['playCount']);
 
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return GestureDetector(
       onTap: () => _openPlay(post),
-      child: _glass(
-        padding: EdgeInsets.zero,
-        child: Column(
+      child: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(AppBorderRadius.large),
+          boxShadow: [
+            BoxShadow(
+              color: (isDark ? Colors.black : cs.shadow).withOpacity(isDark ? 0.55 : 0.12),
+              blurRadius: 24,
+              offset: const Offset(0, 14),
+            ),
+          ],
+        ),
+        child: _glass(
+          padding: EdgeInsets.zero,
+          child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
@@ -609,21 +954,51 @@ class _CreatorProfileScreenState extends State<CreatorProfileScreen> {
                       color: Colors.white.withOpacity(0.06),
                       child: preview.isEmpty
                           ? Icon(Icons.videogame_asset_rounded, color: Colors.white.withOpacity(0.6), size: 34)
-                          : ((preview.startsWith('http://') || preview.startsWith('https://'))
-                              ? Image.network(
-                                  preview,
-                                  fit: BoxFit.cover,
-                                  errorBuilder: (_, __, ___) => Icon(
-                                    Icons.videogame_asset_rounded,
-                                    color: Colors.white.withOpacity(0.6),
-                                    size: 34,
-                                  ),
-                                )
-                              : Icon(
-                                  Icons.videogame_asset_rounded,
-                                  color: Colors.white.withOpacity(0.6),
-                                  size: 34,
-                                )),
+                          : Image.network(
+                              preview,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => Icon(
+                                Icons.videogame_asset_rounded,
+                                color: Colors.white.withOpacity(0.6),
+                                size: 34,
+                              ),
+                            ),
+                    ),
+                    Positioned(
+                      top: 10,
+                      left: 10,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(999),
+                          gradient: AppColors.primaryGradient,
+                          boxShadow: [
+                            BoxShadow(
+                              color: AppColors.accent.withOpacity(0.25),
+                              blurRadius: 18,
+                              offset: const Offset(0, 10),
+                            ),
+                          ],
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.play_arrow_rounded, size: 16, color: Colors.white),
+                            const SizedBox(width: 6),
+                            Text(
+                              plays.toString(),
+                              style: AppTypography.caption.copyWith(color: Colors.white, fontWeight: FontWeight.w900),
+                            ),
+                            const SizedBox(width: 10),
+                            const Icon(Icons.favorite_rounded, size: 14, color: Colors.white),
+                            const SizedBox(width: 6),
+                            Text(
+                              likes.toString(),
+                              style: AppTypography.caption.copyWith(color: Colors.white, fontWeight: FontWeight.w900),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                     Positioned.fill(
                       child: DecoratedBox(
@@ -668,22 +1043,11 @@ class _CreatorProfileScreenState extends State<CreatorProfileScreen> {
                     overflow: TextOverflow.ellipsis,
                     style: AppTypography.subtitle2.copyWith(color: Colors.white, fontWeight: FontWeight.w900),
                   ),
-                  const SizedBox(height: 8),
-                  Row(
-                    children: [
-                      Icon(Icons.play_arrow_rounded, size: 16, color: Colors.white.withOpacity(0.78)),
-                      const SizedBox(width: 6),
-                      Text(plays.toString(), style: AppTypography.caption.copyWith(color: Colors.white.withOpacity(0.86), fontWeight: FontWeight.w800)),
-                      const SizedBox(width: 12),
-                      Icon(Icons.favorite_rounded, size: 16, color: Colors.white.withOpacity(0.78)),
-                      const SizedBox(width: 6),
-                      Text(likes.toString(), style: AppTypography.caption.copyWith(color: Colors.white.withOpacity(0.86), fontWeight: FontWeight.w800)),
-                    ],
-                  ),
                 ],
               ),
             ),
           ],
+          ),
         ),
       ),
     );
@@ -716,7 +1080,7 @@ class _CreatorProfileScreenState extends State<CreatorProfileScreen> {
     final totalRemixes = _toInt(s['totalRemixes']);
 
     return DefaultTabController(
-      length: 2,
+      length: 3,
       child: Scaffold(
         backgroundColor: Colors.transparent,
         body: Container(
@@ -881,6 +1245,7 @@ class _CreatorProfileScreenState extends State<CreatorProfileScreen> {
                                       indicatorSize: TabBarIndicatorSize.tab,
                                       tabs: const [
                                         Tab(text: 'Games'),
+                                        Tab(text: 'Videos'),
                                         Tab(text: 'About'),
                                       ],
                                     ),
@@ -947,6 +1312,42 @@ class _CreatorProfileScreenState extends State<CreatorProfileScreen> {
                                     ],
                                   ],
                                 ),
+                              ),
+                            ),
+                            RefreshIndicator(
+                              onRefresh: _load,
+                              child: ListView(
+                                padding: const EdgeInsets.fromLTRB(AppSpacing.lg, AppSpacing.lg, AppSpacing.lg, AppSpacing.xxxl),
+                                children: [
+                                  if (_posts.where(_isVideoPost).isEmpty)
+                                    _glass(
+                                      padding: const EdgeInsets.all(16),
+                                      child: Text(
+                                        'No videos yet.',
+                                        style: AppTypography.body2.copyWith(color: Colors.white.withOpacity(0.86), fontWeight: FontWeight.w700),
+                                      ),
+                                    )
+                                  else
+                                    GridView.builder(
+                                      shrinkWrap: true,
+                                      physics: const NeverScrollableScrollPhysics(),
+                                      itemCount: _posts.where(_isVideoPost).length,
+                                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                                        crossAxisCount: 2,
+                                        mainAxisSpacing: 12,
+                                        crossAxisSpacing: 12,
+                                        childAspectRatio: 0.82,
+                                      ),
+                                      itemBuilder: (context, i) {
+                                        final videos = _posts.where(_isVideoPost).toList(growable: false);
+                                        return _videoCard(videos[i]);
+                                      },
+                                    ),
+                                  if (_paging) ...[
+                                    const SizedBox(height: 18),
+                                    const Center(child: CircularProgressIndicator()),
+                                  ],
+                                ],
                               ),
                             ),
                             ListView(

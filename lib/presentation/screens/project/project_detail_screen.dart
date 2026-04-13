@@ -5,9 +5,9 @@ import 'package:provider/provider.dart';
 import 'dart:math' as math;
 import 'dart:io';
 import 'dart:ui';
-import 'package:video_player/video_player.dart';
 import 'package:share_plus/share_plus.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:video_player/video_player.dart';
 import 'package:flutter/services.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:flutter/rendering.dart';
@@ -727,19 +727,6 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
         () => _onLaunchAiTrailerGameplayMode(),
         enabled: isReady && hasProjectId && !_trailerGenerating,
       ),
-      _buildActionButton(
-        'CHECK REEL',
-        ((_trailerVideoUrl ?? '').trim().isNotEmpty)
-            ? 'Ready • Open + publish'
-            : ((_trailerId ?? '').trim().isNotEmpty)
-            ? '${_trailerStage ?? 'Processing…'} • ETA ${_fmtEta(_trailerEtaSec)}'
-            : 'Start tracking reel status',
-        Icons.verified_rounded,
-        null,
-        _onCheckReel,
-        isOutlined: true,
-        enabled: isReady && hasProjectId,
-      ),
       ...secondary,
     ];
 
@@ -1273,116 +1260,41 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
     if (!mounted) return;
     await showModalBottomSheet<void>(
       context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (ctx) {
-        final cs = Theme.of(ctx).colorScheme;
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(18, 14, 18, 22),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Trailer is ready',
-                  style: AppTypography.titleLarge.copyWith(
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  videoUrl,
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                  style: AppTypography.body2.copyWith(
-                    color: cs.onSurfaceVariant,
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Row(
-                  children: [
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: () async {
-                          await Clipboard.setData(
-                            ClipboardData(text: videoUrl),
-                          );
-                          if (!ctx.mounted) return;
-                          Navigator.of(ctx).pop();
-                          AppNotifier.showSuccess('Trailer link copied');
-                        },
-                        icon: const Icon(Icons.copy_rounded),
-                        label: const Text('Copy Link'),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: ElevatedButton.icon(
-                        onPressed: () async {
-                          await Share.share(videoUrl);
-                        },
-                        icon: const Icon(Icons.ios_share_rounded),
-                        label: const Text('Share'),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () async {
-                      final router = GoRouter.of(context);
-                      final token = context.read<AuthProvider>().token;
-                      try {
-                        await HapticFeedback.mediumImpact();
-                      } catch (_) {}
-                      if (token == null || token.trim().isEmpty) {
-                        AppNotifier.showError(
-                          'Session expired. Please sign in again.',
-                        );
-                        return;
-                      }
-                      final pub = await TrailersService.publishTrailerToFeed(
-                        token: token,
-                        trailerId: trailerId,
-                      );
-                      if (pub['success'] != true) {
-                        AppNotifier.showError(
-                          pub['message']?.toString() ??
-                              'Failed to publish reel',
-                        );
-                        return;
-                      }
-                      AppNotifier.showSuccess(
-                        'Reel published to Arcade 🚀 Opening feed...',
-                      );
-                      if (!ctx.mounted) return;
-                      Navigator.of(ctx).pop();
-                      router.go('/dashboard?tab=arcade');
-                    },
-                    icon: const Icon(Icons.rocket_launch_rounded),
-                    label: const Text('Publish Reel to Arcade'),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  child: TextButton.icon(
-                    onPressed: () async {
-                      final ok = await launchUrl(
-                        Uri.parse(videoUrl),
-                        mode: LaunchMode.externalApplication,
-                      );
-                      if (!ok)
-                        AppNotifier.showError('Could not open trailer link');
-                    },
-                    icon: const Icon(Icons.open_in_new_rounded),
-                    label: const Text('Open video'),
-                  ),
-                ),
-              ],
-            ),
-          ),
+        return _TrailerPreviewSheet(
+          videoUrl: videoUrl,
+          trailerId: trailerId,
+          onPublish: () async {
+            final router = GoRouter.of(context);
+            final token = context.read<AuthProvider>().token;
+            try {
+              await HapticFeedback.mediumImpact();
+            } catch (_) {}
+            if (token == null || token.trim().isEmpty) {
+              AppNotifier.showError(
+                'Session expired. Please sign in again.',
+              );
+              return;
+            }
+            final pub = await TrailersService.publishTrailerToFeed(
+              token: token,
+              trailerId: trailerId,
+            );
+            if (pub['success'] != true) {
+              AppNotifier.showError(
+                pub['message']?.toString() ?? 'Failed to publish reel',
+              );
+              return;
+            }
+            AppNotifier.showSuccess(
+              'Reel published to Arcade 🚀 Opening feed...',
+            );
+            if (!ctx.mounted) return;
+            Navigator.of(ctx).pop();
+            router.go('/dashboard?tab=arcade');
+          },
         );
       },
     );
@@ -1865,6 +1777,236 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
     final bytes = data?.buffer.asUint8List();
     if (bytes == null) throw Exception('Failed to render QR');
     await ImageGallerySaver.saveImage(bytes);
+  }
+}
+
+class _TrailerPreviewSheet extends StatefulWidget {
+  final String videoUrl;
+  final String trailerId;
+  final Future<void> Function() onPublish;
+
+  const _TrailerPreviewSheet({
+    required this.videoUrl,
+    required this.trailerId,
+    required this.onPublish,
+  });
+
+  @override
+  State<_TrailerPreviewSheet> createState() => _TrailerPreviewSheetState();
+}
+
+class _TrailerPreviewSheetState extends State<_TrailerPreviewSheet> {
+  VideoPlayerController? _ctrl;
+  bool _init = false;
+  bool _failed = false;
+  bool _publishing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _boot();
+  }
+
+  Future<void> _boot() async {
+    final url = widget.videoUrl.trim();
+    if (url.isEmpty) return;
+    final c = VideoPlayerController.networkUrl(Uri.parse(url));
+    _ctrl = c;
+    try {
+      await c.initialize();
+      await c.setLooping(true);
+      await c.play();
+      if (!mounted) return;
+      setState(() => _init = true);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _init = true;
+        _failed = true;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bottom = MediaQuery.of(context).viewInsets.bottom;
+    final maxH = MediaQuery.of(context).size.height * 0.88;
+
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(bottom: bottom),
+        child: Center(
+          child: Container(
+            margin: const EdgeInsets.all(16),
+            constraints: BoxConstraints(maxWidth: 620, maxHeight: maxH),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(color: isDark ? Colors.white.withOpacity(0.10) : cs.outlineVariant.withOpacity(0.8), width: 1.2),
+              boxShadow: [
+                BoxShadow(
+                  color: isDark ? Colors.black.withOpacity(0.6) : Colors.black.withOpacity(0.12),
+                  blurRadius: 34,
+                  offset: const Offset(0, 22),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(28),
+              child: Container(
+                color: (isDark ? const Color(0xFF05060A) : cs.surface).withOpacity(0.96),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+                      child: Row(
+                        children: [
+                          Text(
+                            'Preview Reel',
+                            style: AppTypography.titleLarge.copyWith(fontWeight: FontWeight.w900, color: isDark ? Colors.white : cs.onSurface),
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            icon: Icon(Icons.close_rounded, color: isDark ? Colors.white70 : cs.onSurfaceVariant),
+                          ),
+                        ],
+                      ),
+                    ),
+                    AspectRatio(
+                      aspectRatio: 9 / 16,
+                      child: Container(
+                        color: Colors.black,
+                        child: !_init
+                            ? Center(child: CircularProgressIndicator(color: cs.primary))
+                            : _failed
+                                ? Center(
+                                    child: Icon(Icons.video_library_rounded, size: 56, color: isDark ? Colors.white24 : cs.onSurfaceVariant.withOpacity(0.4)),
+                                  )
+                                : GestureDetector(
+                                    onTap: () {
+                                      final c = _ctrl;
+                                      if (c == null) return;
+                                      if (c.value.isPlaying) {
+                                        c.pause();
+                                      } else {
+                                        c.play();
+                                      }
+                                      setState(() {});
+                                    },
+                                    child: FittedBox(
+                                      fit: BoxFit.cover,
+                                      child: SizedBox(
+                                        width: _ctrl!.value.size.width,
+                                        height: _ctrl!.value.size.height,
+                                        child: VideoPlayer(_ctrl!),
+                                      ),
+                                    ),
+                                  ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Expanded(
+                                child: OutlinedButton.icon(
+                                  onPressed: _publishing
+                                      ? null
+                                      : () {
+                                          Navigator.of(context).pop();
+                                        },
+                                  icon: const Icon(Icons.schedule_rounded),
+                                  label: const Text('Not now'),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: ElevatedButton.icon(
+                                  onPressed: (_publishing || _failed)
+                                      ? null
+                                      : () async {
+                                          if (_publishing) return;
+                                          setState(() => _publishing = true);
+                                          try {
+                                            await widget.onPublish();
+                                          } finally {
+                                            if (mounted) setState(() => _publishing = false);
+                                          }
+                                        },
+                                  icon: _publishing
+                                      ? const SizedBox(
+                                          width: 18,
+                                          height: 18,
+                                          child: CircularProgressIndicator(strokeWidth: 2),
+                                        )
+                                      : const Icon(Icons.rocket_launch_rounded),
+                                  label: const Text('Publish'),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: TextButton.icon(
+                                  onPressed: () async {
+                                    await Clipboard.setData(ClipboardData(text: widget.videoUrl));
+                                    if (!mounted) return;
+                                    AppNotifier.showSuccess('Trailer link copied');
+                                  },
+                                  icon: const Icon(Icons.copy_rounded),
+                                  label: const Text('Copy'),
+                                ),
+                              ),
+                              Expanded(
+                                child: TextButton.icon(
+                                  onPressed: () async {
+                                    await Share.share(widget.videoUrl);
+                                  },
+                                  icon: const Icon(Icons.ios_share_rounded),
+                                  label: const Text('Share'),
+                                ),
+                              ),
+                              Expanded(
+                                child: TextButton.icon(
+                                  onPressed: () async {
+                                    final ok = await launchUrl(
+                                      Uri.parse(widget.videoUrl),
+                                      mode: LaunchMode.externalApplication,
+                                    );
+                                    if (!ok) AppNotifier.showError('Could not open trailer link');
+                                  },
+                                  icon: const Icon(Icons.open_in_new_rounded),
+                                  label: const Text('Open'),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
 

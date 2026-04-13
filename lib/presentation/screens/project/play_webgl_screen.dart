@@ -11,6 +11,7 @@ import 'package:provider/provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:url_launcher/url_launcher.dart';
+import 'package:video_player/video_player.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../../core/constants/app_constants.dart';
@@ -40,6 +41,227 @@ class PlayWebglScreen extends StatefulWidget {
 
   @override
   State<PlayWebglScreen> createState() => _PlayWebglScreenState();
+}
+
+class _AutoTrailerPreviewSheet extends StatefulWidget {
+  final String videoUrl;
+  final String trailerId;
+  final Future<void> Function() onPublish;
+
+  const _AutoTrailerPreviewSheet({
+    required this.videoUrl,
+    required this.trailerId,
+    required this.onPublish,
+  });
+
+  @override
+  State<_AutoTrailerPreviewSheet> createState() =>
+      _AutoTrailerPreviewSheetState();
+}
+
+class _AutoTrailerPreviewSheetState extends State<_AutoTrailerPreviewSheet> {
+  VideoPlayerController? _ctrl;
+  bool _init = false;
+  bool _failed = false;
+  bool _publishing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _boot();
+  }
+
+  Future<void> _boot() async {
+    final url = widget.videoUrl.trim();
+    if (url.isEmpty) return;
+    final c = VideoPlayerController.networkUrl(Uri.parse(url));
+    _ctrl = c;
+    try {
+      await c.initialize();
+      await c.setLooping(true);
+      await c.play();
+      if (!mounted) return;
+      setState(() => _init = true);
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _init = true;
+        _failed = true;
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _ctrl?.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bottom = MediaQuery.of(context).viewInsets.bottom;
+    final maxH = MediaQuery.of(context).size.height * 0.90;
+
+    return SafeArea(
+      child: Padding(
+        padding: EdgeInsets.only(bottom: bottom),
+        child: Center(
+          child: Container(
+            margin: const EdgeInsets.all(16),
+            constraints: BoxConstraints(maxWidth: 620, maxHeight: maxH),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(28),
+              border: Border.all(
+                color: isDark
+                    ? Colors.white.withOpacity(0.10)
+                    : cs.outlineVariant.withOpacity(0.8),
+                width: 1.2,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: isDark
+                      ? Colors.black.withOpacity(0.65)
+                      : Colors.black.withOpacity(0.14),
+                  blurRadius: 36,
+                  offset: const Offset(0, 22),
+                ),
+              ],
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(28),
+              child: Container(
+                color: (isDark ? const Color(0xFF05060A) : cs.surface)
+                    .withOpacity(0.96),
+                child: Column(
+                  mainAxisSize: MainAxisSize.max,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 10, 10, 10),
+                      child: Row(
+                        children: [
+                          Text(
+                            'Reel Preview',
+                            style: AppTypography.titleLarge.copyWith(
+                              fontWeight: FontWeight.w900,
+                              color: isDark ? Colors.white : cs.onSurface,
+                            ),
+                          ),
+                          const Spacer(),
+                          IconButton(
+                            onPressed: () => Navigator.of(context).pop(),
+                            icon: Icon(
+                              Icons.close_rounded,
+                              color: isDark
+                                  ? Colors.white70
+                                  : cs.onSurfaceVariant,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Expanded(
+                      child: Center(
+                        child: AspectRatio(
+                          aspectRatio: 9 / 16,
+                          child: Container(
+                            color: Colors.black,
+                            child: !_init
+                                ? Center(
+                                    child: CircularProgressIndicator(
+                                      color: cs.primary,
+                                    ),
+                                  )
+                                : _failed
+                                ? Center(
+                                    child: Icon(
+                                      Icons.video_library_rounded,
+                                      size: 56,
+                                      color: isDark
+                                          ? Colors.white24
+                                          : cs.onSurfaceVariant.withOpacity(
+                                              0.4,
+                                            ),
+                                    ),
+                                  )
+                                : GestureDetector(
+                                    onTap: () {
+                                      final c = _ctrl;
+                                      if (c == null) return;
+                                      if (c.value.isPlaying) {
+                                        c.pause();
+                                      } else {
+                                        c.play();
+                                      }
+                                      setState(() {});
+                                    },
+                                    child: FittedBox(
+                                      fit: BoxFit.cover,
+                                      child: SizedBox(
+                                        width: _ctrl!.value.size.width,
+                                        height: _ctrl!.value.size.height,
+                                        child: VideoPlayer(_ctrl!),
+                                      ),
+                                    ),
+                                  ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton.icon(
+                              onPressed: _publishing
+                                  ? null
+                                  : () => Navigator.of(context).pop(),
+                              icon: const Icon(Icons.schedule_rounded),
+                              label: const Text('Not now'),
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: ElevatedButton.icon(
+                              onPressed: (_publishing || _failed)
+                                  ? null
+                                  : () async {
+                                      if (_publishing) return;
+                                      setState(() => _publishing = true);
+                                      try {
+                                        await widget.onPublish();
+                                      } finally {
+                                        if (mounted)
+                                          setState(() => _publishing = false);
+                                      }
+                                    },
+                              icon: _publishing
+                                  ? const SizedBox(
+                                      width: 18,
+                                      height: 18,
+                                      child: CircularProgressIndicator(
+                                        strokeWidth: 2,
+                                      ),
+                                    )
+                                  : const Icon(Icons.rocket_launch_rounded),
+                              label: const Text('Publish'),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _PlayWebglScreenState extends State<PlayWebglScreen>
@@ -75,8 +297,34 @@ class _PlayWebglScreenState extends State<PlayWebglScreen>
   Timer? _healthMonitor;
   bool _recovering = false;
   int _recoverTries = 0;
-
   String? _projectId;
+  bool _is3dMode = false;
+
+  void _toggle3dMode() {
+    _toggle3dModeSafe();
+  }
+
+  Future<void> _toggle3dModeSafe() async {
+    try {
+      await _releaseAllKeys();
+    } catch (_) {}
+
+    final next = !_is3dMode;
+    if (!mounted) return;
+    setState(() {
+      _is3dMode = next;
+    });
+
+    try {
+      await Future.delayed(const Duration(milliseconds: 20));
+      await _ensureGameFocus();
+    } catch (_) {}
+
+    AppNotifier.showSuccess(
+      next ? '3D / FPS Controls Enabled (WASD)' : '2D Controls Enabled',
+    );
+  }
+
   bool _autoTrailerMode = false;
   bool _autoTrailerSubmitting = false;
   String _autoTrailerStatus = 'idle';
@@ -88,7 +336,7 @@ class _PlayWebglScreenState extends State<PlayWebglScreen>
   int? _autoTrailerElapsedSec;
   String _autoTrailerStyle = 'energetic';
   String _autoTrailerTarget = 'reels';
-  bool _autoTrailerAutoPublishEnabled = true;
+  bool _autoTrailerAutoPublishEnabled = false;
   Timer? _autoTrailerPoll;
   Timer? _autoTrailerEtaTicker;
   Timer? _autoTrailerCaptureTick;
@@ -149,6 +397,249 @@ class _PlayWebglScreenState extends State<PlayWebglScreen>
   bool _voiceListening = false;
   String _voiceLast = '';
   Timer? _voicePersistDebounce;
+  bool _voicePlayMode = false;
+  bool _voiceWakeWord = true;
+  Timer? _voiceHoldRelease;
+  String _voiceCmdLast = '';
+  int _voicePlayLastAtMs = 0;
+  String _voicePlayLastNorm = '';
+  bool _voiceStartInFlight = false;
+
+  Future<void> _toggleVoicePlayMode() async {
+    if (!mounted) return;
+    final next = !_voicePlayMode;
+    setState(() {
+      _voicePlayMode = next;
+      _voiceCmdLast = '';
+      _voicePlayLastAtMs = 0;
+      _voicePlayLastNorm = '';
+    });
+    if (!next) {
+      _voiceHoldRelease?.cancel();
+      await _stopVoiceListening();
+      await _releaseAllKeys();
+    } else {
+      await _startVoiceListening();
+    }
+    AppNotifier.showSuccess(next ? 'Voice Play ON' : 'Voice Play OFF');
+  }
+
+  Future<void> _openAutoTrailerPreviewSheet({
+    required String videoUrl,
+    required String trailerId,
+  }) async {
+    if (!mounted) return;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      useSafeArea: true,
+      builder: (ctx) {
+        return _AutoTrailerPreviewSheet(
+          videoUrl: videoUrl,
+          trailerId: trailerId,
+          onPublish: () async {
+            final token = context.read<AuthProvider>().token;
+            if (token == null || token.trim().isNotEmpty == false) {
+              AppNotifier.showError('Session expired. Please sign in again.');
+              return;
+            }
+            final pub = await TrailersService.publishTrailerToFeed(
+              token: token,
+              trailerId: trailerId,
+            );
+            if (pub['success'] == true) {
+              _autoTrailerPublishedToFeed = true;
+              AppNotifier.showSuccess('🚀 Reel published to Arcade feed');
+              if (ctx.mounted) {
+                Navigator.of(ctx).pop();
+              }
+              return;
+            }
+            AppNotifier.showError(
+              pub['message']?.toString() ?? 'Could not publish reel to feed',
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Future<void> _handleExit() async {
+    _releaseAllKeys();
+    await _finalizeAutoTrailerPipeline();
+
+    final tid = (_autoTrailerId ?? '').trim();
+    final readyUrl = (_autoTrailerVideoUrl ?? '').trim();
+    final shouldPreview =
+        _autoTrailerMode && !_autoTrailerPublishedToFeed && tid.isNotEmpty;
+
+    if (shouldPreview) {
+      if (readyUrl.isEmpty) {
+        await _checkAutoTrailerStatus(
+          notifyOnReady: false,
+          publishOnReady: false,
+        );
+      }
+      final url = (_autoTrailerVideoUrl ?? '').trim();
+      if (url.isNotEmpty) {
+        await _openAutoTrailerPreviewSheet(videoUrl: url, trailerId: tid);
+      }
+    }
+
+    await _maybeShowPostGameCoachReport(force: true);
+    if (!context.mounted) return;
+
+    if (!context.mounted) return;
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/dashboard?tab=projects');
+    }
+  }
+
+  Future<void> _toggleVoiceWakeWord() async {
+    if (!mounted) return;
+    setState(() {
+      _voiceWakeWord = !_voiceWakeWord;
+      _voicePlayLastAtMs = 0;
+      _voicePlayLastNorm = '';
+    });
+    AppNotifier.showSuccess(
+      _voiceWakeWord ? 'Wake word ON (say: play ...)' : 'Wake word OFF',
+    );
+  }
+
+  Future<void> _voiceTapKey({required String key, required String code}) async {
+    await _ensureGameFocus();
+    await _sendKey(key: key, code: code, down: true);
+    await Future.delayed(const Duration(milliseconds: 70));
+    await _sendKey(key: key, code: code, down: false);
+  }
+
+  Future<void> _voiceMove({required String dir, required bool hold}) async {
+    await _ensureGameFocus();
+    _voiceHoldRelease?.cancel();
+    if (dir == 'left') {
+      await _sendKey(key: 'ArrowRight', code: 'ArrowRight', down: false);
+      await _sendKey(key: 'd', code: 'KeyD', down: false);
+      await _sendKey(key: 'ArrowLeft', code: 'ArrowLeft', down: true);
+      await _sendKey(key: 'a', code: 'KeyA', down: true);
+    } else {
+      await _sendKey(key: 'ArrowLeft', code: 'ArrowLeft', down: false);
+      await _sendKey(key: 'a', code: 'KeyA', down: false);
+      await _sendKey(key: 'ArrowRight', code: 'ArrowRight', down: true);
+      await _sendKey(key: 'd', code: 'KeyD', down: true);
+    }
+
+    if (!hold) {
+      _voiceHoldRelease = Timer(const Duration(milliseconds: 650), () async {
+        try {
+          await _sendKey(key: 'ArrowLeft', code: 'ArrowLeft', down: false);
+          await _sendKey(key: 'a', code: 'KeyA', down: false);
+          await _sendKey(key: 'ArrowRight', code: 'ArrowRight', down: false);
+          await _sendKey(key: 'd', code: 'KeyD', down: false);
+        } catch (_) {}
+      });
+    }
+  }
+
+  Future<void> _handleVoicePlayCommand(String words) async {
+    String norm(String s) {
+      final t = s.trim().toLowerCase();
+      return t.replaceAll(RegExp(r'\s+'), ' ');
+    }
+
+    String? stripWake(String s) {
+      final t = norm(s);
+      if (t.isEmpty) return null;
+      if (!_voiceWakeWord) return t;
+      if (t.startsWith('play ')) return t.substring(5).trim();
+      if (t == 'play') return '';
+      if (t.startsWith('game ')) return t.substring(5).trim();
+      if (t == 'game') return '';
+      if (t.startsWith('go ')) return t.substring(3).trim();
+      if (t == 'go') return '';
+      return null;
+    }
+
+    final stripped = stripWake(words);
+    if (stripped == null) return;
+    final s = norm(stripped);
+    if (s.isEmpty) return;
+
+    final now = DateTime.now().millisecondsSinceEpoch;
+    if (now - _voicePlayLastAtMs < 260) return;
+    if (s == _voicePlayLastNorm) return;
+    _voicePlayLastAtMs = now;
+    _voicePlayLastNorm = s;
+
+    bool hasAny(List<String> keys) => keys.any((k) => s.contains(k));
+    final hold = hasAny(const ['hold', 'keep', 'continue', 'stay', 'maintain']);
+
+    if (hasAny(const [
+      'stop',
+      'freeze',
+      'halt',
+      'release',
+      'stopp',
+      'wa9ef',
+      'قف',
+      'stoppe',
+    ])) {
+      _voiceHoldRelease?.cancel();
+      await _releaseAllKeys();
+      return;
+    }
+
+    if (hasAny(const ['left', 'gauche', 'يسار', 'yassar', 'a gauche'])) {
+      await _voiceMove(dir: 'left', hold: hold);
+      return;
+    }
+    if (hasAny(const ['right', 'droite', 'يمين', 'ymin', 'a droite'])) {
+      await _voiceMove(dir: 'right', hold: hold);
+      return;
+    }
+
+    if (hasAny(const ['jump', 'saute', 'up', 'hop', 'double jump'])) {
+      await _voiceTapKey(key: ' ', code: 'Space');
+      if (hasAny(const ['double'])) {
+        await Future.delayed(const Duration(milliseconds: 110));
+        await _voiceTapKey(key: ' ', code: 'Space');
+      }
+      return;
+    }
+
+    if (hasAny(const [
+      'fire',
+      'shoot',
+      'tir',
+      'attack',
+      'hit',
+      'click',
+      'tap',
+      'shooting',
+    ])) {
+      await _voiceTapKey(key: 'f', code: 'KeyF');
+      try {
+        await _sendMousePrimary(down: true);
+        await Future.delayed(const Duration(milliseconds: 60));
+        await _sendMousePrimary(down: false);
+      } catch (_) {}
+      return;
+    }
+
+    if (hasAny(const ['dash', 'boost', 'sprint'])) {
+      await _voiceTapKey(key: 'Enter', code: 'Enter');
+      return;
+    }
+
+    if (hasAny(const ['pause', 'resume', 'menu', 'escape', 'start'])) {
+      await _voiceTapKey(key: 'p', code: 'KeyP');
+      await _voiceTapKey(key: 'Escape', code: 'Escape');
+      return;
+    }
+  }
 
   static const _kPrefPlayerSkinPrefix = 'gameforge.playerSkin.';
   static const _kPrefPlayerSpriteUrlPrefix = 'gameforge.playerSpriteUrl.';
@@ -927,9 +1418,9 @@ class _PlayWebglScreenState extends State<PlayWebglScreen>
     }
   }
 
-  Future<void> _maybeShowPostGameCoachReport() async {
+  Future<void> _maybeShowPostGameCoachReport({bool force = false}) async {
     if (!mounted) return;
-    if (_coachReportShown) return;
+    if (!force && _coachReportShown) return;
     if (_coachReportInFlight) return;
 
     final pid = (_projectId ?? '').trim();
@@ -2144,10 +2635,11 @@ class _PlayWebglScreenState extends State<PlayWebglScreen>
       final raw = (u.queryParameters['gfTrailerAutoPublish'] ?? '')
           .trim()
           .toLowerCase();
+      if (raw.isEmpty) return false;
       if (raw == '0' || raw == 'false' || raw == 'no') return false;
       if (raw == '1' || raw == 'true' || raw == 'yes') return true;
     } catch (_) {}
-    return true;
+    return false;
   }
 
   int _fallbackAutoTrailerEtaByStatus() {
@@ -2155,10 +2647,10 @@ class _PlayWebglScreenState extends State<PlayWebglScreen>
     if (s == 'recording') {
       final startedMs = _autoTrailerCaptureStartMs;
       if (startedMs > 0) {
-        final elapsed = ((DateTime.now().millisecondsSinceEpoch - startedMs) /
-                1000)
-            .floor()
-            .clamp(0, 240);
+        final elapsed =
+            ((DateTime.now().millisecondsSinceEpoch - startedMs) / 1000)
+                .floor()
+                .clamp(0, 240);
         return (75 - elapsed).clamp(8, 75);
       }
       return 60;
@@ -2189,9 +2681,10 @@ class _PlayWebglScreenState extends State<PlayWebglScreen>
   }
 
   String _fmtAutoTrailerTotalEstimate() {
-    final total = (_autoTrailerEstimatedTotalSec ??
-            ((_autoTrailerElapsedSec ?? 0) + _effectiveAutoTrailerEtaSec()))
-        .clamp(0, 3600);
+    final total =
+        (_autoTrailerEstimatedTotalSec ??
+                ((_autoTrailerElapsedSec ?? 0) + _effectiveAutoTrailerEtaSec()))
+            .clamp(0, 3600);
     final m = total ~/ 60;
     final s = total % 60;
     return '~${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
@@ -2383,8 +2876,8 @@ class _PlayWebglScreenState extends State<PlayWebglScreen>
     final tokenJs = jsonEncode(token.trim());
     final apiBaseJs = jsonEncode(apiBase);
     final pidJs = jsonEncode(pid.isEmpty ? 'unknown' : pid);
-  const minRecordMs = _autoTrailerMinRecordMs;
-  const minBlobBytes = _autoTrailerMinBlobBytes;
+    const minRecordMs = _autoTrailerMinRecordMs;
+    const minBlobBytes = _autoTrailerMinBlobBytes;
 
     await _runJs("""
       (function(){
@@ -2515,12 +3008,10 @@ class _PlayWebglScreenState extends State<PlayWebglScreen>
         final mime = (st['mime'] ?? '').toString().trim().toLowerCase();
         final blobSize = (st['blobSize'] is num)
             ? (st['blobSize'] as num).toInt()
-            : int.tryParse((st['blobSize'] ?? '').toString()) ??
-                  0;
+            : int.tryParse((st['blobSize'] ?? '').toString()) ?? 0;
         final recMs = (st['recordedMs'] is num)
             ? (st['recordedMs'] as num).toInt()
-            : int.tryParse((st['recordedMs'] ?? '').toString()) ??
-                  0;
+            : int.tryParse((st['recordedMs'] ?? '').toString()) ?? 0;
 
         if (blobSize < _autoTrailerMinBlobBytes ||
             recMs < _autoTrailerMinRecordMs) {
@@ -2537,7 +3028,8 @@ class _PlayWebglScreenState extends State<PlayWebglScreen>
           return;
         }
 
-        if (defaultTargetPlatform == TargetPlatform.iOS && mime.contains('webm')) {
+        if (defaultTargetPlatform == TargetPlatform.iOS &&
+            mime.contains('webm')) {
           if (mounted) {
             setState(() {
               _autoTrailerStage = 'webm captured on iOS • using source';
@@ -2720,12 +3212,12 @@ class _PlayWebglScreenState extends State<PlayWebglScreen>
           _autoTrailerEtaSec = (data['etaSec'] is num)
               ? (data['etaSec'] as num).toInt()
               : _autoTrailerEtaSec;
-      _autoTrailerEstimatedTotalSec = (data['estimatedTotalSec'] is num)
-        ? (data['estimatedTotalSec'] as num).toInt()
-        : _autoTrailerEstimatedTotalSec;
-      _autoTrailerElapsedSec = (data['elapsedSec'] is num)
-        ? (data['elapsedSec'] as num).toInt()
-        : _autoTrailerElapsedSec;
+          _autoTrailerEstimatedTotalSec = (data['estimatedTotalSec'] is num)
+              ? (data['estimatedTotalSec'] as num).toInt()
+              : _autoTrailerEstimatedTotalSec;
+          _autoTrailerElapsedSec = (data['elapsedSec'] is num)
+              ? (data['elapsedSec'] as num).toInt()
+              : _autoTrailerElapsedSec;
         });
       }
 
@@ -2850,7 +3342,16 @@ class _PlayWebglScreenState extends State<PlayWebglScreen>
             '🎬 Reel is ready, tap Check Reel to open it',
           );
         }
-        if (publishOnReady) {
+        if (!_autoTrailerAutoPublishEnabled) {
+          final readyUrl = (_autoTrailerVideoUrl ?? '').trim();
+          final tid = (_autoTrailerId ?? '').trim();
+          if (readyUrl.isNotEmpty && tid.isNotEmpty && mounted) {
+            await _openAutoTrailerPreviewSheet(
+              videoUrl: readyUrl,
+              trailerId: tid,
+            );
+          }
+        } else if (publishOnReady) {
           await _autoPublishTrailerToFeedIfNeeded();
         }
         return;
@@ -2992,8 +3493,23 @@ class _PlayWebglScreenState extends State<PlayWebglScreen>
                     ],
                   ),
                   const SizedBox(height: 12),
+                  SwitchListTile(
+                    value: _is3dMode,
+                    onChanged: (v) {
+                      _toggle3dMode();
+                      setModal(() {});
+                    },
+                    title: const Text('3D Mode Controls'),
+                    subtitle: const Text(
+                      'Enable Joystick for 3D movement (WASD)',
+                    ),
+                    secondary: Icon(
+                      Icons.threed_rotation_rounded,
+                      color: _is3dMode ? AppColors.accent : null,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
                   SwitchListTile.adaptive(
-                    contentPadding: EdgeInsets.zero,
                     value: autoPublish,
                     onChanged: (v) => setModal(() => autoPublish = v),
                     title: const Text('Auto publish to feed'),
@@ -3009,14 +3525,21 @@ class _PlayWebglScreenState extends State<PlayWebglScreen>
                     child: ElevatedButton.icon(
                       onPressed: () {
                         if (!mounted) return;
+                        final needsReload = _autoTrailerStyle != style;
+
                         setState(() {
                           _autoTrailerStyle = style;
                           _autoTrailerTarget = target;
                           _autoTrailerAutoPublishEnabled = autoPublish;
                         });
-                        Navigator.of(ctx).pop();
+
+                        if (needsReload) {
+                          _controller.reload();
+                        }
+
+                        Navigator.of(context).pop();
                         AppNotifier.showSuccess(
-                          'Trailer options updated: $style • $target • ${autoPublish ? 'auto-publish ON' : 'auto-publish OFF'}',
+                          'Settings updated. ${needsReload ? "Reloading engine..." : "Applied."}',
                         );
                       },
                       icon: const Icon(Icons.check_rounded),
@@ -3471,54 +3994,99 @@ class _PlayWebglScreenState extends State<PlayWebglScreen>
 
   Future<void> _toggleVoice() async {
     if (_voiceListening) {
-      try {
-        await _speech.stop();
-      } catch (_) {}
-      if (!mounted) return;
-      setState(() => _voiceListening = false);
-      return;
+      await _stopVoiceListening();
+    } else {
+      await _startVoiceListening();
     }
+  }
 
-    final ok = await _speech.initialize().catchError((_) => false);
-    if (ok != true) {
-      if (!mounted) return;
-      AppNotifier.showError('Voice unavailable');
-      return;
-    }
-
+  Future<void> _stopVoiceListening() async {
+    try {
+      await _speech.stop();
+    } catch (_) {}
     if (!mounted) return;
-    setState(() {
-      _voiceListening = true;
-      _voiceLast = '';
-    });
+    setState(() => _voiceListening = false);
+  }
 
-    await _speech.listen(
-      onResult: (res) async {
-        final words = (res.recognizedWords).trim();
-        if (words.isEmpty) return;
+  Future<void> _startVoiceListening() async {
+    if (_voiceStartInFlight) return;
+    _voiceStartInFlight = true;
+    try {
+      if (!mounted) return;
+      final ok = await _speech
+          .initialize(
+            onStatus: (status) async {
+              final s = status.trim().toLowerCase();
+              if (!_voicePlayMode) return;
+              if (!mounted) return;
+              if (!_voiceListening) return;
+              if (s.contains('done') || s.contains('notlistening')) {
+                await Future.delayed(const Duration(milliseconds: 220));
+                if (!mounted) return;
+                if (!_voicePlayMode) return;
+                if (!_voiceListening) return;
+                await _startVoiceListening();
+              }
+            },
+            onError: (_) async {
+              if (!_voicePlayMode) return;
+              if (!mounted) return;
+              if (!_voiceListening) return;
+              await Future.delayed(const Duration(milliseconds: 600));
+              if (!mounted) return;
+              if (!_voicePlayMode) return;
+              if (!_voiceListening) return;
+              await _startVoiceListening();
+            },
+          )
+          .catchError((_) => false);
+      if (ok != true) {
         if (!mounted) return;
-        setState(() => _voiceLast = words);
-        final parsed = _parseVoiceCommand(words);
-        if (parsed.autoBalance != null) {
-          final v = parsed.autoBalance!;
-          if (!mounted) return;
-          setState(() => _autoBalanceNextRun = v);
-          await _saveAutoBalancePref(v);
-          if (!v) {
-            await _clearAutoBalancePending();
-            if (!mounted) return;
-            AppNotifier.showSuccess('Auto-balance OFF');
-          } else {
-            if (!mounted) return;
-            AppNotifier.showSuccess('Auto-balance ON');
-          }
-        }
+        AppNotifier.showError('Voice unavailable');
+        return;
+      }
 
-        await _applyVoiceRuntimePatch(patch: parsed.patch);
-      },
-      listenMode: stt.ListenMode.confirmation,
-      partialResults: true,
-    );
+      if (!mounted) return;
+      setState(() {
+        _voiceListening = true;
+        _voiceLast = '';
+      });
+
+      await _speech.listen(
+        onResult: (res) async {
+          final words = (res.recognizedWords).trim();
+          if (words.isEmpty) return;
+          if (!mounted) return;
+          setState(() => _voiceLast = words);
+          if (_voicePlayMode) {
+            setState(() => _voiceCmdLast = words);
+            await _handleVoicePlayCommand(words);
+          }
+
+          final parsed = _parseVoiceCommand(words);
+          if (parsed.autoBalance != null) {
+            final v = parsed.autoBalance!;
+            if (!mounted) return;
+            setState(() => _autoBalanceNextRun = v);
+            await _saveAutoBalancePref(v);
+            if (!v) {
+              await _clearAutoBalancePending();
+              if (!mounted) return;
+              AppNotifier.showSuccess('Auto-balance OFF');
+            } else {
+              if (!mounted) return;
+              AppNotifier.showSuccess('Auto-balance ON');
+            }
+          }
+
+          await _applyVoiceRuntimePatch(patch: parsed.patch);
+        },
+        listenMode: stt.ListenMode.confirmation,
+        partialResults: true,
+      );
+    } finally {
+      _voiceStartInFlight = false;
+    }
   }
 
   Future<void> _applyRuntimeConfig({
@@ -5044,156 +5612,7 @@ class _PlayWebglScreenState extends State<PlayWebglScreen>
                                             ],
                                           ),
                                           const SizedBox(height: 10),
-                                          Row(
-                                            children: [
-                                              Expanded(
-                                                child: Text(
-                                                  'FPS controls (WASD + mouse click)',
-                                                  style: AppTypography.body2
-                                                      .copyWith(
-                                                        fontWeight:
-                                                            FontWeight.w800,
-                                                      ),
-                                                ),
-                                              ),
-                                              Switch(
-                                                value: fpsControlsEnabled,
-                                                onChanged: saving
-                                                    ? null
-                                                    : (v) async {
-                                                        setSheetState(
-                                                          () =>
-                                                              fpsControlsEnabled =
-                                                                  v,
-                                                        );
-                                                        if (mounted) {
-                                                          setState(
-                                                            () =>
-                                                                _fpsControlsEnabled =
-                                                                    v,
-                                                          );
-                                                        }
-                                                        final pid = _projectId;
-                                                        if (pid != null &&
-                                                            pid
-                                                                .trim()
-                                                                .isNotEmpty) {
-                                                          try {
-                                                            final prefs =
-                                                                await SharedPreferences.getInstance();
-                                                            await prefs.setBool(
-                                                              '$_kPrefFpsControlsPrefix$pid',
-                                                              v,
-                                                            );
-                                                          } catch (_) {}
-                                                        }
-
-                                                        try {
-                                                          await _pushRuntimeConfigToWebView(
-                                                            speed: speed.clamp(
-                                                              0.0,
-                                                              20.0,
-                                                            ),
-                                                            timeScale: timeScale
-                                                                .clamp(
-                                                                  0.5,
-                                                                  2.0,
-                                                                ),
-                                                            difficulty:
-                                                                difficulty
-                                                                    .clamp(
-                                                                      0.0,
-                                                                      1.0,
-                                                                    ),
-                                                            theme: themeCtrl
-                                                                .text
-                                                                .trim(),
-                                                            notes: notesCtrl
-                                                                .text
-                                                                .trim(),
-                                                            genre: genreCtrl
-                                                                .text
-                                                                .trim(),
-                                                            assetsType:
-                                                                assetsTypeCtrl
-                                                                    .text
-                                                                    .trim(),
-                                                            mechanics: mechanicsCtrl
-                                                                .text
-                                                                .split(',')
-                                                                .map(
-                                                                  (e) =>
-                                                                      e.trim(),
-                                                                )
-                                                                .where(
-                                                                  (e) => e
-                                                                      .isNotEmpty,
-                                                                )
-                                                                .toList(),
-                                                            primaryColor:
-                                                                _normHex(
-                                                                  primaryCtrl
-                                                                      .text,
-                                                                ) ??
-                                                                '#22C55E',
-                                                            secondaryColor:
-                                                                _normHex(
-                                                                  secondaryCtrl
-                                                                      .text,
-                                                                ) ??
-                                                                '#3B82F6',
-                                                            accentColor:
-                                                                _normHex(
-                                                                  accentCtrl
-                                                                      .text,
-                                                                ) ??
-                                                                '#F59E0B',
-                                                            playerColor:
-                                                                _normHex(
-                                                                  playerCtrl
-                                                                      .text,
-                                                                ) ??
-                                                                (_normHex(
-                                                                      accentCtrl
-                                                                          .text,
-                                                                    ) ??
-                                                                    '#F59E0B'),
-                                                            fogEnabled:
-                                                                fogEnabled,
-                                                            fogDensity:
-                                                                fogDensity
-                                                                    .clamp(
-                                                                      0.0,
-                                                                      0.1,
-                                                                    ),
-                                                            cameraZoom:
-                                                                cameraZoom
-                                                                    .clamp(
-                                                                      0.0,
-                                                                      30.0,
-                                                                    ),
-                                                            gravityY: gravityY
-                                                                .clamp(
-                                                                  -50.0,
-                                                                  0.0,
-                                                                ),
-                                                            jumpForce: jumpForce
-                                                                .clamp(
-                                                                  0.0,
-                                                                  50.0,
-                                                                ),
-                                                            playerSkinId:
-                                                                playerSkinId,
-                                                            playerSpriteUrl:
-                                                                spriteUrlCtrl
-                                                                    .text
-                                                                    .trim(),
-                                                          );
-                                                        } catch (_) {}
-                                                      },
-                                              ),
-                                            ],
-                                          ),
+                                          const SizedBox.shrink(),
                                           const SizedBox(height: 10),
                                           Row(
                                             children: [
@@ -7215,62 +7634,32 @@ class _PlayWebglScreenState extends State<PlayWebglScreen>
 
     BoxDecoration panelDecoration() {
       final accent = skinAccent(_controllerSkin);
-      final base = cs.surface.withOpacity(0.38);
-      final border = accent.withOpacity(0.22);
+      final base = cs.surface.withOpacity(0.28);
+      final border = accent.withOpacity(0.30);
       return BoxDecoration(
-        color: base,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: border),
+        gradient: LinearGradient(
+          colors: [
+            Color.lerp(base, Colors.black, 0.18)!,
+            Color.lerp(base, accent, 0.10)!,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: border, width: 1.2),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.18),
-            blurRadius: 18,
-            offset: const Offset(0, 10),
+            color: Colors.black.withOpacity(0.26),
+            blurRadius: 24,
+            offset: const Offset(0, 14),
           ),
           BoxShadow(
-            color: accent.withOpacity(0.10),
-            blurRadius: 30,
-            offset: const Offset(0, 14),
+            color: accent.withOpacity(0.14),
+            blurRadius: 34,
+            offset: const Offset(0, 18),
           ),
         ],
       );
-    }
-
-    Widget glyph({required String text, required Color color}) {
-      return Container(
-        width: 28,
-        height: 28,
-        alignment: Alignment.center,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: color.withOpacity(0.14),
-          border: Border.all(color: color.withOpacity(0.35)),
-        ),
-        child: Text(
-          text,
-          style: AppTypography.caption.copyWith(
-            fontWeight: FontWeight.w900,
-            color: color,
-            height: 1.0,
-          ),
-        ),
-      );
-    }
-
-    Widget actionGlyph({required bool primary}) {
-      final a = skinAccent(_controllerSkin);
-      switch (_controllerSkin) {
-        case _ControllerSkin.xbox:
-          return glyph(text: primary ? 'A' : 'B', color: a);
-        case _ControllerSkin.playstation:
-          return glyph(text: primary ? '△' : '○', color: a);
-        case _ControllerSkin.nintendo:
-          return glyph(text: primary ? 'A' : 'B', color: a);
-        case _ControllerSkin.arcade:
-          return primary
-              ? const Icon(Icons.arrow_upward_rounded, size: 22)
-              : const Icon(Icons.local_fire_department_rounded, size: 22);
-      }
     }
 
     _FaceSpec faceSpec({required bool primary}) {
@@ -7306,14 +7695,7 @@ class _PlayWebglScreenState extends State<PlayWebglScreen>
       canPop: false,
       onPopInvokedWithResult: (didPop, result) async {
         if (didPop) return;
-        await _finalizeAutoTrailerPipeline();
-        await _maybeShowPostGameCoachReport();
-        if (!context.mounted) return;
-        if (context.canPop()) {
-          context.pop();
-        } else {
-          context.go('/dashboard?tab=projects');
-        }
+        await _handleExit();
       },
       child: Scaffold(
         backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -7325,27 +7707,37 @@ class _PlayWebglScreenState extends State<PlayWebglScreen>
                 elevation: 0,
                 leading: IconButton(
                   onPressed: () async {
-                    _releaseAllKeys();
-                    await _finalizeAutoTrailerPipeline();
-                    await _maybeShowPostGameCoachReport();
-                    if (!context.mounted) return;
-                    if (context.canPop()) {
-                      context.pop();
-                    } else {
-                      context.go('/dashboard?tab=projects');
-                    }
+                    await _handleExit();
                   },
                   icon: Icon(Icons.arrow_back, color: cs.onSurface),
                 ),
                 title: Text('Play', style: AppTypography.subtitle1),
                 actions: [
+                  IconButton(
+                    onPressed: _toggle3dMode,
+                    icon: Icon(
+                      _is3dMode
+                          ? Icons.videogame_asset_rounded
+                          : Icons.threed_rotation_rounded,
+                      color: _is3dMode ? AppColors.accent : cs.onSurface,
+                    ),
+                    tooltip: 'Toggle 3D Mode',
+                  ),
                   if (isIos)
                     IconButton(
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      iconSize: 20,
                       tooltip: 'Open in Safari',
                       onPressed: _openInSafari,
                       icon: const Icon(Icons.open_in_new_rounded),
                     ),
                   IconButton(
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    iconSize: 20,
                     onPressed: () async {
                       await Clipboard.setData(
                         ClipboardData(text: _resolvedUrl),
@@ -7357,12 +7749,34 @@ class _PlayWebglScreenState extends State<PlayWebglScreen>
                   ),
                   if (_autoTrailerMode)
                     IconButton(
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      iconSize: 20,
+                      tooltip: 'Reel Style',
+                      onPressed: _openAutoTrailerOptionsSheet,
+                      icon: const Icon(Icons.auto_awesome_rounded),
+                    ),
+                  if (_autoTrailerMode)
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      iconSize: 20,
                       tooltip: (_autoTrailerVideoUrl ?? '').trim().isNotEmpty
                           ? 'Open Reel'
-                          : 'Check Reel • ETA ${_fmtAutoTrailerEta(_autoTrailerEtaSec)} / ${_fmtAutoTrailerTotalEstimate()}',
+                          : 'Check Reel',
                       onPressed: () async {
                         final readyUrl = (_autoTrailerVideoUrl ?? '').trim();
                         if (readyUrl.isNotEmpty) {
+                          final tid = (_autoTrailerId ?? '').trim();
+                          if (tid.isNotEmpty) {
+                            await _openAutoTrailerPreviewSheet(
+                              videoUrl: readyUrl,
+                              trailerId: tid,
+                            );
+                            return;
+                          }
                           final ok = await launchUrl(
                             Uri.parse(readyUrl),
                             mode: LaunchMode.externalApplication,
@@ -7372,9 +7786,6 @@ class _PlayWebglScreenState extends State<PlayWebglScreen>
                           return;
                         }
                         await _checkAutoTrailerStatus();
-                        AppNotifier.showSuccess(
-                          'Reel: ${(_autoTrailerStage ?? _autoTrailerStatus).trim()} • ETA ${_fmtAutoTrailerEta(_autoTrailerEtaSec)} / ${_fmtAutoTrailerTotalEstimate()}',
-                        );
                       },
                       icon: Icon(
                         (_autoTrailerVideoUrl ?? '').trim().isNotEmpty
@@ -7382,21 +7793,27 @@ class _PlayWebglScreenState extends State<PlayWebglScreen>
                             : Icons.hourglass_bottom_rounded,
                       ),
                     ),
-                  if (_autoTrailerMode)
-                    IconButton(
-                      tooltip: 'Trailer options',
-                      onPressed: _openAutoTrailerOptionsSheet,
-                      icon: const Icon(Icons.movie_filter_rounded),
-                    ),
                   IconButton(
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    iconSize: 20,
                     onPressed: _openControllerSkinSheet,
                     icon: const Icon(Icons.sports_esports_rounded),
                   ),
                   IconButton(
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    iconSize: 20,
                     onPressed: _openingSettings ? null : _openSettingsDrawer,
                     icon: const Icon(Icons.tune_rounded),
                   ),
                   IconButton(
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    iconSize: 20,
                     onPressed: _toggleVoice,
                     icon: Icon(
                       _voiceListening
@@ -7405,13 +7822,37 @@ class _PlayWebglScreenState extends State<PlayWebglScreen>
                     ),
                   ),
                   IconButton(
-                    onPressed: _toggleFullscreen,
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    iconSize: 20,
+                    tooltip: _voicePlayMode
+                        ? 'Voice Play: ON'
+                        : 'Voice Play: OFF',
+                    onPressed: _toggleVoicePlayMode,
                     icon: Icon(
-                      _isFullscreen
-                          ? Icons.fullscreen_exit_rounded
-                          : Icons.fullscreen_rounded,
+                      _voicePlayMode
+                          ? Icons.accessibility_new_rounded
+                          : Icons.accessibility_new_outlined,
                     ),
                   ),
+                  if (_voicePlayMode)
+                    IconButton(
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(),
+                      iconSize: 20,
+                      tooltip: _voiceWakeWord
+                          ? 'Wake word: ON (play ...)'
+                          : 'Wake word: OFF',
+                      onPressed: _toggleVoiceWakeWord,
+                      icon: Icon(
+                        _voiceWakeWord
+                            ? Icons.record_voice_over_rounded
+                            : Icons.voice_over_off_rounded,
+                      ),
+                    ),
+                  const SizedBox(width: 8),
                 ],
               ),
         body: Stack(
@@ -7423,6 +7864,50 @@ class _PlayWebglScreenState extends State<PlayWebglScreen>
             _ghostOverlay(),
 
             _mpFeedOverlay(),
+
+            if (_isFullscreen &&
+                !_loading &&
+                _error == null &&
+                !_fpsControlsEnabled)
+              Positioned(
+                top: 14,
+                right: 14,
+                child: SafeArea(
+                  minimum: EdgeInsets.zero,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(16),
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.black.withOpacity(0.42),
+                          skinAccent(_controllerSkin).withOpacity(0.20),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      border: Border.all(
+                        color: skinAccent(_controllerSkin).withOpacity(0.36),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.24),
+                          blurRadius: 18,
+                          offset: const Offset(0, 10),
+                        ),
+                      ],
+                    ),
+                    child: IconButton(
+                      tooltip: 'Switch controller',
+                      visualDensity: VisualDensity.compact,
+                      icon: const Icon(
+                        Icons.sports_esports_rounded,
+                        color: Colors.white,
+                      ),
+                      onPressed: _openControllerSkinSheet,
+                    ),
+                  ),
+                ),
+              ),
 
             if (_autoTrailerMode && !_isFullscreen)
               Positioned(
@@ -7637,8 +8122,356 @@ class _PlayWebglScreenState extends State<PlayWebglScreen>
                       );
                     },
                     child: Container(
-                      key: ValueKey<String>('2d.${_controllerSkin.name}'),
-                      child: (_controllerSkin == _ControllerSkin.arcade)
+                      key: ValueKey<String>(
+                        '${_is3dMode ? '3d' : '2d'}.${_controllerSkin.name}',
+                      ),
+                      child: _is3dMode
+                          ? Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                _DpadCross(
+                                  accent: skinAccent(_controllerSkin),
+                                  glow: 0.14,
+                                  skin: _controllerSkin,
+                                  onUpDown: () async {
+                                    await _ensureGameFocus();
+                                    await _sendKey(
+                                      key: 'w',
+                                      code: 'KeyW',
+                                      down: true,
+                                    );
+                                  },
+                                  onUpUp: () async {
+                                    await _sendKey(
+                                      key: 'w',
+                                      code: 'KeyW',
+                                      down: false,
+                                    );
+                                  },
+                                  onLeftDown: () async {
+                                    await _ensureGameFocus();
+                                    await _sendKey(
+                                      key: 'a',
+                                      code: 'KeyA',
+                                      down: true,
+                                    );
+                                  },
+                                  onLeftUp: () async {
+                                    await _sendKey(
+                                      key: 'a',
+                                      code: 'KeyA',
+                                      down: false,
+                                    );
+                                  },
+                                  onDownDown: () async {
+                                    await _ensureGameFocus();
+                                    await _sendKey(
+                                      key: 's',
+                                      code: 'KeyS',
+                                      down: true,
+                                    );
+                                  },
+                                  onDownUp: () async {
+                                    await _sendKey(
+                                      key: 's',
+                                      code: 'KeyS',
+                                      down: false,
+                                    );
+                                  },
+                                  onRightDown: () async {
+                                    await _ensureGameFocus();
+                                    await _sendKey(
+                                      key: 'd',
+                                      code: 'KeyD',
+                                      down: true,
+                                    );
+                                  },
+                                  onRightUp: () async {
+                                    await _sendKey(
+                                      key: 'd',
+                                      code: 'KeyD',
+                                      down: false,
+                                    );
+                                  },
+                                ),
+                                const SizedBox(width: 12),
+                                Container(
+                                  padding: const EdgeInsets.all(14),
+                                  decoration: panelDecoration().copyWith(
+                                    borderRadius: BorderRadius.circular(22),
+                                  ),
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Builder(
+                                        builder: (context) {
+                                          String topLabel() {
+                                            switch (_controllerSkin) {
+                                              case _ControllerSkin.playstation:
+                                                return '△';
+                                              case _ControllerSkin.xbox:
+                                                return 'Y';
+                                              case _ControllerSkin.nintendo:
+                                                return 'X';
+                                              case _ControllerSkin.arcade:
+                                                return '↑';
+                                            }
+                                          }
+
+                                          String leftLabel() {
+                                            switch (_controllerSkin) {
+                                              case _ControllerSkin.playstation:
+                                                return '□';
+                                              case _ControllerSkin.xbox:
+                                                return 'X';
+                                              case _ControllerSkin.nintendo:
+                                                return 'Y';
+                                              case _ControllerSkin.arcade:
+                                                return 'Q';
+                                            }
+                                          }
+
+                                          String rightLabel() {
+                                            switch (_controllerSkin) {
+                                              case _ControllerSkin.playstation:
+                                                return '○';
+                                              case _ControllerSkin.xbox:
+                                                return 'B';
+                                              case _ControllerSkin.nintendo:
+                                                return 'A';
+                                              case _ControllerSkin.arcade:
+                                                return '🎯';
+                                            }
+                                          }
+
+                                          String bottomLabel() {
+                                            switch (_controllerSkin) {
+                                              case _ControllerSkin.playstation:
+                                                return '✕';
+                                              case _ControllerSkin.xbox:
+                                                return 'A';
+                                              case _ControllerSkin.nintendo:
+                                                return 'B';
+                                              case _ControllerSkin.arcade:
+                                                return '⤒';
+                                            }
+                                          }
+
+                                          _FaceSpec specForPos(String pos) {
+                                            switch (_controllerSkin) {
+                                              case _ControllerSkin.xbox:
+                                                if (pos == 'top') {
+                                                  return const _FaceSpec(
+                                                    label: 'Y',
+                                                    fillA: Color(0xFFF59E0B),
+                                                    fillB: Color(0xFFFBBF24),
+                                                  );
+                                                }
+                                                if (pos == 'right') {
+                                                  return const _FaceSpec(
+                                                    label: 'B',
+                                                    fillA: Color(0xFFDC2626),
+                                                    fillB: Color(0xFFEF4444),
+                                                  );
+                                                }
+                                                if (pos == 'left') {
+                                                  return const _FaceSpec(
+                                                    label: 'X',
+                                                    fillA: Color(0xFF2563EB),
+                                                    fillB: Color(0xFF60A5FA),
+                                                  );
+                                                }
+                                                return const _FaceSpec(
+                                                  label: 'A',
+                                                  fillA: Color(0xFF16A34A),
+                                                  fillB: Color(0xFF22C55E),
+                                                );
+                                              case _ControllerSkin.playstation:
+                                                if (pos == 'top') {
+                                                  return const _FaceSpec(
+                                                    label: '△',
+                                                    fillA: Color(0xFF16A34A),
+                                                    fillB: Color(0xFF22C55E),
+                                                  );
+                                                }
+                                                if (pos == 'right') {
+                                                  return const _FaceSpec(
+                                                    label: '○',
+                                                    fillA: Color(0xFFDC2626),
+                                                    fillB: Color(0xFFEF4444),
+                                                  );
+                                                }
+                                                if (pos == 'left') {
+                                                  return const _FaceSpec(
+                                                    label: '□',
+                                                    fillA: Color(0xFFDB2777),
+                                                    fillB: Color(0xFFEC4899),
+                                                  );
+                                                }
+                                                return const _FaceSpec(
+                                                  label: '✕',
+                                                  fillA: Color(0xFF2563EB),
+                                                  fillB: Color(0xFF60A5FA),
+                                                );
+                                              case _ControllerSkin.nintendo:
+                                                if (pos == 'top') {
+                                                  return const _FaceSpec(
+                                                    label: 'X',
+                                                    fillA: Color(0xFF2563EB),
+                                                    fillB: Color(0xFF60A5FA),
+                                                  );
+                                                }
+                                                if (pos == 'right') {
+                                                  return const _FaceSpec(
+                                                    label: 'A',
+                                                    fillA: Color(0xFFEF4444),
+                                                    fillB: Color(0xFFF87171),
+                                                  );
+                                                }
+                                                if (pos == 'left') {
+                                                  return const _FaceSpec(
+                                                    label: 'Y',
+                                                    fillA: Color(0xFF16A34A),
+                                                    fillB: Color(0xFF22C55E),
+                                                  );
+                                                }
+                                                return const _FaceSpec(
+                                                  label: 'B',
+                                                  fillA: Color(0xFFF59E0B),
+                                                  fillB: Color(0xFFFBBF24),
+                                                );
+                                              case _ControllerSkin.arcade:
+                                                return _FaceSpec(
+                                                  label: '•',
+                                                  fillA: cs.primary,
+                                                  fillB: cs.primaryContainer,
+                                                );
+                                            }
+                                          }
+
+                                          Widget faceBtn({
+                                            required String label,
+                                            required Future<void> Function()
+                                            onDown,
+                                            required Future<void> Function()
+                                            onUp,
+                                          }) {
+                                            final pos = (label == topLabel())
+                                                ? 'top'
+                                                : (label == rightLabel())
+                                                    ? 'right'
+                                                    : (label == leftLabel())
+                                                        ? 'left'
+                                                        : 'bottom';
+                                            return _TouchKey(
+                                              label: label,
+                                              child: _FaceButtonFace(
+                                                spec: specForPos(pos).copyWith(
+                                                  labelOverride: label,
+                                                ),
+                                                pressedT: _hudPulseCtrl.value,
+                                              ),
+                                              size: 64,
+                                              haptic: true,
+                                              skin: _controllerSkin,
+                                              forceShape: _TouchKeyShape.circle,
+                                              onDown: onDown,
+                                              onUp: onUp,
+                                            );
+                                          }
+
+                                          return Column(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Row(
+                                                children: [
+                                                  faceBtn(
+                                                    label: topLabel(),
+                                                    onDown: () async {
+                                                      await _ensureGameFocus();
+                                                      await _sendKey(
+                                                        key: 'e',
+                                                        code: 'KeyE',
+                                                        down: true,
+                                                      );
+                                                    },
+                                                    onUp: () async {
+                                                      await _sendKey(
+                                                        key: 'e',
+                                                        code: 'KeyE',
+                                                        down: false,
+                                                      );
+                                                    },
+                                                  ),
+                                                  const SizedBox(width: 10),
+                                                  faceBtn(
+                                                    label: rightLabel(),
+                                                    onDown: () async {
+                                                      await _ensureGameFocus();
+                                                      await _sendMousePrimary(
+                                                        down: true,
+                                                      );
+                                                    },
+                                                    onUp: () async {
+                                                      await _sendMousePrimary(
+                                                        down: false,
+                                                      );
+                                                    },
+                                                  ),
+                                                ],
+                                              ),
+                                              const SizedBox(height: 10),
+                                              Row(
+                                                children: [
+                                                  faceBtn(
+                                                    label: leftLabel(),
+                                                    onDown: () async {
+                                                      await _ensureGameFocus();
+                                                      await _sendKey(
+                                                        key: 'q',
+                                                        code: 'KeyQ',
+                                                        down: true,
+                                                      );
+                                                    },
+                                                    onUp: () async {
+                                                      await _sendKey(
+                                                        key: 'q',
+                                                        code: 'KeyQ',
+                                                        down: false,
+                                                      );
+                                                    },
+                                                  ),
+                                                  const SizedBox(width: 10),
+                                                  faceBtn(
+                                                    label: bottomLabel(),
+                                                    onDown: () async {
+                                                      await _ensureGameFocus();
+                                                      await _sendKey(
+                                                        key: ' ',
+                                                        code: 'Space',
+                                                        down: true,
+                                                      );
+                                                    },
+                                                    onUp: () async {
+                                                      await _sendKey(
+                                                        key: ' ',
+                                                        code: 'Space',
+                                                        down: false,
+                                                      );
+                                                    },
+                                                  ),
+                                                ],
+                                              ),
+                                            ],
+                                          );
+                                        },
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                            )
+                          : (_controllerSkin == _ControllerSkin.arcade)
                           ? Container(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: AppSpacing.md,
@@ -7883,51 +8716,56 @@ class _PlayWebglScreenState extends State<PlayWebglScreen>
                                 Container(
                                   padding: const EdgeInsets.all(10),
                                   decoration: panelDecoration(),
-                                  child: _TouchKey(
-                                    label: 'Jump',
-                                    child: _FaceButtonFace(
-                                      spec: faceSpec(primary: true),
-                                      pressedT: _hudPulseCtrl.value,
-                                    ),
-                                    size: 62,
-                                    haptic: true,
-                                    skin: _controllerSkin,
-                                    forceShape: _TouchKeyShape.circle,
-                                    onDown: () async {
-                                      await _ensureGameFocus();
-                                      await _sendKey(
-                                        key: ' ',
-                                        code: 'Space',
-                                        down: true,
-                                      );
-                                      await _sendKey(
-                                        key: 'w',
-                                        code: 'KeyW',
-                                        down: true,
-                                      );
-                                      await _sendKey(
-                                        key: 'ArrowUp',
-                                        code: 'ArrowUp',
-                                        down: true,
-                                      );
-                                    },
-                                    onUp: () async {
-                                      await _sendKey(
-                                        key: ' ',
-                                        code: 'Space',
-                                        down: false,
-                                      );
-                                      await _sendKey(
-                                        key: 'w',
-                                        code: 'KeyW',
-                                        down: false,
-                                      );
-                                      await _sendKey(
-                                        key: 'ArrowUp',
-                                        code: 'ArrowUp',
-                                        down: false,
-                                      );
-                                    },
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      _TouchKey(
+                                        label: 'Jump',
+                                        child: _FaceButtonFace(
+                                          spec: faceSpec(primary: true),
+                                          pressedT: _hudPulseCtrl.value,
+                                        ),
+                                        size: 62,
+                                        haptic: true,
+                                        skin: _controllerSkin,
+                                        forceShape: _TouchKeyShape.circle,
+                                        onDown: () async {
+                                          await _ensureGameFocus();
+                                          await _sendKey(
+                                            key: ' ',
+                                            code: 'Space',
+                                            down: true,
+                                          );
+                                          await _sendKey(
+                                            key: 'w',
+                                            code: 'KeyW',
+                                            down: true,
+                                          );
+                                          await _sendKey(
+                                            key: 'ArrowUp',
+                                            code: 'ArrowUp',
+                                            down: true,
+                                          );
+                                        },
+                                        onUp: () async {
+                                          await _sendKey(
+                                            key: ' ',
+                                            code: 'Space',
+                                            down: false,
+                                          );
+                                          await _sendKey(
+                                            key: 'w',
+                                            code: 'KeyW',
+                                            down: false,
+                                          );
+                                          await _sendKey(
+                                            key: 'ArrowUp',
+                                            code: 'ArrowUp',
+                                            down: false,
+                                          );
+                                        },
+                                      ),
+                                    ],
                                   ),
                                 ),
                               ],
@@ -8030,7 +8868,9 @@ class _PlayWebglScreenState extends State<PlayWebglScreen>
                       ),
                       const SizedBox(width: 8),
                       TextButton(
-                        onPressed: _toggleVoice,
+                        onPressed: _voicePlayMode
+                            ? _toggleVoicePlayMode
+                            : _toggleVoice,
                         child: Text(
                           'Stop',
                           style: AppTypography.caption.copyWith(
@@ -8467,27 +9307,30 @@ class _DpadCross extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final cs = Theme.of(context).colorScheme;
-    final plate = cs.surface.withOpacity(0.58);
+    final plate = cs.surface.withOpacity(0.50);
     return Container(
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(26),
+        borderRadius: BorderRadius.circular(28),
         gradient: LinearGradient(
-          colors: [plate, cs.surface.withOpacity(0.42)],
+          colors: [
+            Color.lerp(plate, Colors.black, 0.15)!,
+            Color.lerp(cs.surface.withOpacity(0.42), accent, 0.08)!,
+          ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        border: Border.all(color: accent.withOpacity(0.26)),
+        border: Border.all(color: accent.withOpacity(0.34), width: 1.2),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.18),
-            blurRadius: 18,
-            offset: const Offset(0, 10),
+            color: Colors.black.withOpacity(0.24),
+            blurRadius: 24,
+            offset: const Offset(0, 14),
           ),
           BoxShadow(
-            color: accent.withOpacity(glow),
-            blurRadius: 30,
-            offset: const Offset(0, 16),
+            color: accent.withOpacity((glow + 0.03).clamp(0.0, 0.26)),
+            blurRadius: 36,
+            offset: const Offset(0, 18),
           ),
         ],
       ),
@@ -8497,7 +9340,7 @@ class _DpadCross extends StatelessWidget {
           _TouchKey(
             label: 'Up',
             child: const Icon(Icons.keyboard_arrow_up_rounded, size: 26),
-            size: 56,
+            size: 58,
             haptic: true,
             skin: skin,
             forceShape: _TouchKeyShape.roundedRect,
@@ -8511,7 +9354,7 @@ class _DpadCross extends StatelessWidget {
               _TouchKey(
                 label: 'Left',
                 child: const Icon(Icons.chevron_left_rounded, size: 26),
-                size: 56,
+                size: 58,
                 haptic: true,
                 skin: skin,
                 forceShape: _TouchKeyShape.roundedRect,
@@ -8520,19 +9363,32 @@ class _DpadCross extends StatelessWidget {
               ),
               const SizedBox(width: 8),
               Container(
-                width: 16,
-                height: 16,
+                width: 18,
+                height: 18,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: cs.onSurface.withOpacity(0.12),
-                  border: Border.all(color: accent.withOpacity(0.18)),
+                  gradient: RadialGradient(
+                    colors: [
+                      accent.withOpacity(0.35),
+                      cs.onSurface.withOpacity(0.16),
+                    ],
+                    stops: const [0.12, 1],
+                  ),
+                  border: Border.all(color: accent.withOpacity(0.30)),
+                  boxShadow: [
+                    BoxShadow(
+                      color: accent.withOpacity(0.16),
+                      blurRadius: 10,
+                      spreadRadius: 1,
+                    ),
+                  ],
                 ),
               ),
               const SizedBox(width: 8),
               _TouchKey(
                 label: 'Right',
                 child: const Icon(Icons.chevron_right_rounded, size: 26),
-                size: 56,
+                size: 58,
                 haptic: true,
                 skin: skin,
                 forceShape: _TouchKeyShape.roundedRect,
@@ -8545,7 +9401,7 @@ class _DpadCross extends StatelessWidget {
           _TouchKey(
             label: 'Down',
             child: const Icon(Icons.keyboard_arrow_down_rounded, size: 26),
-            size: 56,
+            size: 58,
             haptic: true,
             skin: skin,
             forceShape: _TouchKeyShape.roundedRect,

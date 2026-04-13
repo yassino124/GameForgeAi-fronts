@@ -6,7 +6,7 @@ function resolveApiBaseUrl() {
   if (/^https?:\/\//i.test(raw)) return raw.replace(/\/$/, "");
 
   if (typeof window !== "undefined") {
-    return `http://${window.location.hostname}:3000/api`;
+    return `${window.location.origin}/api`;
   }
   return "http://localhost:3000/api";
 }

@@ -14,14 +14,19 @@ class TemplatesService {
   static Future<Map<String, dynamic>> listPublicTemplates({
     String? q,
     String? category,
+    String? token,
   }) async {
     final qp = <String, String>{};
     if (q != null && q.trim().isNotEmpty) qp['q'] = q.trim();
     if (category != null && category.trim().isNotEmpty && category != 'All') {
       qp['category'] = category.trim();
     }
-    final uri = Uri(path: '/templates', queryParameters: qp);
-    return ApiService.get(uri.toString());
+    final hasToken = token != null && token.trim().isNotEmpty;
+    final uri = Uri(
+      path: hasToken ? '/templates/my' : '/templates',
+      queryParameters: qp,
+    );
+    return ApiService.get(uri.toString(), token: hasToken ? token : null);
   }
 
   static Future<Map<String, dynamic>> updateTemplateMedia({
@@ -42,13 +47,19 @@ class TemplatesService {
       token: token,
       files: files.isEmpty ? null : files,
       fileLists: {
-        if (screenshots != null && screenshots.isNotEmpty) 'screenshots': screenshots,
+        if (screenshots != null && screenshots.isNotEmpty)
+          'screenshots': screenshots,
       },
     );
   }
 
-  static Future<Map<String, dynamic>> getTemplate(String id) async {
-    return ApiService.get('/templates/$id');
+  static Future<Map<String, dynamic>> getTemplate(
+    String id, {
+    String? token,
+  }) async {
+    final hasToken = token != null && token.trim().isNotEmpty;
+    final path = hasToken ? '/templates/my/$id' : '/templates/$id';
+    return ApiService.get(path, token: hasToken ? token : null);
   }
 
   static Future<Map<String, dynamic>> getTemplateDownloadUrl({
@@ -99,13 +110,13 @@ class TemplatesService {
     return ApiService.post(
       '/templates/$templateId/purchase/confirm',
       token: token,
-      data: {
-        'paymentIntentId': paymentIntentId,
-      },
+      data: {'paymentIntentId': paymentIntentId},
     );
   }
 
-  static Future<Map<String, dynamic>> listTemplateReviews(String templateId) async {
+  static Future<Map<String, dynamic>> listTemplateReviews(
+    String templateId,
+  ) async {
     return ApiService.get('/templates/$templateId/reviews');
   }
 
@@ -113,7 +124,10 @@ class TemplatesService {
     required String token,
     required String templateId,
   }) async {
-    return ApiService.get('/templates/$templateId/reviews/pending', token: token);
+    return ApiService.get(
+      '/templates/$templateId/reviews/pending',
+      token: token,
+    );
   }
 
   static Future<Map<String, dynamic>> approveTemplateReview({
@@ -121,7 +135,10 @@ class TemplatesService {
     required String templateId,
     required String userId,
   }) async {
-    return ApiService.post('/templates/$templateId/reviews/$userId/approve', token: token);
+    return ApiService.post(
+      '/templates/$templateId/reviews/$userId/approve',
+      token: token,
+    );
   }
 
   static Future<Map<String, dynamic>> submitTemplateReview({
@@ -133,10 +150,7 @@ class TemplatesService {
     return ApiService.post(
       '/templates/$templateId/reviews',
       token: token,
-      data: {
-        'rating': rating,
-        'comment': comment,
-      },
+      data: {'rating': rating, 'comment': comment},
     );
   }
 
@@ -164,14 +178,18 @@ class TemplatesService {
       token: token,
       files: files,
       fileLists: {
-        if (screenshots != null && screenshots.isNotEmpty) 'screenshots': screenshots,
+        if (screenshots != null && screenshots.isNotEmpty)
+          'screenshots': screenshots,
       },
       timeout: const Duration(minutes: 15),
       fields: {
         if (name != null && name.trim().isNotEmpty) 'name': name.trim(),
-        if (description != null && description.trim().isNotEmpty) 'description': description.trim(),
-        if (category != null && category.trim().isNotEmpty) 'category': category.trim(),
-        if (tagsCsv != null && tagsCsv.trim().isNotEmpty) 'tags': tagsCsv.trim(),
+        if (description != null && description.trim().isNotEmpty)
+          'description': description.trim(),
+        if (category != null && category.trim().isNotEmpty)
+          'category': category.trim(),
+        if (tagsCsv != null && tagsCsv.trim().isNotEmpty)
+          'tags': tagsCsv.trim(),
         if (price != null) 'price': price.toString(),
       },
     );

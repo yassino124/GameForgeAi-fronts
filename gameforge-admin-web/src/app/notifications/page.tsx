@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import AdminShell from "@/app/_components/AdminShell";
 import { NeonChip, PulseDot } from "@/app/_components/Hud";
 import { apiFetch, ApiError } from "@/lib/api";
@@ -28,6 +29,18 @@ type SendPayload = {
   target: { type: TargetMode; roles?: string[]; userIds?: string[] };
 };
 
+type PersonalNotification = {
+  id?: string;
+  _id?: string;
+  title?: string;
+  message?: string;
+  type?: string;
+  isRead?: boolean;
+  read?: boolean;
+  createdAt?: string;
+  data?: any;
+};
+
 function cx(...parts: Array<string | false | null | undefined>) {
   return parts.filter(Boolean).join(" ");
 }
@@ -38,6 +51,7 @@ function userLabel(u: UserRow) {
 }
 
 export default function NotificationsAdminPage() {
+  const router = useRouter();
   const toast = useToast();
   const token = useMemo(() => getToken(), []);
 
@@ -54,6 +68,8 @@ export default function NotificationsAdminPage() {
   const [type, setType] = useState<SendPayload["type"]>("info");
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [personalLoading, setPersonalLoading] = useState(false);
+  const [personalNotifs, setPersonalNotifs] = useState<PersonalNotification[]>([]);
 
   async function searchUsers() {
     if (!token) return;
@@ -82,6 +98,65 @@ export default function NotificationsAdminPage() {
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, q]);
+
+  async function loadPersonalNotifications() {
+    if (!token) return;
+    setPersonalLoading(true);
+    try {
+      const res = await apiFetch<PersonalNotification[]>("/notifications", {
+        method: "GET",
+        token,
+      });
+      setPersonalNotifs(Array.isArray(res) ? res : []);
+    } catch {
+      // non-blocking for composer
+    } finally {
+      setPersonalLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    loadPersonalNotifications();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token]);
+
+  async function openNotification(n: PersonalNotification) {
+    const id = String(n._id || n.id || "").trim();
+    if (id) {
+      try {
+        await apiFetch(`/notifications/${encodeURIComponent(id)}`, {
+          method: "PATCH",
+          token,
+          body: { isRead: true },
+        });
+      } catch {
+        // ignore read-state error
+      }
+      setPersonalNotifs((prev) =>
+        prev.map((x) => {
+          const xid = String(x._id || x.id || "").trim();
+          return xid === id ? { ...x, isRead: true, read: true } : x;
+        }),
+      );
+    }
+
+    const route = String(n?.data?.route || "").trim();
+    const ticketId = String(n?.data?.ticketId || "").trim();
+
+    if (ticketId) {
+      router.push(`/messages?ticketId=${encodeURIComponent(ticketId)}`);
+      return;
+    }
+    if (route.startsWith("/")) {
+      if (route === "/messages") {
+        router.push("/messages");
+      } else {
+        router.push(route);
+      }
+      return;
+    }
+    router.push("/messages");
+  }
 
   function toggleSelect(u: UserRow) {
     setSelected((prev) => {
@@ -369,6 +444,62 @@ export default function NotificationsAdminPage() {
                 </div>
               </div>
             )}
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-black/20 p-4">
+            <div className="flex items-center justify-between">
+              <div className="text-xs font-semibold text-zinc-200">Recent personal notifications</div>
+              <NeonChip tone="cyan">
+                <span className="font-mono">INBOX</span>
+                <span className="text-white">{personalLoading ? "…" : personalNotifs.length}</span>
+              </NeonChip>
+            </div>
+
+            <div className="mt-3 max-h-[260px] space-y-2 overflow-auto pr-1">
+              {personalLoading ? (
+                <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-zinc-400">
+                  Loading notifications…
+                </div>
+              ) : personalNotifs.length === 0 ? (
+                <div className="rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-xs text-zinc-400">
+                  No notifications yet.
+                </div>
+              ) : (
+                personalNotifs.slice(0, 12).map((n, i) => {
+                  const id = String(n._id || n.id || i).trim();
+                  const isRead = n.isRead === true || n.read === true;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      onClick={() => openNotification(n)}
+                      className={cx(
+                        "w-full rounded-xl border px-3 py-2 text-left transition",
+                        isRead
+                          ? "border-white/10 bg-black/20"
+                          : "border-indigo-400/20 bg-indigo-500/10 hover:border-indigo-300/40",
+                      )}
+                    >
+                      <div className="truncate text-xs font-semibold text-white">{n.title || "Notification"}</div>
+                      <div className="mt-1 line-clamp-2 text-[11px] text-zinc-400">{n.message || "Open"}</div>
+                      <div className="mt-1 text-[10px] uppercase tracking-wide text-zinc-500">
+                        {String(n?.data?.kind || n?.type || "info")}
+                      </div>
+                    </button>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="mt-3 flex justify-end">
+              <button
+                type="button"
+                className="gf-btn h-9 rounded-xl px-3 text-xs"
+                onClick={() => router.push("/messages")}
+              >
+                Open Support Inbox
+              </button>
+            </div>
           </div>
         </div>
       </div>

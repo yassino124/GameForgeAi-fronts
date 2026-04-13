@@ -128,6 +128,10 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
         _digitFocusNodes[next].requestFocus();
       }
       setState(() {});
+
+      if (_otpCode.length == 6 && !_isVerifying) {
+        _verifyCode();
+      }
       return;
     }
 
@@ -347,8 +351,11 @@ class _EmailVerificationScreenState extends State<EmailVerificationScreen>
                                 textAlign: TextAlign.center,
                                 keyboardType: TextInputType.number,
                                 textInputAction: index == 5 ? TextInputAction.done : TextInputAction.next,
-                                maxLength: 1,
-                                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                                enableInteractiveSelection: true,
+                                inputFormatters: [
+                                  FilteringTextInputFormatter.digitsOnly,
+                                  LengthLimitingTextInputFormatter(6),
+                                ],
                                 style: AppTypography.h4,
                                 decoration: InputDecoration(
                                   counterText: '',

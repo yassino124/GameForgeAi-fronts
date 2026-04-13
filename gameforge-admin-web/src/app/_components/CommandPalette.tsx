@@ -63,6 +63,7 @@ export default function CommandPalette(props: {
       { kind: "page", title: "Dashboard", subtitle: "Overview", href: "/dashboard" },
       { kind: "page", title: "Builds / Queue", subtitle: "Monitor running / failed", href: "/builds" },
       { kind: "page", title: "Projects", subtitle: "Manage projects", href: "/projects" },
+      { kind: "page", title: "Support Inbox", subtitle: "Tickets / replies / SLA", href: "/messages" },
       { kind: "page", title: "Users", subtitle: "Roles & access", href: "/users" },
       { kind: "page", title: "Templates", subtitle: "Store templates", href: "/templates" },
       { kind: "page", title: "Upload Template", subtitle: "Templates • Create / upload", href: "/templates?upload=1" },

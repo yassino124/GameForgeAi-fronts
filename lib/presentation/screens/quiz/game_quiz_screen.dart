@@ -10,6 +10,7 @@ import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/providers/auth_provider.dart';
+import '../../../core/services/api_service.dart';
 import '../../../core/services/daily_rewards_service.dart';
 import '../../../core/services/reward_sfx_service.dart';
 import '../../../core/services/local_notifications_service.dart';
@@ -949,6 +950,23 @@ class _GameQuizScreenState extends State<GameQuizScreen> {
           if (milestones.isNotEmpty) {
             await _showMilestoneWow(token: token, milestones: milestones);
           }
+        }
+
+        try {
+          await ApiService.post(
+            '/gameplay/progression/award-xp',
+            token: token,
+            data: {
+              'xp': earned,
+              'source': _mode == _kModeDaily ? 'quiz_daily' : 'quiz_practice',
+              'meta': {
+                'score': _score,
+                'totalQuestions': _questions.length,
+              },
+            },
+          );
+        } catch (_) {
+          // keep quiz reward flow even if gameplay progression sync fails temporarily
         }
       }
     } catch (_) {}

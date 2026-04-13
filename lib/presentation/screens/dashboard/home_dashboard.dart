@@ -1808,7 +1808,7 @@ class _HomeDashboardState extends State<HomeDashboard> with TickerProviderStateM
       extendBody: false,
       backgroundColor: isDark ? const Color(0xFF070914) : cs.surface,
       drawer: _buildWowDrawer(context, auth),
-      floatingActionButton: _selectedIndex == 0 ? _buildAICoachFAB() : null,
+      floatingActionButton: _selectedIndex == 0 ? _buildHomeFloatingButtons() : null,
       bottomNavigationBar: _selectedIndex == 3 ? null : _buildBottomNavigationBar(),
       body: Stack(
         fit: StackFit.expand,
@@ -3333,6 +3333,49 @@ class _HomeDashboardState extends State<HomeDashboard> with TickerProviderStateM
     );
   }
 
+  Widget _buildHomeFloatingButtons() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          decoration: BoxDecoration(
+            shape: BoxShape.circle,
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.25),
+                blurRadius: 16,
+                offset: const Offset(0, 6),
+              ),
+            ],
+          ),
+          child: ClipOval(
+            child: BackdropFilter(
+              filter: ImageFilter.blur(sigmaX: 12, sigmaY: 12),
+              child: Material(
+                color: AppColors.primary.withOpacity(0.75),
+                child: InkWell(
+                  onTap: () => context.go('/messages'),
+                  child: const SizedBox(
+                    width: 46,
+                    height: 46,
+                    child: Icon(
+                      Icons.headset_mic_rounded,
+                      color: Colors.white,
+                      size: 22,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        _buildAICoachFAB(),
+      ],
+    );
+  }
+
   Widget _recentFilterChip(String label) {
     final selected = _recentForgesFilter == label;
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -3591,6 +3634,7 @@ class _HomeDashboardState extends State<HomeDashboard> with TickerProviderStateM
             icon: Icon(Icons.add_circle_outline_rounded, color: cs.onSurface),
             tooltip: 'Forge new game',
           ),
+          const SizedBox(width: 2),
           notifButton(),
           const SizedBox(width: 6),
           InkWell(

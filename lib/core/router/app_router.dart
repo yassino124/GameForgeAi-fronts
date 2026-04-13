@@ -18,7 +18,9 @@ import '../../presentation/screens/multiplayer/multiplayer.dart';
 import '../../presentation/screens/live/live_feed_screen.dart';
 import '../../presentation/screens/live/go_live_screen.dart';
 import '../../presentation/screens/live/live_watch_screen.dart';
-import '../../presentation/screens/project/play_webgl_screen.dart' as play_webgl;
+import '../../presentation/screens/project/play_webgl_screen.dart'
+    as play_webgl;
+import '../../presentation/screens/discovery/discovery.dart';
 
 class AppRouter {
   static Page<T> _fadeSlidePage<T>({
@@ -31,11 +33,18 @@ class AppRouter {
       transitionDuration: const Duration(milliseconds: 260),
       reverseTransitionDuration: const Duration(milliseconds: 220),
       transitionsBuilder: (context, animation, secondaryAnimation, child) {
-        final curved = CurvedAnimation(parent: animation, curve: Curves.easeOutCubic, reverseCurve: Curves.easeInCubic);
+        final curved = CurvedAnimation(
+          parent: animation,
+          curve: Curves.easeOutCubic,
+          reverseCurve: Curves.easeInCubic,
+        );
         return FadeTransition(
           opacity: curved,
           child: SlideTransition(
-            position: Tween<Offset>(begin: const Offset(0.02, 0.02), end: Offset.zero).animate(curved),
+            position: Tween<Offset>(
+              begin: const Offset(0.02, 0.02),
+              end: Offset.zero,
+            ).animate(curved),
             child: child,
           ),
         );
@@ -138,7 +147,10 @@ class AppRouter {
             }
           }
 
-          return _fadeSlidePage(child: HomeDashboard(initialIndex: initialIndex), state: state);
+          return _fadeSlidePage(
+            child: HomeDashboard(initialIndex: initialIndex),
+            state: state,
+          );
         },
       ),
 
@@ -148,7 +160,10 @@ class AppRouter {
           if (!AuthGuard.canActivate(context)) {
             return _fadeSlidePage(child: const SignInScreen(), state: state);
           }
-          return _fadeSlidePage(child: const MultiplayerLobbyScreen(), state: state);
+          return _fadeSlidePage(
+            child: const MultiplayerLobbyScreen(),
+            state: state,
+          );
         },
       ),
 
@@ -160,8 +175,12 @@ class AppRouter {
           }
 
           final extra = state.extra;
-          final data = extra is Map ? Map<String, dynamic>.from(extra) : <String, dynamic>{};
-          final mode = (data['mode']?.toString() ?? 'join').trim().isEmpty ? 'join' : (data['mode']?.toString() ?? 'join').trim();
+          final data = extra is Map
+              ? Map<String, dynamic>.from(extra)
+              : <String, dynamic>{};
+          final mode = (data['mode']?.toString() ?? 'join').trim().isEmpty
+              ? 'join'
+              : (data['mode']?.toString() ?? 'join').trim();
           final roomId = data['roomId']?.toString();
           final name = data['name']?.toString();
 
@@ -209,6 +228,16 @@ class AppRouter {
         },
       ),
 
+      GoRoute(
+        path: '/discovery',
+        pageBuilder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return _fadeSlidePage(child: const SignInScreen(), state: state);
+          }
+          return _fadeSlidePage(child: const DiscoveryScreen(), state: state);
+        },
+      ),
+
       // Project creation routes (protected)
       GoRoute(
         path: '/create-project',
@@ -216,7 +245,10 @@ class AppRouter {
           if (!AuthGuard.canActivate(context)) {
             return _fadeSlidePage(child: const SignInScreen(), state: state);
           }
-          return _fadeSlidePage(child: const TemplateSelectionScreen(), state: state);
+          return _fadeSlidePage(
+            child: const TemplateSelectionScreen(),
+            state: state,
+          );
         },
       ),
 
@@ -226,7 +258,10 @@ class AppRouter {
           if (!AuthGuard.canActivate(context)) {
             return _fadeSlidePage(child: const SignInScreen(), state: state);
           }
-          return _fadeSlidePage(child: const AiCreateGameScreen(), state: state);
+          return _fadeSlidePage(
+            child: const AiCreateGameScreen(),
+            state: state,
+          );
         },
       ),
 
@@ -236,7 +271,10 @@ class AppRouter {
           if (!AuthGuard.canActivate(context)) {
             return _fadeSlidePage(child: const SignInScreen(), state: state);
           }
-          return _fadeSlidePage(child: const AiScratchGameScreen(), state: state);
+          return _fadeSlidePage(
+            child: const AiScratchGameScreen(),
+            state: state,
+          );
         },
       ),
 
@@ -246,7 +284,10 @@ class AppRouter {
           if (!AuthGuard.canActivate(context)) {
             return _fadeSlidePage(child: const SignInScreen(), state: state);
           }
-          return _fadeSlidePage(child: const AiPhaserGameScreen(), state: state);
+          return _fadeSlidePage(
+            child: const AiPhaserGameScreen(),
+            state: state,
+          );
         },
       ),
 
@@ -256,7 +297,10 @@ class AppRouter {
           if (!AuthGuard.canActivate(context)) {
             return _fadeSlidePage(child: const SignInScreen(), state: state);
           }
-          return _fadeSlidePage(child: const AiClaudeGameScreen(), state: state);
+          return _fadeSlidePage(
+            child: const AiClaudeGameScreen(),
+            state: state,
+          );
         },
       ),
 
@@ -266,10 +310,12 @@ class AppRouter {
           if (!AuthGuard.canActivate(context)) {
             return _fadeSlidePage(child: const SignInScreen(), state: state);
           }
-          return _fadeSlidePage(child: const AiThreeJsGameScreen(), state: state);
+          return _fadeSlidePage(
+            child: const AiThreeJsGameScreen(),
+            state: state,
+          );
         },
       ),
-
 
       GoRoute(
         path: '/templates/upload',
@@ -295,7 +341,10 @@ class AppRouter {
           if (!AuthGuard.canActivate(context)) {
             return _fadeSlidePage(child: const SignInScreen(), state: state);
           }
-          return _fadeSlidePage(child: const AIConfigurationScreen(), state: state);
+          return _fadeSlidePage(
+            child: const AIConfigurationScreen(),
+            state: state,
+          );
         },
       ),
       GoRoute(
@@ -304,7 +353,10 @@ class AppRouter {
           if (!AuthGuard.canActivate(context)) {
             return _fadeSlidePage(child: const SignInScreen(), state: state);
           }
-          return _fadeSlidePage(child: const GenerationProgressScreen(), state: state);
+          return _fadeSlidePage(
+            child: const GenerationProgressScreen(),
+            state: state,
+          );
         },
       ),
       GoRoute(
@@ -314,8 +366,13 @@ class AppRouter {
             return _fadeSlidePage(child: const SignInScreen(), state: state);
           }
           final extra = state.extra;
-          final data = extra is Map ? Map<String, dynamic>.from(extra) : <String, dynamic>{};
-          return _fadeSlidePage(child: ProjectDetailScreen(data: data), state: state);
+          final data = extra is Map
+              ? Map<String, dynamic>.from(extra)
+              : <String, dynamic>{};
+          return _fadeSlidePage(
+            child: ProjectDetailScreen(data: data),
+            state: state,
+          );
         },
       ),
 
@@ -336,11 +393,14 @@ class AppRouter {
             return _fadeSlidePage(child: const SignInScreen(), state: state);
           }
           final extra = state.extra;
-          final data = extra is Map ? Map<String, dynamic>.from(extra) : <String, dynamic>{};
+          final data = extra is Map
+              ? Map<String, dynamic>.from(extra)
+              : <String, dynamic>{};
           final url = data['url']?.toString();
           final projectId = data['projectId']?.toString();
           final mpRoomId = (data['mpRoomId'] ?? data['roomId'])?.toString();
-          final mpSessionId = (data['mpSessionId'] ?? data['sessionId'])?.toString();
+          final mpSessionId = (data['mpSessionId'] ?? data['sessionId'])
+              ?.toString();
           final mpIsHost = data['mpIsHost'] == true || data['isHost'] == true;
           return _fadeSlidePage(
             child: play_webgl.PlayWebglScreen(
@@ -362,7 +422,10 @@ class AppRouter {
             return _fadeSlidePage(child: const SignInScreen(), state: state);
           }
           final creatorId = state.pathParameters['id'] ?? '';
-          return _fadeSlidePage(child: CreatorProfileScreen(creatorId: creatorId), state: state);
+          return _fadeSlidePage(
+            child: CreatorProfileScreen(creatorId: creatorId),
+            state: state,
+          );
         },
       ),
 
@@ -373,13 +436,16 @@ class AppRouter {
             return _fadeSlidePage(child: const SignInScreen(), state: state);
           }
           final extra = state.extra;
-          final data = extra is Map ? Map<String, dynamic>.from(extra) : <String, dynamic>{};
+          final data = extra is Map
+              ? Map<String, dynamic>.from(extra)
+              : <String, dynamic>{};
           final rawPid = data['projectId']?.toString() ?? '';
           final pid = rawPid.trim().isEmpty ? null : rawPid.trim();
           final name = data['projectName']?.toString();
           final sessionContext = <String, dynamic>{
             if (data['playerDna'] != null) 'playerDna': data['playerDna'],
-            if (data['suggestedPreset'] != null) 'suggestedPreset': data['suggestedPreset'],
+            if (data['suggestedPreset'] != null)
+              'suggestedPreset': data['suggestedPreset'],
             if (data['nextActions'] != null) 'nextActions': data['nextActions'],
           };
 
@@ -411,7 +477,10 @@ class AppRouter {
           if (!AuthGuard.canActivate(context)) {
             return _fadeSlidePage(child: const SignInScreen(), state: state);
           }
-          return _fadeSlidePage(child: const BuildConfigurationScreen(), state: state);
+          return _fadeSlidePage(
+            child: const BuildConfigurationScreen(),
+            state: state,
+          );
         },
       ),
       GoRoute(
@@ -420,7 +489,10 @@ class AppRouter {
           if (!AuthGuard.canActivate(context)) {
             return _fadeSlidePage(child: const SignInScreen(), state: state);
           }
-          return _fadeSlidePage(child: const BuildProgressScreen(), state: state);
+          return _fadeSlidePage(
+            child: const BuildProgressScreen(),
+            state: state,
+          );
         },
       ),
       GoRoute(
@@ -429,7 +501,10 @@ class AppRouter {
           if (!AuthGuard.canActivate(context)) {
             return _fadeSlidePage(child: const SignInScreen(), state: state);
           }
-          return _fadeSlidePage(child: const BuildResultsScreen(), state: state);
+          return _fadeSlidePage(
+            child: const BuildResultsScreen(),
+            state: state,
+          );
         },
       ),
 
@@ -440,8 +515,25 @@ class AppRouter {
           if (!AuthGuard.canActivate(context)) {
             return const SignInScreen();
           }
-          final autoFinder = (state.uri.queryParameters['autofinder'] ?? '').toString() == '1';
-          return TemplateMarketplaceScreen(autoOpenAiFinder: autoFinder);
+          final qp = state.uri.queryParameters;
+          final hasProFilter = (qp['pro'] ?? '').trim().isNotEmpty;
+          final autoFinder =
+              !hasProFilter && (qp['autofinder'] ?? '').toString() == '1';
+          String? initialProFilter;
+          final pro = (qp['pro'] ?? '').trim().toLowerCase();
+          if (pro == 'paid') initialProFilter = 'Paid';
+          if (pro == 'free') initialProFilter = 'Free';
+
+          String? initialSortBy;
+          final sort = (qp['sort'] ?? '').trim().toLowerCase();
+          if (sort == 'price_low') initialSortBy = 'Price: Low';
+          if (sort == 'price_high') initialSortBy = 'Price: High';
+
+          return TemplateMarketplaceScreen(
+            autoOpenAiFinder: autoFinder,
+            initialProFilter: initialProFilter,
+            initialSortBy: initialSortBy,
+          );
         },
       ),
 
@@ -499,7 +591,8 @@ class AppRouter {
           if (!AuthGuard.canActivate(context)) {
             return const SignInScreen();
           }
-          final autoStart = (state.uri.queryParameters['autostart'] ?? '').toString() == '1';
+          final autoStart =
+              (state.uri.queryParameters['autostart'] ?? '').toString() == '1';
           return SubscriptionScreen(autoStart: autoStart);
         },
       ),
@@ -510,7 +603,23 @@ class AppRouter {
           if (!AuthGuard.canActivate(context)) {
             return _fadeSlidePage(child: const SignInScreen(), state: state);
           }
-          return _fadeSlidePage(child: const CreatorWalletScreen(), state: state);
+          return _fadeSlidePage(
+            child: const CreatorWalletScreen(),
+            state: state,
+          );
+        },
+      ),
+
+      GoRoute(
+        path: '/progression-cards',
+        pageBuilder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return _fadeSlidePage(child: const SignInScreen(), state: state);
+          }
+          return _fadeSlidePage(
+            child: const ProgressionCardsScreen(),
+            state: state,
+          );
         },
       ),
 
@@ -605,7 +714,12 @@ class AppRouter {
       ),
       GoRoute(
         path: '/messages',
-        builder: (context, state) => const InAppMessagesScreen(),
+        builder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return const SignInScreen();
+          }
+          return const InAppMessagesScreen();
+        },
       ),
 
       // TODO: Add more routes as we implement them
@@ -615,16 +729,9 @@ class AppRouter {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
-              Icons.error_outline,
-              size: 64,
-              color: AppColors.error,
-            ),
+            const Icon(Icons.error_outline, size: 64, color: AppColors.error),
             const SizedBox(height: AppSpacing.lg),
-            Text(
-              'Page not found',
-              style: AppTypography.h3,
-            ),
+            Text('Page not found', style: AppTypography.h3),
             const SizedBox(height: AppSpacing.md),
             Text(
               state.error.toString(),

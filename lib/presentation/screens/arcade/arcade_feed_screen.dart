@@ -36,16 +36,14 @@ import '../../widgets/widgets.dart';
 class ArcadeFeedScreen extends StatefulWidget {
   final VoidCallback? onBack;
 
-  const ArcadeFeedScreen({
-    super.key,
-    this.onBack,
-  });
+  const ArcadeFeedScreen({super.key, this.onBack});
 
   @override
   State<ArcadeFeedScreen> createState() => _ArcadeFeedScreenState();
 }
 
-class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepAliveClientMixin, TickerProviderStateMixin {
+class _ArcadeFeedScreenState extends State<ArcadeFeedScreen>
+    with AutomaticKeepAliveClientMixin, TickerProviderStateMixin {
   final PageController _pageController = PageController();
 
   bool _loading = false;
@@ -64,7 +62,12 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
 
   VideoPlayerController? _reelVideo;
   String? _reelPostId;
-  bool _reelMuted = true;
+  bool _reelMuted = false;
+  final AudioPlayer _reelMusicPlayer = AudioPlayer();
+  String? _reelMusicPostId;
+  String? _reelMusicUrl;
+
+  double get _reelVolume => _reelMuted ? 0.0 : 1.0;
 
   String? _burstPostId;
   double _burstT = 0;
@@ -80,7 +83,8 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
 
   final Set<String> _seenAdImpressions = <String>{};
 
-  final Map<String, List<Map<String, dynamic>>> _localComments = <String, List<Map<String, dynamic>>>{};
+  final Map<String, List<Map<String, dynamic>>> _localComments =
+      <String, List<Map<String, dynamic>>>{};
   final Map<String, String?> _commentsCursor = <String, String?>{};
 
   @override
@@ -89,7 +93,10 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
   @override
   void initState() {
     super.initState();
-    _neonCtrl = AnimationController(vsync: this, duration: const Duration(milliseconds: 1800))..repeat();
+    _neonCtrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1800),
+    )..repeat();
     _loadFirst();
     _loadLiveSessions();
   }
@@ -135,7 +142,8 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
 
     final me = context.read<AuthProvider>().user;
     final m = (me is Map) ? me : null;
-    final username = (m?['username'] ?? m?['name'] ?? m?['email'] ?? '').toString();
+    final username = (m?['username'] ?? m?['name'] ?? m?['email'] ?? '')
+        .toString();
 
     final token = context.read<AuthProvider>().token;
     if (token == null || token.trim().isEmpty) return;
@@ -151,7 +159,9 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
           token: token,
           postId: postId,
           username: username,
-          initialItems: List<Map<String, dynamic>>.from(_localComments[postId] ?? const []),
+          initialItems: List<Map<String, dynamic>>.from(
+            _localComments[postId] ?? const [],
+          ),
           onItemsChanged: (items, cursor) {
             _localComments[postId] = items;
             _commentsCursor[postId] = cursor;
@@ -171,10 +181,19 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
         data: data,
         version: QrVersions.auto,
         gapless: true,
-        eyeStyle: const QrEyeStyle(eyeShape: QrEyeShape.square, color: Colors.black),
-        dataModuleStyle: const QrDataModuleStyle(dataModuleShape: QrDataModuleShape.square, color: Colors.black),
+        eyeStyle: const QrEyeStyle(
+          eyeShape: QrEyeShape.square,
+          color: Colors.black,
+        ),
+        dataModuleStyle: const QrDataModuleStyle(
+          dataModuleShape: QrDataModuleShape.square,
+          color: Colors.black,
+        ),
       );
-      final imgData = await painter.toImageData(720, format: ImageByteFormat.png);
+      final imgData = await painter.toImageData(
+        720,
+        format: ImageByteFormat.png,
+      );
       return imgData?.buffer.asUint8List();
     } catch (_) {
       return null;
@@ -208,9 +227,13 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
         quality: 100,
         name: name,
       );
-      final success = (res is Map) ? (res['isSuccess'] == true || res['success'] == true) : true;
+      final success = (res is Map)
+          ? (res['isSuccess'] == true || res['success'] == true)
+          : true;
       if (mounted) {
-        success ? AppNotifier.showSuccess('Saved to Photos') : AppNotifier.showError('Failed to save');
+        success
+            ? AppNotifier.showSuccess('Saved to Photos')
+            : AppNotifier.showError('Failed to save');
       }
     } catch (e) {
       if (mounted) AppNotifier.showError(e.toString());
@@ -225,6 +248,7 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
     _pageController.dispose();
     _adVideo?.dispose();
     _reelVideo?.dispose();
+    _reelMusicPlayer.dispose();
     super.dispose();
   }
 
@@ -239,8 +263,9 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
 
     if (_reelVideo != null && _reelPostId == nextPostId) {
       try {
+        await _reelVideo!.setVolume(_reelVolume);
         if (play) {
-          await _reelVideo!.play();
+          await _playReelWithFallback();
         } else {
           await _reelVideo!.pause();
         }
@@ -257,10 +282,10 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
     _reelVideo = VideoPlayerController.networkUrl(Uri.parse(nextUrl));
     try {
       await _reelVideo!.setLooping(true);
-      await _reelVideo!.setVolume(_reelMuted ? 0.0 : 1.0);
       await _reelVideo!.initialize();
+      await _reelVideo!.setVolume(_reelVolume);
       if (play) {
-        await _reelVideo!.play();
+        await _playReelWithFallback();
       }
       if (mounted) setState(() {});
     } catch (_) {
@@ -270,6 +295,38 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
     }
   }
 
+  Future<void> _playReelWithFallback() async {
+    final player = _reelVideo;
+    if (player == null) return;
+
+    try {
+      await player.play();
+      return;
+    } catch (_) {}
+
+    if (!_reelMuted) {
+      _reelMuted = true;
+      try {
+        await player.setVolume(0.0);
+        await player.play();
+      } catch (_) {}
+      if (mounted) setState(() {});
+    }
+  }
+
+  Future<void> _ensureReelSoundFromUserTap() async {
+    final player = _reelVideo;
+    if (player == null) return;
+
+    _reelMuted = false;
+    try {
+      await player.setVolume(1.0);
+      await player.play();
+    } catch (_) {}
+    await _syncReelMusicForActivePost();
+    if (mounted) setState(() {});
+  }
+
   Future<void> _stopReelVideo() async {
     try {
       await _reelVideo?.pause();
@@ -277,17 +334,78 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
     await _reelVideo?.dispose();
     _reelVideo = null;
     _reelPostId = null;
+    await _stopReelMusic();
   }
 
   Future<void> _toggleReelMuted() async {
     _reelMuted = !_reelMuted;
     try {
-      await _reelVideo?.setVolume(_reelMuted ? 0.0 : 1.0);
+      await _reelVideo?.setVolume(_reelVolume);
     } catch (_) {}
+    await _syncReelMusicForActivePost();
     if (mounted) setState(() {});
   }
 
-  Future<void> _ensureAdVideo({required String campaignId, required String url, required bool play}) async {
+  Future<void> _stopReelMusic() async {
+    _reelMusicPostId = null;
+    _reelMusicUrl = null;
+    try {
+      await _reelMusicPlayer.stop();
+    } catch (_) {}
+  }
+
+  Future<void> _syncReelMusicForPost(
+    Map<String, dynamic> p, {
+    required bool play,
+  }) async {
+    if (!play || _reelMuted) {
+      await _stopReelMusic();
+      return;
+    }
+
+    final postId = _postId(p).trim();
+    final musicUrl = _postReelMusicUrl(p).trim();
+    if (postId.isEmpty || musicUrl.isEmpty) {
+      await _stopReelMusic();
+      return;
+    }
+
+    if (_reelMusicPostId == postId && _reelMusicUrl == musicUrl) {
+      try {
+        if (!_reelMusicPlayer.playing) {
+          await _reelMusicPlayer.play();
+        }
+      } catch (_) {}
+      return;
+    }
+
+    _reelMusicPostId = postId;
+    _reelMusicUrl = musicUrl;
+    try {
+      await _reelMusicPlayer.stop();
+      await _reelMusicPlayer.setLoopMode(LoopMode.one);
+      await _reelMusicPlayer.setVolume(0.78);
+      await _reelMusicPlayer.setUrl(musicUrl);
+      await _reelMusicPlayer.play();
+    } catch (_) {
+      await _stopReelMusic();
+    }
+  }
+
+  Future<void> _syncReelMusicForActivePost() async {
+    final p = _postAt(_activeIndex);
+    if (p == null || !_isReel(p)) {
+      await _stopReelMusic();
+      return;
+    }
+    await _syncReelMusicForPost(p, play: true);
+  }
+
+  Future<void> _ensureAdVideo({
+    required String campaignId,
+    required String url,
+    required bool play,
+  }) async {
     final nextUrl = url.trim();
     final nextCampaignId = campaignId.trim();
     if (nextUrl.isEmpty || nextCampaignId.isEmpty) return;
@@ -369,7 +487,14 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
               child: InkWell(
                 borderRadius: BorderRadius.circular(18),
                 onTap: _goBack,
-                child: _glass(context, child: Icon(Icons.arrow_back_ios_new_rounded, color: isDark ? Colors.white : cs.onSurface, size: 20)),
+                child: _glass(
+                  context,
+                  child: Icon(
+                    Icons.arrow_back_ios_new_rounded,
+                    color: isDark ? Colors.white : cs.onSurface,
+                    size: 20,
+                  ),
+                ),
               ),
             ),
             const SizedBox(width: 12),
@@ -386,81 +511,163 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
               ),
             ),
             const Spacer(),
-            Material(
-              type: MaterialType.transparency,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(18),
-                onTap: () => context.push('/live'),
-                child: _glass(
-                  context,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Stack(
-                        alignment: Alignment.center,
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Material(
+                  type: MaterialType.transparency,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(18),
+                    onTap: () => context.push('/discovery'),
+                    child: _glass(
+                      context,
+                      child: Icon(
+                        Icons.search_rounded,
+                        color: isDark ? Colors.white : cs.onSurface,
+                        size: 22,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Material(
+                  type: MaterialType.transparency,
+                  child: InkWell(
+                    borderRadius: BorderRadius.circular(18),
+                    onTap: () => context.push('/live'),
+                    child: _glass(
+                      context,
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
-                          Container(
-                            width: 10,
-                            height: 10,
-                            decoration: const BoxDecoration(
-                              color: Color(0xFFFF0000),
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          AnimatedBuilder(
-                            animation: _neonCtrl,
-                            builder: (context, _) {
-                              return Container(
-                                width: 18,
-                                height: 18,
-                                decoration: BoxDecoration(
+                          Stack(
+                            alignment: Alignment.center,
+                            children: [
+                              Container(
+                                width: 10,
+                                height: 10,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFFFF0000),
                                   shape: BoxShape.circle,
-                                  border: Border.all(
-                                    color: const Color(0xFFFF0000).withOpacity(0.4 * (1 - _neonCtrl.value)),
-                                    width: 2 * _neonCtrl.value,
-                                  ),
                                 ),
-                              );
-                            },
+                              ),
+                              AnimatedBuilder(
+                                animation: _neonCtrl,
+                                builder: (context, _) {
+                                  return Container(
+                                    width: 18,
+                                    height: 18,
+                                    decoration: BoxDecoration(
+                                      shape: BoxShape.circle,
+                                      border: Border.all(
+                                        color: const Color(0xFFFF0000)
+                                            .withOpacity(0.4 * (1 - _neonCtrl.value)),
+                                        width: 2 * _neonCtrl.value,
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ],
+                          ),
+                          const SizedBox(width: 8),
+                          Icon(
+                            Icons.sensors_rounded,
+                            color: isDark ? Colors.white : cs.onSurface,
+                            size: 20,
                           ),
                         ],
                       ),
-                      const SizedBox(width: 10),
-                      Icon(Icons.sensors_rounded, color: isDark ? Colors.white : cs.onSurface, size: 20),
-                    ],
+                    ),
                   ),
                 ),
-              ),
+                const SizedBox(width: 8),
+                if (total > 0)
+                  _glass(
+                    context,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    child: Text(
+                      '${i + 1}/$total',
+                      style: AppTypography.caption.copyWith(
+                        color: isDark ? Colors.white70 : cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+              ],
             ),
-            const SizedBox(width: 12),
-            if (total > 0)
-              _glass(
-                context,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                child: Text(
-                  '${i + 1} / $total',
-                  style: AppTypography.caption.copyWith(
-                    color: isDark ? Colors.white70 : cs.onSurfaceVariant,
-                    fontWeight: FontWeight.w900,
-                  ),
-                ),
-              ),
           ],
         ),
       ),
     );
   }
 
-  Widget _glass(BuildContext context, {required Widget child, EdgeInsets padding = const EdgeInsets.symmetric(horizontal: 12, vertical: 10)}) {
+  String _liveAvatarUrl(Map<String, dynamic> live) {
+    dynamic _getIn(Map? m, String k) => (m == null) ? null : m[k];
+
+    final creator = live['creator'];
+    final cm = (creator is Map) ? creator : null;
+    final user = live['user'];
+    final um = (user is Map) ? user : null;
+    final cUser = _getIn(cm, 'user');
+    final cum = (cUser is Map) ? cUser : null;
+
+    final candidates = <dynamic>[
+      live['creatorAvatar'],
+      live['creatorAvatarUrl'],
+      live['avatarUrl'],
+      live['avatar'],
+      _getIn(cm, 'avatarUrl'),
+      _getIn(cm, 'avatar'),
+      _getIn(cm, 'photoUrl'),
+      _getIn(cm, 'photo'),
+      _getIn(cm, 'profileImageUrl'),
+      _getIn(cm, 'profileImage'),
+      _getIn(um, 'avatarUrl'),
+      _getIn(um, 'avatar'),
+      _getIn(um, 'photoUrl'),
+      _getIn(um, 'photo'),
+      _getIn(um, 'profileImageUrl'),
+      _getIn(um, 'profileImage'),
+      _getIn(cum, 'avatarUrl'),
+      _getIn(cum, 'avatar'),
+      _getIn(cum, 'photoUrl'),
+      _getIn(cum, 'photo'),
+      _getIn(cum, 'profileImageUrl'),
+      _getIn(cum, 'profileImage'),
+    ];
+
+    for (final v in candidates) {
+      final s = (v ?? '').toString().trim();
+      if (s.isNotEmpty) return ApiService.normalizeImageUrl(s);
+    }
+    return '';
+  }
+
+  Widget _glass(
+    BuildContext context, {
+    required Widget child,
+    EdgeInsets padding = const EdgeInsets.symmetric(
+      horizontal: 12,
+      vertical: 10,
+    ),
+  }) {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       padding: padding,
       decoration: BoxDecoration(
-        color: (isDark ? Colors.black : cs.surface).withOpacity(isDark ? 0.35 : 0.78),
+        color: (isDark ? Colors.black : cs.surface).withOpacity(
+          isDark ? 0.35 : 0.78,
+        ),
         borderRadius: BorderRadius.circular(18),
         border: Border.all(
-          color: isDark ? Colors.white.withOpacity(0.12) : cs.outlineVariant.withOpacity(0.75),
+          color: isDark
+              ? Colors.white.withOpacity(0.12)
+              : cs.outlineVariant.withOpacity(0.75),
         ),
       ),
       child: child,
@@ -469,9 +676,7 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
 
   void _confetti() {
     if (!mounted) return;
-    final entry = OverlayEntry(
-      builder: (context) => const _MiniConfetti(),
-    );
+    final entry = OverlayEntry(builder: (context) => const _MiniConfetti());
     Overlay.of(context, rootOverlay: true).insert(entry);
     Future.delayed(const Duration(milliseconds: 820), entry.remove);
   }
@@ -511,12 +716,14 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
     });
 
     try {
-      final res = await GameFeedService.list(token: token, limit: 10);
+      final res = await GameFeedService.list(token: token, limit: 50);
       final data = res['data'];
       final list = (data is List) ? data : const [];
       if (!mounted) return;
       setState(() {
-        _posts = list.map((e) => Map<String, dynamic>.from(e as Map)).toList(growable: false);
+        _posts = list
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList(growable: false);
         _nextCursor = res['nextCursor']?.toString();
         _loading = false;
       });
@@ -554,18 +761,33 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
 
     setState(() => _paging = true);
     try {
-      final res = await GameFeedService.list(token: token, limit: 10, cursor: _nextCursor);
-      final data = res['data'];
-      final list = (data is List) ? data : const [];
-      if (!mounted) return;
-
-      final next = list.map((e) => Map<String, dynamic>.from(e as Map)).toList(growable: false);
-      setState(() {
-        _posts = [..._posts, ...next];
-        _nextCursor = res['nextCursor']?.toString();
-        _paging = false;
-      });
+      var pages = 0;
+      while (mounted &&
+          _nextCursor != null &&
+          _nextCursor!.trim().isNotEmpty &&
+          pages < 3) {
+        final res = await GameFeedService.list(
+          token: token,
+          limit: 50,
+          cursor: _nextCursor,
+        );
+        final data = res['data'];
+        final list = (data is List) ? data : const [];
+        final next = list
+            .map((e) => Map<String, dynamic>.from(e as Map))
+            .toList(growable: false);
+        if (next.isEmpty) {
+          _nextCursor = null;
+          break;
+        }
+        setState(() {
+          _posts = [..._posts, ...next];
+          _nextCursor = res['nextCursor']?.toString();
+        });
+        pages++;
+      }
     } catch (_) {
+    } finally {
       if (!mounted) return;
       setState(() => _paging = false);
     }
@@ -576,21 +798,28 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
     return _posts[index];
   }
 
-  String _postId(Map<String, dynamic> p) => (p['id'] ?? p['_id'] ?? '').toString();
+  String _postId(Map<String, dynamic> p) =>
+      (p['id'] ?? p['_id'] ?? '').toString();
 
-  String _postTitle(Map<String, dynamic> p) => (p['title'] ?? p['name'] ?? 'Game').toString();
+  String _postTitle(Map<String, dynamic> p) =>
+      (p['title'] ?? p['name'] ?? 'Game').toString();
 
-  String _postWebglUrl(Map<String, dynamic> p) => (p['webglUrl'] ?? p['url'] ?? '').toString();
+  String _postWebglUrl(Map<String, dynamic> p) =>
+      (p['webglUrl'] ?? p['url'] ?? '').toString();
 
-  String _postPreview(Map<String, dynamic> p) => (p['previewImageUrl'] ?? p['previewImage'] ?? '').toString();
+  String _postPreview(Map<String, dynamic> p) =>
+      (p['previewImageUrl'] ?? p['previewImage'] ?? '').toString();
 
   String _postReelUrl(Map<String, dynamic> p) {
-    final raw = (p['previewVideoUrl'] ??
-            p['trailerVideoUrl'] ??
-            p['videoUrl'] ??
-            (p['reel'] is Map ? (p['reel'] as Map)['previewVideoUrl'] : null) ??
-            (p['reel'] is Map ? (p['reel'] as Map)['videoUrl'] : null))
-        ?.toString();
+    final raw =
+        (p['previewVideoUrl'] ??
+                p['trailerVideoUrl'] ??
+                p['videoUrl'] ??
+                (p['reel'] is Map
+                    ? (p['reel'] as Map)['previewVideoUrl']
+                    : null) ??
+                (p['reel'] is Map ? (p['reel'] as Map)['videoUrl'] : null))
+            ?.toString();
     return ApiService.normalizeImageUrl(raw);
   }
 
@@ -615,8 +844,18 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
         .trim();
   }
 
+  String _postReelMusicUrl(Map<String, dynamic> p) {
+    final raw =
+        (p['reelMusicUrl'] ??
+                p['musicUrl'] ??
+                (p['reel'] is Map ? (p['reel'] as Map)['musicUrl'] : null))
+            ?.toString();
+    return ApiService.normalizeImageUrl(raw);
+  }
+
   List<String> _postReelCaptionLines(Map<String, dynamic> p) {
-    final dynamic value = p['reelCaptionLines'] ??
+    final dynamic value =
+        p['reelCaptionLines'] ??
         (p['reel'] is Map ? (p['reel'] as Map)['captionLines'] : null);
     if (value is! List) return const <String>[];
     return value
@@ -635,13 +874,17 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
         .toLowerCase();
   }
 
-  String _postProjectId(Map<String, dynamic> p) => (p['projectId'] ?? '').toString();
+  String _postProjectId(Map<String, dynamic> p) =>
+      (p['projectId'] ?? '').toString();
 
-  String _postCreatorId(Map<String, dynamic> p) => (p['creatorId'] ?? p['creatorUserId'] ?? p['creator'] ?? '').toString();
+  String _postCreatorId(Map<String, dynamic> p) =>
+      (p['creatorId'] ?? p['creatorUserId'] ?? p['creator'] ?? '').toString();
 
-  bool _isAd(Map<String, dynamic> p) => (p['kind']?.toString() ?? '').toLowerCase() == 'ad';
+  bool _isAd(Map<String, dynamic> p) =>
+      (p['kind']?.toString() ?? '').toLowerCase() == 'ad';
 
-  String _adCampaignId(Map<String, dynamic> p) => (p['campaignId'] ?? p['id'] ?? '').toString();
+  String _adCampaignId(Map<String, dynamic> p) =>
+      (p['campaignId'] ?? p['id'] ?? '').toString();
 
   int _postLikeCount(Map<String, dynamic> p) {
     final v = p['likeCount'];
@@ -662,7 +905,9 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
         final data = res['data'];
         if (data is List) {
           setState(() {
-            _liveSessions = data.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+            _liveSessions = data
+                .map((e) => Map<String, dynamic>.from(e as Map))
+                .toList();
           });
         }
       }
@@ -705,7 +950,11 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
             ),
           ),
           const SizedBox(height: 6),
-          Container(width: 40, height: 8, color: Colors.white.withOpacity(0.05)),
+          Container(
+            width: 40,
+            height: 8,
+            color: Colors.white.withOpacity(0.05),
+          ),
         ],
       ),
     );
@@ -714,10 +963,10 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
   Widget _buildLiveCircleItem(Map<String, dynamic> live) {
     final id = (live['id'] ?? live['_id'] ?? '').toString();
     final username = (live['creatorUsername'] ?? 'Creator').toString();
-    final avatarUrl = (live['creatorAvatar'] ?? '').toString().trim();
+    final avatarUrl = _liveAvatarUrl(live);
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    
+
     return GestureDetector(
       onTap: () => context.push('/live/watch/$id'),
       child: Padding(
@@ -744,11 +993,17 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                             AppColors.primary,
                           ],
                           stops: const [0.0, 0.4, 0.6, 1.0],
-                          transform: GradientRotation(_neonCtrl.value * 2 * math.pi),
+                          transform: GradientRotation(
+                            _neonCtrl.value * 2 * math.pi,
+                          ),
                         ),
                         boxShadow: [
                           BoxShadow(
-                            color: AppColors.primary.withOpacity(isDark ? 0.3 * _neonCtrl.value : 0.15 * _neonCtrl.value),
+                            color: AppColors.primary.withOpacity(
+                              isDark
+                                  ? 0.3 * _neonCtrl.value
+                                  : 0.15 * _neonCtrl.value,
+                            ),
                             blurRadius: 12,
                             spreadRadius: 2,
                           ),
@@ -766,28 +1021,58 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                     child: ClipRRect(
                       borderRadius: BorderRadius.circular(34),
                       child: Container(
-                        color: isDark ? Colors.white.withOpacity(0.05) : cs.surfaceContainerHighest.withOpacity(0.3),
+                        color: isDark
+                            ? Colors.white.withOpacity(0.05)
+                            : cs.surfaceContainerHighest.withOpacity(0.3),
                         child: Container(
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
-                            border: Border.all(color: isDark ? Colors.white.withOpacity(0.08) : cs.outlineVariant.withOpacity(0.5)),
+                            border: Border.all(
+                              color: isDark
+                                  ? Colors.white.withOpacity(0.08)
+                                  : cs.outlineVariant.withOpacity(0.5),
+                            ),
                           ),
                           child: avatarUrl.isEmpty
                               ? Center(
-                                  child: Icon(Icons.person_rounded, color: isDark ? Colors.white24 : cs.onSurfaceVariant.withOpacity(0.3), size: 34),
+                                  child: Icon(
+                                    Icons.person_rounded,
+                                    color: isDark
+                                        ? Colors.white24
+                                        : cs.onSurfaceVariant.withOpacity(0.3),
+                                    size: 34,
+                                  ),
                                 )
                               : CachedNetworkImage(
                                   imageUrl: avatarUrl,
                                   fit: BoxFit.cover,
-                                  fadeInDuration: const Duration(milliseconds: 120),
+                                  fadeInDuration: const Duration(
+                                    milliseconds: 120,
+                                  ),
                                   placeholder: (context, _) {
                                     return Center(
-                                      child: Icon(Icons.person_rounded, color: isDark ? Colors.white24 : cs.onSurfaceVariant.withOpacity(0.3), size: 34),
+                                      child: Icon(
+                                        Icons.person_rounded,
+                                        color: isDark
+                                            ? Colors.white24
+                                            : cs.onSurfaceVariant.withOpacity(
+                                                0.3,
+                                              ),
+                                        size: 34,
+                                      ),
                                     );
                                   },
                                   errorWidget: (context, _, __) {
                                     return Center(
-                                      child: Icon(Icons.person_rounded, color: isDark ? Colors.white24 : cs.onSurfaceVariant.withOpacity(0.3), size: 34),
+                                      child: Icon(
+                                        Icons.person_rounded,
+                                        color: isDark
+                                            ? Colors.white24
+                                            : cs.onSurfaceVariant.withOpacity(
+                                                0.3,
+                                              ),
+                                        size: 34,
+                                      ),
                                     );
                                   },
                                 ),
@@ -799,7 +1084,10 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                 Positioned(
                   bottom: 0,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 3,
+                    ),
                     decoration: BoxDecoration(
                       gradient: const LinearGradient(
                         colors: [Color(0xFFFF0000), Color(0xFFFF4D4D)],
@@ -812,7 +1100,10 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                           offset: const Offset(0, 4),
                         ),
                       ],
-                      border: Border.all(color: isDark ? Colors.black : Colors.white, width: 1.5),
+                      border: Border.all(
+                        color: isDark ? Colors.black : Colors.white,
+                        width: 1.5,
+                      ),
                     ),
                     child: Text(
                       'LIVE',
@@ -865,6 +1156,7 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
       final videoUrl = (p['videoUrl'] ?? '').toString().trim();
       await _ensureAdVideo(campaignId: campaignId, url: videoUrl, play: true);
       await _stopReelVideo();
+      await _stopReelMusic();
       return;
     }
 
@@ -883,11 +1175,13 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
         });
       }
       await _ensureReelVideo(postId: postId, url: reelUrl, play: true);
+      await _syncReelMusicForPost(p, play: true);
       _debouncedPlay(postId);
       return;
     }
 
     await _stopReelVideo();
+    await _stopReelMusic();
 
     if (postId.isEmpty) return;
 
@@ -972,7 +1266,9 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
       final data = res['data'];
       if (!mounted) return;
       if (data is Map) {
-        final likeCount = (data['likeCount'] is num) ? (data['likeCount'] as num).toInt() : null;
+        final likeCount = (data['likeCount'] is num)
+            ? (data['likeCount'] as num).toInt()
+            : null;
         final likedNext = data['liked'] == true;
         setState(() {
           p['likedByMe'] = likedNext;
@@ -999,7 +1295,8 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
       final res = await GameFeedService.remix(token: token, postId: postId);
       final data = res['data'];
       final projectId = (data is Map)
-          ? (data['projectId']?.toString() ?? (data['data']?['projectId']?.toString() ?? ''))
+          ? (data['projectId']?.toString() ??
+                (data['data']?['projectId']?.toString() ?? ''))
           : '';
 
       if (!mounted) return;
@@ -1054,7 +1351,9 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
         );
         final data = res['data'];
         final candidate = (data is Map) ? data['url']?.toString() : null;
-        if (res['success'] == true && candidate != null && candidate.trim().isNotEmpty) {
+        if (res['success'] == true &&
+            candidate != null &&
+            candidate.trim().isNotEmpty) {
           apkUrl = candidate.trim();
         }
       } catch (_) {}
@@ -1087,14 +1386,25 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                 final bytes = await _capturePng(shareCardKey);
                 if (bytes != null && bytes.isNotEmpty) {
                   final dir = await getTemporaryDirectory();
-                  final f = File('${dir.path}/gameforge_arcade_${DateTime.now().millisecondsSinceEpoch}.png');
+                  final f = File(
+                    '${dir.path}/gameforge_arcade_${DateTime.now().millisecondsSinceEpoch}.png',
+                  );
                   await f.writeAsBytes(bytes);
                   final caption = 'Play my game in 10s — scan the QR\n$url';
                   final box = sheetCtx.findRenderObject() as RenderBox?;
                   final origin = (box != null)
                       ? box.localToGlobal(Offset.zero) & box.size
-                      : Rect.fromLTWH(0, 0, MediaQuery.of(sheetCtx).size.width, MediaQuery.of(sheetCtx).size.height);
-                  await Share.shareXFiles([XFile(f.path)], text: caption, sharePositionOrigin: origin);
+                      : Rect.fromLTWH(
+                          0,
+                          0,
+                          MediaQuery.of(sheetCtx).size.width,
+                          MediaQuery.of(sheetCtx).size.height,
+                        );
+                  await Share.shareXFiles(
+                    [XFile(f.path)],
+                    text: caption,
+                    sharePositionOrigin: origin,
+                  );
                   _confetti();
                   return;
                 }
@@ -1112,10 +1422,14 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
             Future<void> saveCard() async {
               final bytes = await _capturePng(shareCardKey);
               if (bytes == null || bytes.isEmpty) {
-                if (mounted) AppNotifier.showError('Failed to generate share card');
+                if (mounted)
+                  AppNotifier.showError('Failed to generate share card');
                 return;
               }
-              await _savePngToPhotos(bytes, name: 'gameforge_card_${DateTime.now().millisecondsSinceEpoch}');
+              await _savePngToPhotos(
+                bytes,
+                name: 'gameforge_card_${DateTime.now().millisecondsSinceEpoch}',
+              );
               _confetti();
             }
 
@@ -1125,7 +1439,10 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                 if (mounted) AppNotifier.showError('Failed to generate QR');
                 return;
               }
-              await _savePngToPhotos(png, name: 'gameforge_qr_${DateTime.now().millisecondsSinceEpoch}');
+              await _savePngToPhotos(
+                png,
+                name: 'gameforge_qr_${DateTime.now().millisecondsSinceEpoch}',
+              );
               _confetti();
             }
 
@@ -1137,7 +1454,9 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                   child: Container(
                     decoration: BoxDecoration(
                       color: cs.surface.withOpacity(0.86),
-                      border: Border.all(color: cs.outlineVariant.withOpacity(0.55)),
+                      border: Border.all(
+                        color: cs.outlineVariant.withOpacity(0.55),
+                      ),
                       borderRadius: BorderRadius.circular(22),
                       boxShadow: [
                         BoxShadow(
@@ -1153,22 +1472,36 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
               );
             }
 
-            Widget actionChip({required IconData icon, required String label, required VoidCallback onTap}) {
+            Widget actionChip({
+              required IconData icon,
+              required String label,
+              required VoidCallback onTap,
+            }) {
               return GestureDetector(
                 onTap: onTap,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(999),
                     color: cs.surfaceContainerHighest.withOpacity(0.55),
-                    border: Border.all(color: cs.outlineVariant.withOpacity(0.5)),
+                    border: Border.all(
+                      color: cs.outlineVariant.withOpacity(0.5),
+                    ),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(icon, size: 18, color: cs.onSurface),
                       const SizedBox(width: 8),
-                      Text(label, style: AppTypography.caption.copyWith(fontWeight: FontWeight.w900)),
+                      Text(
+                        label,
+                        style: AppTypography.caption.copyWith(
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
                     ],
                   ),
                 ),
@@ -1184,7 +1517,11 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                     decoration: BoxDecoration(
                       borderRadius: BorderRadius.circular(22),
                       boxShadow: [
-                        BoxShadow(color: cs.primary.withOpacity(0.22), blurRadius: 26, offset: const Offset(0, 18)),
+                        BoxShadow(
+                          color: cs.primary.withOpacity(0.22),
+                          blurRadius: 26,
+                          offset: const Offset(0, 18),
+                        ),
                       ],
                     ),
                     child: _NeonFrame(
@@ -1195,7 +1532,9 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                         child: Stack(
                           fit: StackFit.expand,
                           children: [
-                            if (preview.isNotEmpty && (preview.startsWith('http://') || preview.startsWith('https://')))
+                            if (preview.isNotEmpty &&
+                                (preview.startsWith('http://') ||
+                                    preview.startsWith('https://')))
                               Image.network(
                                 preview,
                                 fit: BoxFit.cover,
@@ -1203,13 +1542,20 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                                   return Container(
                                     decoration: BoxDecoration(
                                       gradient: LinearGradient(
-                                        colors: [cs.primary.withOpacity(0.95), AppColors.accent.withOpacity(0.85)],
+                                        colors: [
+                                          cs.primary.withOpacity(0.95),
+                                          AppColors.accent.withOpacity(0.85),
+                                        ],
                                         begin: Alignment.topLeft,
                                         end: Alignment.bottomRight,
                                       ),
                                     ),
                                     child: Center(
-                                      child: Icon(Icons.sports_esports_rounded, color: Colors.white.withOpacity(0.92), size: 56),
+                                      child: Icon(
+                                        Icons.sports_esports_rounded,
+                                        color: Colors.white.withOpacity(0.92),
+                                        size: 56,
+                                      ),
                                     ),
                                   );
                                 },
@@ -1218,13 +1564,20 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                               Container(
                                 decoration: BoxDecoration(
                                   gradient: LinearGradient(
-                                    colors: [cs.primary.withOpacity(0.95), AppColors.accent.withOpacity(0.85)],
+                                    colors: [
+                                      cs.primary.withOpacity(0.95),
+                                      AppColors.accent.withOpacity(0.85),
+                                    ],
                                     begin: Alignment.topLeft,
                                     end: Alignment.bottomRight,
                                   ),
                                 ),
                                 child: Center(
-                                  child: Icon(Icons.sports_esports_rounded, color: Colors.white.withOpacity(0.92), size: 56),
+                                  child: Icon(
+                                    Icons.sports_esports_rounded,
+                                    color: Colors.white.withOpacity(0.92),
+                                    size: 56,
+                                  ),
                                 ),
                               ),
                             DecoratedBox(
@@ -1245,7 +1598,10 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                               child: DecoratedBox(
                                 decoration: BoxDecoration(
                                   gradient: RadialGradient(
-                                    colors: [AppColors.accent.withOpacity(0.28), Colors.transparent],
+                                    colors: [
+                                      AppColors.accent.withOpacity(0.28),
+                                      Colors.transparent,
+                                    ],
                                     radius: 1.2,
                                     center: const Alignment(0.65, -0.75),
                                   ),
@@ -1256,11 +1612,16 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                               top: 14,
                               left: 14,
                               child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 12,
+                                  vertical: 8,
+                                ),
                                 decoration: BoxDecoration(
                                   borderRadius: BorderRadius.circular(999),
                                   color: Colors.black.withOpacity(0.22),
-                                  border: Border.all(color: Colors.white.withOpacity(0.18)),
+                                  border: Border.all(
+                                    color: Colors.white.withOpacity(0.18),
+                                  ),
                                 ),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
@@ -1271,7 +1632,14 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                                       decoration: BoxDecoration(
                                         shape: BoxShape.circle,
                                         color: Colors.white.withOpacity(0.92),
-                                        boxShadow: [BoxShadow(color: Colors.white.withOpacity(0.45), blurRadius: 12)],
+                                        boxShadow: [
+                                          BoxShadow(
+                                            color: Colors.white.withOpacity(
+                                              0.45,
+                                            ),
+                                            blurRadius: 12,
+                                          ),
+                                        ],
                                       ),
                                     ),
                                     const SizedBox(width: 10),
@@ -1296,7 +1664,8 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                                 children: [
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       mainAxisSize: MainAxisSize.min,
                                       children: [
                                         Text(
@@ -1313,7 +1682,9 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                                         Text(
                                           'Built with GameForge',
                                           style: AppTypography.caption.copyWith(
-                                            color: Colors.white.withOpacity(0.92),
+                                            color: Colors.white.withOpacity(
+                                              0.92,
+                                            ),
                                             fontWeight: FontWeight.w800,
                                           ),
                                         ),
@@ -1333,7 +1704,8 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                                           final s = c.biggest.shortestSide;
                                           final qr = (s - 20).clamp(42.0, 62.0);
                                           return Column(
-                                            mainAxisAlignment: MainAxisAlignment.center,
+                                            mainAxisAlignment:
+                                                MainAxisAlignment.center,
                                             mainAxisSize: MainAxisSize.min,
                                             children: [
                                               Stack(
@@ -1343,7 +1715,8 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                                                     data: url,
                                                     version: QrVersions.auto,
                                                     size: qr,
-                                                    backgroundColor: Colors.white,
+                                                    backgroundColor:
+                                                        Colors.white,
                                                   ),
                                                   Container(
                                                     width: 16,
@@ -1351,9 +1724,16 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                                                     decoration: BoxDecoration(
                                                       color: Colors.white,
                                                       shape: BoxShape.circle,
-                                                      border: Border.all(color: Colors.black.withOpacity(0.12)),
+                                                      border: Border.all(
+                                                        color: Colors.black
+                                                            .withOpacity(0.12),
+                                                      ),
                                                     ),
-                                                    child: Icon(Icons.gamepad_rounded, size: 11, color: cs.primary),
+                                                    child: Icon(
+                                                      Icons.gamepad_rounded,
+                                                      size: 11,
+                                                      color: cs.primary,
+                                                    ),
                                                   ),
                                                 ],
                                               ),
@@ -1362,10 +1742,12 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                                                 fit: BoxFit.scaleDown,
                                                 child: Text(
                                                   'Scan',
-                                                  style: AppTypography.caption.copyWith(
-                                                    fontWeight: FontWeight.w900,
-                                                    color: Colors.black,
-                                                  ),
+                                                  style: AppTypography.caption
+                                                      .copyWith(
+                                                        fontWeight:
+                                                            FontWeight.w900,
+                                                        color: Colors.black,
+                                                      ),
                                                 ),
                                               ),
                                             ],
@@ -1401,7 +1783,12 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                           Row(
                             children: [
                               Expanded(
-                                child: Text('Share build', style: AppTypography.subtitle1.copyWith(fontWeight: FontWeight.w900)),
+                                child: Text(
+                                  'Share build',
+                                  style: AppTypography.subtitle1.copyWith(
+                                    fontWeight: FontWeight.w900,
+                                  ),
+                                ),
                               ),
                               IconButton(
                                 onPressed: () => Navigator.of(sheetCtx).pop(),
@@ -1436,32 +1823,62 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                             isFullWidth: true,
                           ),
                           const SizedBox(height: AppSpacing.lg),
-                          Text('WebGL', style: AppTypography.subtitle2.copyWith(fontWeight: FontWeight.w900)),
+                          Text(
+                            'WebGL',
+                            style: AppTypography.subtitle2.copyWith(
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
                           const SizedBox(height: 10),
                           Container(
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
-                              color: cs.surfaceContainerHighest.withOpacity(0.35),
+                              color: cs.surfaceContainerHighest.withOpacity(
+                                0.35,
+                              ),
                               borderRadius: BorderRadius.circular(18),
-                              border: Border.all(color: cs.outlineVariant.withOpacity(0.5)),
+                              border: Border.all(
+                                color: cs.outlineVariant.withOpacity(0.5),
+                              ),
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text('Playable link', style: AppTypography.caption.copyWith(fontWeight: FontWeight.w900, color: cs.onSurfaceVariant)),
+                                Text(
+                                  'Playable link',
+                                  style: AppTypography.caption.copyWith(
+                                    fontWeight: FontWeight.w900,
+                                    color: cs.onSurfaceVariant,
+                                  ),
+                                ),
                                 const SizedBox(height: 8),
-                                Text(url, maxLines: 2, overflow: TextOverflow.ellipsis, style: AppTypography.body2.copyWith(fontWeight: FontWeight.w700)),
+                                Text(
+                                  url,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTypography.body2.copyWith(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
                                 const SizedBox(height: 10),
                                 Row(
                                   children: [
-                                    actionChip(icon: Icons.copy_rounded, label: 'Copy', onTap: () => copy(url)),
+                                    actionChip(
+                                      icon: Icons.copy_rounded,
+                                      label: 'Copy',
+                                      onTap: () => copy(url),
+                                    ),
                                     const SizedBox(width: 10),
                                     actionChip(
                                       icon: Icons.open_in_new_rounded,
                                       label: 'Open',
                                       onTap: () async {
                                         try {
-                                          await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+                                          await launchUrl(
+                                            Uri.parse(url),
+                                            mode:
+                                                LaunchMode.externalApplication,
+                                          );
                                         } catch (_) {}
                                       },
                                     ),
@@ -1471,7 +1888,12 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                             ),
                           ),
                           const SizedBox(height: AppSpacing.lg),
-                          Text('QR code', style: AppTypography.subtitle2.copyWith(fontWeight: FontWeight.w900)),
+                          Text(
+                            'QR code',
+                            style: AppTypography.subtitle2.copyWith(
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
                           const SizedBox(height: 10),
                           Center(
                             child: Container(
@@ -1479,7 +1901,13 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                               decoration: BoxDecoration(
                                 color: Colors.white,
                                 borderRadius: BorderRadius.circular(18),
-                                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 16, offset: const Offset(0, 10))],
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: Colors.black.withOpacity(0.12),
+                                    blurRadius: 16,
+                                    offset: const Offset(0, 10),
+                                  ),
+                                ],
                               ),
                               child: QrImageView(
                                 data: url,
@@ -1491,37 +1919,71 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                           ),
                           const SizedBox(height: 10),
                           Center(
-                            child: actionChip(icon: Icons.copy_rounded, label: 'Copy link for QR', onTap: () => copy(url)),
+                            child: actionChip(
+                              icon: Icons.copy_rounded,
+                              label: 'Copy link for QR',
+                              onTap: () => copy(url),
+                            ),
                           ),
                           const SizedBox(height: 6),
                           if (apkUrl.isNotEmpty) ...[
                             const SizedBox(height: AppSpacing.lg),
-                            Text('Android (APK)', style: AppTypography.subtitle2.copyWith(fontWeight: FontWeight.w900)),
+                            Text(
+                              'Android (APK)',
+                              style: AppTypography.subtitle2.copyWith(
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
                             const SizedBox(height: 10),
                             Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: cs.surfaceContainerHighest.withOpacity(0.35),
+                                color: cs.surfaceContainerHighest.withOpacity(
+                                  0.35,
+                                ),
                                 borderRadius: BorderRadius.circular(18),
-                                border: Border.all(color: cs.outlineVariant.withOpacity(0.5)),
+                                border: Border.all(
+                                  color: cs.outlineVariant.withOpacity(0.5),
+                                ),
                               ),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text('Download link', style: AppTypography.caption.copyWith(fontWeight: FontWeight.w900, color: cs.onSurfaceVariant)),
+                                  Text(
+                                    'Download link',
+                                    style: AppTypography.caption.copyWith(
+                                      fontWeight: FontWeight.w900,
+                                      color: cs.onSurfaceVariant,
+                                    ),
+                                  ),
                                   const SizedBox(height: 8),
-                                  Text(apkUrl, maxLines: 2, overflow: TextOverflow.ellipsis, style: AppTypography.body2.copyWith(fontWeight: FontWeight.w700)),
+                                  Text(
+                                    apkUrl,
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: AppTypography.body2.copyWith(
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
                                   const SizedBox(height: 10),
                                   Row(
                                     children: [
-                                      actionChip(icon: Icons.copy_rounded, label: 'Copy', onTap: () => copy(apkUrl)),
+                                      actionChip(
+                                        icon: Icons.copy_rounded,
+                                        label: 'Copy',
+                                        onTap: () => copy(apkUrl),
+                                      ),
                                       const SizedBox(width: 10),
                                       actionChip(
                                         icon: Icons.open_in_new_rounded,
                                         label: 'Open',
                                         onTap: () async {
                                           try {
-                                            await launchUrl(Uri.parse(apkUrl), mode: LaunchMode.externalApplication);
+                                            await launchUrl(
+                                              Uri.parse(apkUrl),
+                                              mode: LaunchMode
+                                                  .externalApplication,
+                                            );
                                           } catch (_) {}
                                         },
                                       ),
@@ -1531,7 +1993,12 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                               ),
                             ),
                             const SizedBox(height: AppSpacing.lg),
-                            Text('APK QR code', style: AppTypography.subtitle2.copyWith(fontWeight: FontWeight.w900)),
+                            Text(
+                              'APK QR code',
+                              style: AppTypography.subtitle2.copyWith(
+                                fontWeight: FontWeight.w900,
+                              ),
+                            ),
                             const SizedBox(height: 10),
                             Center(
                               child: Container(
@@ -1539,7 +2006,13 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                                 decoration: BoxDecoration(
                                   color: Colors.white,
                                   borderRadius: BorderRadius.circular(18),
-                                  boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.12), blurRadius: 16, offset: const Offset(0, 10))],
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withOpacity(0.12),
+                                      blurRadius: 16,
+                                      offset: const Offset(0, 10),
+                                    ),
+                                  ],
                                 ),
                                 child: QrImageView(
                                   data: apkUrl,
@@ -1551,7 +2024,11 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                             ),
                             const SizedBox(height: 10),
                             Center(
-                              child: actionChip(icon: Icons.copy_rounded, label: 'Copy link for QR', onTap: () => copy(apkUrl)),
+                              child: actionChip(
+                                icon: Icons.copy_rounded,
+                                label: 'Copy link for QR',
+                                onTap: () => copy(apkUrl),
+                              ),
                             ),
                             const SizedBox(height: 6),
                           ],
@@ -1586,7 +2063,9 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
       return;
     }
 
-    final creatorUsername = (p['creatorUsername'] ?? p['creator'] ?? '').toString().trim();
+    final creatorUsername = (p['creatorUsername'] ?? p['creator'] ?? '')
+        .toString()
+        .trim();
     final cs = Theme.of(context).colorScheme;
 
     await showModalBottomSheet<void>(
@@ -1602,7 +2081,10 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
 
         Future<void> init() async {
           try {
-            final res = await CreatorMonetizationService.entitlement(token: token, creatorUserId: creatorId);
+            final res = await CreatorMonetizationService.entitlement(
+              token: token,
+              creatorUserId: creatorId,
+            );
             final data = res['data'];
             hasPass = (data is Map) ? (data['hasCreatorPass'] == true) : false;
           } catch (_) {
@@ -1648,18 +2130,30 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
             );
 
             if (res['success'] != true) {
-              final msg = (res['message'] ?? res['error'] ?? 'PaymentSheet request failed').toString();
+              final msg =
+                  (res['message'] ??
+                          res['error'] ??
+                          'PaymentSheet request failed')
+                      .toString();
               throw Exception(msg);
             }
 
             final data = res['data'];
-            final m = (data is Map) ? Map<String, dynamic>.from(data) : <String, dynamic>{};
+            final m = (data is Map)
+                ? Map<String, dynamic>.from(data)
+                : <String, dynamic>{};
             final customerId = m['customerId']?.toString() ?? '';
-            final ephemeralKeySecret = m['ephemeralKeySecret']?.toString() ?? '';
-            final paymentIntentClientSecret = m['paymentIntentClientSecret']?.toString() ?? '';
+            final ephemeralKeySecret =
+                m['ephemeralKeySecret']?.toString() ?? '';
+            final paymentIntentClientSecret =
+                m['paymentIntentClientSecret']?.toString() ?? '';
             final paymentIntentId = m['paymentIntentId']?.toString() ?? '';
-            if (customerId.isEmpty || ephemeralKeySecret.isEmpty || paymentIntentClientSecret.isEmpty) {
-              throw Exception('Invalid PaymentSheet data from server: ${m.isEmpty ? res.toString() : m.toString()}');
+            if (customerId.isEmpty ||
+                ephemeralKeySecret.isEmpty ||
+                paymentIntentClientSecret.isEmpty) {
+              throw Exception(
+                'Invalid PaymentSheet data from server: ${m.isEmpty ? res.toString() : m.toString()}',
+              );
             }
 
             final cs = Theme.of(sheetCtx).colorScheme;
@@ -1703,7 +2197,10 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
 
             // Refresh entitlement state after successful payment
             try {
-              final ent = await CreatorMonetizationService.entitlement(token: token, creatorUserId: creatorId);
+              final ent = await CreatorMonetizationService.entitlement(
+                token: token,
+                creatorUserId: creatorId,
+              );
               final d = ent['data'];
               hasPass = (d is Map) ? (d['hasCreatorPass'] == true) : hasPass;
             } catch (_) {}
@@ -1735,13 +2232,27 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
               return GestureDetector(
                 onTap: () => safeSet(() => amount = v),
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
                     borderRadius: BorderRadius.circular(999),
-                    color: selected ? cs.primary.withOpacity(0.14) : cs.surfaceContainerHighest.withOpacity(0.35),
-                    border: Border.all(color: selected ? cs.primary.withOpacity(0.38) : cs.outlineVariant.withOpacity(0.55)),
+                    color: selected
+                        ? cs.primary.withOpacity(0.14)
+                        : cs.surfaceContainerHighest.withOpacity(0.35),
+                    border: Border.all(
+                      color: selected
+                          ? cs.primary.withOpacity(0.38)
+                          : cs.outlineVariant.withOpacity(0.55),
+                    ),
                   ),
-                  child: Text('\$${v.toStringAsFixed(0)}', style: AppTypography.caption.copyWith(fontWeight: FontWeight.w900)),
+                  child: Text(
+                    '\$${v.toStringAsFixed(0)}',
+                    style: AppTypography.caption.copyWith(
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
                 ),
               );
             }
@@ -1762,8 +2273,12 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                             children: [
                               Expanded(
                                 child: Text(
-                                  creatorUsername.isEmpty ? 'Support creator' : 'Support @$creatorUsername',
-                                  style: AppTypography.subtitle1.copyWith(fontWeight: FontWeight.w900),
+                                  creatorUsername.isEmpty
+                                      ? 'Support creator'
+                                      : 'Support @$creatorUsername',
+                                  style: AppTypography.subtitle1.copyWith(
+                                    fontWeight: FontWeight.w900,
+                                  ),
                                 ),
                               ),
                               IconButton(
@@ -1778,11 +2293,16 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(20),
                               gradient: LinearGradient(
-                                colors: [cs.primary.withOpacity(0.16), AppColors.accent.withOpacity(0.10)],
+                                colors: [
+                                  cs.primary.withOpacity(0.16),
+                                  AppColors.accent.withOpacity(0.10),
+                                ],
                                 begin: Alignment.topLeft,
                                 end: Alignment.bottomRight,
                               ),
-                              border: Border.all(color: cs.outlineVariant.withOpacity(0.55)),
+                              border: Border.all(
+                                color: cs.outlineVariant.withOpacity(0.55),
+                              ),
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1795,20 +2315,35 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                                       decoration: BoxDecoration(
                                         color: cs.primary.withOpacity(0.12),
                                         borderRadius: BorderRadius.circular(14),
-                                        border: Border.all(color: cs.primary.withOpacity(0.18)),
+                                        border: Border.all(
+                                          color: cs.primary.withOpacity(0.18),
+                                        ),
                                       ),
-                                      child: Icon(Icons.workspace_premium_outlined, color: cs.primary),
+                                      child: Icon(
+                                        Icons.workspace_premium_outlined,
+                                        color: cs.primary,
+                                      ),
                                     ),
                                     const SizedBox(width: 12),
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
-                                          Text('Creator Pass', style: AppTypography.body1.copyWith(fontWeight: FontWeight.w900)),
+                                          Text(
+                                            'Creator Pass',
+                                            style: AppTypography.body1.copyWith(
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                          ),
                                           const SizedBox(height: 2),
                                           Text(
                                             'Unlock Source Export + remove watermark for all games.',
-                                            style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700),
+                                            style: AppTypography.caption
+                                                .copyWith(
+                                                  color: cs.onSurfaceVariant,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
                                           ),
                                         ],
                                       ),
@@ -1821,10 +2356,14 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                                   onPressed: hasPass
                                       ? null
                                       : () async {
-                                          await openPaymentSheet('creator_pass');
+                                          await openPaymentSheet(
+                                            'creator_pass',
+                                          );
                                           await safeSet(() {});
                                         },
-                                  type: hasPass ? ButtonType.secondary : ButtonType.primary,
+                                  type: hasPass
+                                      ? ButtonType.secondary
+                                      : ButtonType.primary,
                                   isFullWidth: true,
                                   isLoading: busy,
                                 ),
@@ -1837,7 +2376,9 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(20),
                               color: cs.surface,
-                              border: Border.all(color: cs.outlineVariant.withOpacity(0.6)),
+                              border: Border.all(
+                                color: cs.outlineVariant.withOpacity(0.6),
+                              ),
                             ),
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1848,20 +2389,42 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                                       width: 40,
                                       height: 40,
                                       decoration: BoxDecoration(
-                                        color: AppColors.accent.withOpacity(0.12),
+                                        color: AppColors.accent.withOpacity(
+                                          0.12,
+                                        ),
                                         borderRadius: BorderRadius.circular(14),
-                                        border: Border.all(color: AppColors.accent.withOpacity(0.18)),
+                                        border: Border.all(
+                                          color: AppColors.accent.withOpacity(
+                                            0.18,
+                                          ),
+                                        ),
                                       ),
-                                      child: Icon(Icons.volunteer_activism_outlined, color: AppColors.accent),
+                                      child: Icon(
+                                        Icons.volunteer_activism_outlined,
+                                        color: AppColors.accent,
+                                      ),
                                     ),
                                     const SizedBox(width: 12),
                                     Expanded(
                                       child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
                                         children: [
-                                          Text('Tip', style: AppTypography.body1.copyWith(fontWeight: FontWeight.w900)),
+                                          Text(
+                                            'Tip',
+                                            style: AppTypography.body1.copyWith(
+                                              fontWeight: FontWeight.w900,
+                                            ),
+                                          ),
                                           const SizedBox(height: 2),
-                                          Text('Support the creator and help fund new games.', style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700)),
+                                          Text(
+                                            'Support the creator and help fund new games.',
+                                            style: AppTypography.caption
+                                                .copyWith(
+                                                  color: cs.onSurfaceVariant,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                          ),
                                         ],
                                       ),
                                     ),
@@ -1871,7 +2434,12 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                                 Wrap(
                                   spacing: 10,
                                   runSpacing: 10,
-                                  children: [amountChip(2), amountChip(5), amountChip(10), amountChip(20)],
+                                  children: [
+                                    amountChip(2),
+                                    amountChip(5),
+                                    amountChip(10),
+                                    amountChip(20),
+                                  ],
                                 ),
                                 const SizedBox(height: 12),
                                 TextField(
@@ -1881,14 +2449,23 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                                   decoration: InputDecoration(
                                     hintText: 'Add a message…',
                                     filled: true,
-                                    fillColor: cs.surfaceContainerHighest.withOpacity(0.35),
+                                    fillColor: cs.surfaceContainerHighest
+                                        .withOpacity(0.35),
                                     border: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(18),
-                                      borderSide: BorderSide(color: cs.outlineVariant.withOpacity(0.6)),
+                                      borderSide: BorderSide(
+                                        color: cs.outlineVariant.withOpacity(
+                                          0.6,
+                                        ),
+                                      ),
                                     ),
                                     enabledBorder: OutlineInputBorder(
                                       borderRadius: BorderRadius.circular(18),
-                                      borderSide: BorderSide(color: cs.outlineVariant.withOpacity(0.6)),
+                                      borderSide: BorderSide(
+                                        color: cs.outlineVariant.withOpacity(
+                                          0.6,
+                                        ),
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -1899,7 +2476,10 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                                     icon: const Icon(Icons.payment_rounded),
                                     label: const Text('Send tip'),
                                     onPressed: () async {
-                                      await openPaymentSheet('tip', amountUsd: amount);
+                                      await openPaymentSheet(
+                                        'tip',
+                                        amountUsd: amount,
+                                      );
                                       await safeSet(() {});
                                     },
                                   ),
@@ -1910,7 +2490,10 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                           const SizedBox(height: 8),
                           Text(
                             'Payments are processed by Stripe. Revenue split: 80/20.',
-                            style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700),
+                            style: AppTypography.caption.copyWith(
+                              color: cs.onSurfaceVariant,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ],
                       ),
@@ -1938,14 +2521,19 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
       return CachedNetworkImage(
         imageUrl: img,
         fit: BoxFit.cover,
-        placeholder: (context, _) => Container(color: Colors.black.withOpacity(0.6)),
-        errorWidget: (context, _, __) => Container(color: Colors.black.withOpacity(0.6)),
+        placeholder: (context, _) =>
+            Container(color: Colors.black.withOpacity(0.6)),
+        errorWidget: (context, _, __) =>
+            Container(color: Colors.black.withOpacity(0.6)),
       );
     }
     return Container(
       decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Colors.black.withOpacity(0.85), cs.surfaceContainerHighest.withOpacity(0.45)],
+          colors: [
+            Colors.black.withOpacity(0.85),
+            cs.surfaceContainerHighest.withOpacity(0.45),
+          ],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -1978,12 +2566,21 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
     final liked = _postLikedByMe(p);
     final likeCount = _postLikeCount(p);
     final commentCount = _postCommentCount(p);
-    final creator = (p['creatorUsername'] ?? p['creator'] ?? '').toString().trim();
+    final creator = (p['creatorUsername'] ?? p['creator'] ?? '')
+        .toString()
+        .trim();
     final creatorId = _postCreatorId(p).trim();
-    final tags = (p['tags'] is List) ? (p['tags'] as List).map((e) => e?.toString() ?? '').where((e) => e.trim().isNotEmpty).toList() : <String>[];
+    final tags = (p['tags'] is List)
+        ? (p['tags'] as List)
+              .map((e) => e?.toString() ?? '')
+              .where((e) => e.trim().isNotEmpty)
+              .toList()
+        : <String>[];
     final isReel = _isReel(p);
     final reelUrl = _postReelUrl(p).trim();
-    final wowScore = (p['wowScore'] is num) ? (p['wowScore'] as num).toInt() : 0;
+    final wowScore = (p['wowScore'] is num)
+        ? (p['wowScore'] as num).toInt()
+        : 0;
     final reelStyle = (p['reelStyle'] ?? '').toString().trim().toUpperCase();
     final reelTarget = (p['reelTarget'] ?? '').toString().trim().toUpperCase();
     final reelPromoText = _postReelPromoText(p);
@@ -1993,11 +2590,18 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
 
     final isActive = index == _activeIndex;
     final web = (isActive && _activePostId == _postId(p)) ? _activeWeb : null;
-    final reelPlaying = isActive && _reelPostId == _postId(p) && _reelVideo != null && _reelVideo!.value.isInitialized;
+    final reelPlaying =
+        isActive &&
+        _reelPostId == _postId(p) &&
+        _reelVideo != null &&
+        _reelVideo!.value.isInitialized;
 
-    final burst = (_burstPostId != null && _burstPostId == _postId(p)) ? _burstT : 1.2;
+    final burst = (_burstPostId != null && _burstPostId == _postId(p))
+        ? _burstT
+        : 1.2;
     final burstVisible = (_burstPostId != null && _burstPostId == _postId(p));
-    final heartScale = 0.65 + (1 - (burst - 0.5).abs() * 1.3).clamp(0.0, 1.0) * 0.55;
+    final heartScale =
+        0.65 + (1 - (burst - 0.5).abs() * 1.3).clamp(0.0, 1.0) * 0.55;
     final heartOpacity = (1.0 - burst).clamp(0.0, 1.0);
 
     if (isAd) {
@@ -2009,7 +2613,9 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
       final cta = (p['ctaLabel'] ?? 'Visit').toString().trim();
       final clickUrl = (p['clickUrl'] ?? '').toString().trim();
       final campaignId = _adCampaignId(p).trim();
-      final creditedCreatorId = (p['creditedCreatorId'] ?? '').toString().trim();
+      final creditedCreatorId = (p['creditedCreatorId'] ?? '')
+          .toString()
+          .trim();
 
       Future<void> click() async {
         final token = context.read<AuthProvider>().token;
@@ -2020,7 +2626,9 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
             token: token,
             campaignId: campaignId,
             type: 'click',
-            creditedCreatorUserId: creditedCreatorId.isEmpty ? null : creditedCreatorId,
+            creditedCreatorUserId: creditedCreatorId.isEmpty
+                ? null
+                : creditedCreatorId,
           );
         } catch (_) {}
         try {
@@ -2036,7 +2644,13 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
       if (canPlayVideo) {
         // Fire-and-forget: ensure video controller exists for active ad.
         if (isActiveAd && campaignId.isNotEmpty) {
-          Future.microtask(() => _ensureAdVideo(campaignId: campaignId, url: videoUrl, play: true));
+          Future.microtask(
+            () => _ensureAdVideo(
+              campaignId: campaignId,
+              url: videoUrl,
+              play: true,
+            ),
+          );
         } else {
           Future.microtask(() async {
             try {
@@ -2050,7 +2664,11 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
         fit: StackFit.expand,
         children: [
           Positioned.fill(
-            child: canPlayVideo && _adVideo != null && _adVideoCampaignId == campaignId && _adVideo!.value.isInitialized
+            child:
+                canPlayVideo &&
+                    _adVideo != null &&
+                    _adVideoCampaignId == campaignId &&
+                    _adVideo!.value.isInitialized
                 ? FittedBox(
                     fit: BoxFit.cover,
                     child: SizedBox(
@@ -2060,27 +2678,36 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                     ),
                   )
                 : (img.isNotEmpty
-                    ? CachedNetworkImage(
-                        imageUrl: img,
-                        fit: BoxFit.cover,
-                        placeholder: (context, _) => Container(color: Colors.black.withOpacity(0.85)),
-                        errorWidget: (context, _, __) => Container(color: Colors.black.withOpacity(0.85)),
-                      )
-                    : Container(
-                        decoration: BoxDecoration(
-                          gradient: LinearGradient(
-                            colors: [cs.primary.withOpacity(0.9), AppColors.accent.withOpacity(0.7)],
-                            begin: Alignment.topLeft,
-                            end: Alignment.bottomRight,
+                      ? CachedNetworkImage(
+                          imageUrl: img,
+                          fit: BoxFit.cover,
+                          placeholder: (context, _) =>
+                              Container(color: Colors.black.withOpacity(0.85)),
+                          errorWidget: (context, _, __) =>
+                              Container(color: Colors.black.withOpacity(0.85)),
+                        )
+                      : Container(
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [
+                                cs.primary.withOpacity(0.9),
+                                AppColors.accent.withOpacity(0.7),
+                              ],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
                           ),
-                        ),
-                      )),
+                        )),
           ),
           Positioned.fill(
             child: DecoratedBox(
               decoration: BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Colors.black.withOpacity(0.70), Colors.transparent, Colors.black.withOpacity(0.78)],
+                  colors: [
+                    Colors.black.withOpacity(0.70),
+                    Colors.transparent,
+                    Colors.black.withOpacity(0.78),
+                  ],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                   stops: const [0.0, 0.55, 1.0],
@@ -2096,15 +2723,29 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
               children: [
                 _glass(
                   context,
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Icon(Icons.campaign_outlined, size: 16, color: Theme.of(context).brightness == Brightness.dark ? Colors.white.withOpacity(0.92) : cs.onSurface),
+                      Icon(
+                        Icons.campaign_outlined,
+                        size: 16,
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.white.withOpacity(0.92)
+                            : cs.onSurface,
+                      ),
                       const SizedBox(width: 8),
                       Text(
                         'Sponsored',
-                        style: AppTypography.caption.copyWith(color: Theme.of(context).brightness == Brightness.dark ? Colors.white.withOpacity(0.92) : cs.onSurface, fontWeight: FontWeight.w900),
+                        style: AppTypography.caption.copyWith(
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? Colors.white.withOpacity(0.92)
+                              : cs.onSurface,
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
                     ],
                   ),
@@ -2113,10 +2754,18 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                   const SizedBox(width: 10),
                   _glass(
                     context,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     child: Text(
                       advertiser,
-                      style: AppTypography.caption.copyWith(color: Theme.of(context).brightness == Brightness.dark ? Colors.white.withOpacity(0.92) : cs.onSurface, fontWeight: FontWeight.w900),
+                      style: AppTypography.caption.copyWith(
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.white.withOpacity(0.92)
+                            : cs.onSurface,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
                   ),
                 ],
@@ -2130,21 +2779,33 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
               right: AppSpacing.lg,
               child: _glass(
                 context,
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 child: GestureDetector(
                   onTap: _toggleAdMuted,
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Icon(
-                        _adMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+                        _adMuted
+                            ? Icons.volume_off_rounded
+                            : Icons.volume_up_rounded,
                         size: 18,
-                        color: Theme.of(context).brightness == Brightness.dark ? Colors.white.withOpacity(0.92) : cs.onSurface,
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.white.withOpacity(0.92)
+                            : cs.onSurface,
                       ),
                       const SizedBox(width: 8),
                       Text(
                         _adMuted ? 'Muted' : 'Sound',
-                        style: AppTypography.caption.copyWith(color: Theme.of(context).brightness == Brightness.dark ? Colors.white.withOpacity(0.92) : cs.onSurface, fontWeight: FontWeight.w900),
+                        style: AppTypography.caption.copyWith(
+                          color: Theme.of(context).brightness == Brightness.dark
+                              ? Colors.white.withOpacity(0.92)
+                              : cs.onSurface,
+                          fontWeight: FontWeight.w900,
+                        ),
                       ),
                     ],
                   ),
@@ -2165,15 +2826,34 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                   Row(
                     children: [
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(999),
-                          color: (Theme.of(context).brightness == Brightness.dark ? Colors.white : cs.onSurface).withOpacity(0.10),
-                          border: Border.all(color: (Theme.of(context).brightness == Brightness.dark ? Colors.white : cs.onSurface).withOpacity(0.14)),
+                          color:
+                              (Theme.of(context).brightness == Brightness.dark
+                                      ? Colors.white
+                                      : cs.onSurface)
+                                  .withOpacity(0.10),
+                          border: Border.all(
+                            color:
+                                (Theme.of(context).brightness == Brightness.dark
+                                        ? Colors.white
+                                        : cs.onSurface)
+                                    .withOpacity(0.14),
+                          ),
                         ),
                         child: Text(
                           'Ad',
-                          style: AppTypography.caption.copyWith(color: Theme.of(context).brightness == Brightness.dark ? Colors.white.withOpacity(0.92) : cs.onSurface, fontWeight: FontWeight.w900),
+                          style: AppTypography.caption.copyWith(
+                            color:
+                                Theme.of(context).brightness == Brightness.dark
+                                ? Colors.white.withOpacity(0.92)
+                                : cs.onSurface,
+                            fontWeight: FontWeight.w900,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -2182,7 +2862,13 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                           adTitle.isEmpty ? 'Sponsored' : adTitle,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
-                          style: AppTypography.subtitle1.copyWith(color: Theme.of(context).brightness == Brightness.dark ? Colors.white : cs.onSurface, fontWeight: FontWeight.w900),
+                          style: AppTypography.subtitle1.copyWith(
+                            color:
+                                Theme.of(context).brightness == Brightness.dark
+                                ? Colors.white
+                                : cs.onSurface,
+                            fontWeight: FontWeight.w900,
+                          ),
                         ),
                       ),
                     ],
@@ -2193,7 +2879,13 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                       adDesc,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: AppTypography.body2.copyWith(color: Theme.of(context).brightness == Brightness.dark ? Colors.white.withOpacity(0.92) : cs.onSurfaceVariant, fontWeight: FontWeight.w700, height: 1.25),
+                      style: AppTypography.body2.copyWith(
+                        color: Theme.of(context).brightness == Brightness.dark
+                            ? Colors.white.withOpacity(0.92)
+                            : cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                        height: 1.25,
+                      ),
                     ),
                   ],
                   const SizedBox(height: 14),
@@ -2206,7 +2898,11 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                         end: Alignment.bottomRight,
                       ),
                       boxShadow: [
-                        BoxShadow(color: cs.primary.withOpacity(0.22), blurRadius: 22, offset: const Offset(0, 12)),
+                        BoxShadow(
+                          color: cs.primary.withOpacity(0.22),
+                          blurRadius: 22,
+                          offset: const Offset(0, 12),
+                        ),
                       ],
                     ),
                     child: Material(
@@ -2215,16 +2911,25 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                         borderRadius: BorderRadius.circular(16),
                         onTap: clickUrl.isEmpty ? null : click,
                         child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 16,
+                            vertical: 14,
+                          ),
                           child: Row(
                             children: [
                               Expanded(
                                 child: Text(
                                   cta.isEmpty ? 'Learn more' : cta,
-                                  style: AppTypography.body2.copyWith(color: cs.onPrimary, fontWeight: FontWeight.w900),
+                                  style: AppTypography.body2.copyWith(
+                                    color: cs.onPrimary,
+                                    fontWeight: FontWeight.w900,
+                                  ),
                                 ),
                               ),
-                              Icon(Icons.arrow_forward_rounded, color: cs.onPrimary),
+                              Icon(
+                                Icons.arrow_forward_rounded,
+                                color: cs.onPrimary,
+                              ),
                             ],
                           ),
                         ),
@@ -2245,6 +2950,11 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
       children: [
         Positioned.fill(
           child: GestureDetector(
+            onTap: () {
+              if (isReel) {
+                _ensureReelSoundFromUserTap();
+              }
+            },
             onDoubleTap: () => _likeWithBurst(p),
             behavior: HitTestBehavior.opaque,
             child: ClipRRect(
@@ -2253,15 +2963,17 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                 padding: EdgeInsets.zero,
                 child: isActive
                     ? (reelPlaying
-                        ? FittedBox(
-                            fit: BoxFit.cover,
-                            child: SizedBox(
-                              width: _reelVideo!.value.size.width,
-                              height: _reelVideo!.value.size.height,
-                              child: VideoPlayer(_reelVideo!),
-                            ),
-                          )
-                        : (web != null ? WebViewWidget(controller: web) : _buildPreview(p)))
+                          ? FittedBox(
+                              fit: BoxFit.cover,
+                              child: SizedBox(
+                                width: _reelVideo!.value.size.width,
+                                height: _reelVideo!.value.size.height,
+                                child: VideoPlayer(_reelVideo!),
+                              ),
+                            )
+                          : (web != null
+                                ? WebViewWidget(controller: web)
+                                : _buildPreview(p)))
                     : _buildPreview(p),
               ),
             ),
@@ -2269,18 +2981,22 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
         ),
         if (isReel && reelUrl.isNotEmpty)
           Positioned(
-            top: MediaQuery.of(context).padding.top + 74,
+            top: MediaQuery.of(context).padding.top + 44,
             right: AppSpacing.lg,
             child: AnimatedBuilder(
               animation: _neonCtrl,
               builder: (context, _) {
-                final pulse = 0.96 + (math.sin(_neonCtrl.value * math.pi * 2) * 0.04);
+                final pulse =
+                    0.96 + (math.sin(_neonCtrl.value * math.pi * 2) * 0.04);
                 return Row(
                   children: [
                     Transform.scale(
                       scale: pulse,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(999),
                           gradient: LinearGradient(
@@ -2291,7 +3007,9 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           ),
-                          border: Border.all(color: Colors.white.withOpacity(0.26)),
+                          border: Border.all(
+                            color: Colors.white.withOpacity(0.26),
+                          ),
                           boxShadow: [
                             BoxShadow(
                               color: const Color(0xFFFF4D8D).withOpacity(0.32),
@@ -2303,15 +3021,26 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.local_fire_department_rounded, size: 16, color: Colors.white.withOpacity(0.98)),
+                            Icon(
+                              Icons.local_fire_department_rounded,
+                              size: 16,
+                              color: Colors.white.withOpacity(0.98),
+                            ),
                             if (wowScore >= 80) ...[
                               const SizedBox(width: 4),
-                              const Icon(Icons.auto_awesome_rounded, size: 14, color: Colors.white),
+                              const Icon(
+                                Icons.auto_awesome_rounded,
+                                size: 14,
+                                color: Colors.white,
+                              ),
                             ],
                             const SizedBox(width: 8),
                             Text(
                               wowScore > 0 ? 'REEL • WOW $wowScore' : 'REEL',
-                              style: AppTypography.caption.copyWith(color: Colors.white.withOpacity(0.98), fontWeight: FontWeight.w900),
+                              style: AppTypography.caption.copyWith(
+                                color: Colors.white.withOpacity(0.98),
+                                fontWeight: FontWeight.w900,
+                              ),
                             ),
                           ],
                         ),
@@ -2321,23 +3050,35 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                       const SizedBox(width: 8),
                       _glass(
                         context,
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
                         child: Text(
                           reelStyle.isNotEmpty && reelTarget.isNotEmpty
                               ? '$reelStyle • $reelTarget'
                               : (reelStyle.isNotEmpty ? reelStyle : reelTarget),
-                          style: AppTypography.caption.copyWith(color: Colors.white.withOpacity(0.92), fontWeight: FontWeight.w900),
+                          style: AppTypography.caption.copyWith(
+                            color: Colors.white.withOpacity(0.92),
+                            fontWeight: FontWeight.w800,
+                            fontSize: 11.5,
+                          ),
                         ),
                       ),
                     ],
                     const SizedBox(width: 8),
                     _glass(
                       context,
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
                       child: GestureDetector(
                         onTap: _toggleReelMuted,
                         child: Icon(
-                          _reelMuted ? Icons.volume_off_rounded : Icons.volume_up_rounded,
+                          _reelMuted
+                              ? Icons.volume_off_rounded
+                              : Icons.volume_up_rounded,
                           size: 18,
                           color: Colors.white.withOpacity(0.95),
                         ),
@@ -2347,7 +3088,10 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                       const SizedBox(width: 8),
                       _glass(
                         context,
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
@@ -2357,15 +3101,27 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                               color: Colors.white.withOpacity(0.95),
                             ),
                             const SizedBox(width: 6),
-                            Text(
-                              reelMusicCue,
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                              style: AppTypography.caption.copyWith(
-                                color: Colors.white.withOpacity(0.94),
-                                fontWeight: FontWeight.w900,
+                            ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 170),
+                              child: Text(
+                                reelMusicCue,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTypography.caption.copyWith(
+                                  color: Colors.white.withOpacity(0.94),
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 11.5,
+                                ),
                               ),
                             ),
+                            if (!_reelMuted) ...[
+                              const SizedBox(width: 6),
+                              Icon(
+                                Icons.graphic_eq_rounded,
+                                size: 14,
+                                color: Colors.white.withOpacity(0.9),
+                              ),
+                            ],
                           ],
                         ),
                       ),
@@ -2392,9 +3148,13 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
             decoration: BoxDecoration(
               gradient: LinearGradient(
                 colors: [
-                  (isDark ? Colors.black : Colors.black).withOpacity(isDark ? 0.62 : 0.45),
+                  (isDark ? Colors.black : Colors.black).withOpacity(
+                    isDark ? 0.48 : 0.32,
+                  ),
                   Colors.transparent,
-                  (isDark ? Colors.black : Colors.black).withOpacity(isDark ? 0.72 : 0.55),
+                  (isDark ? Colors.black : Colors.black).withOpacity(
+                    isDark ? 0.56 : 0.40,
+                  ),
                 ],
                 begin: Alignment.topCenter,
                 end: Alignment.bottomCenter,
@@ -2407,7 +3167,7 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
           Positioned(
             left: AppSpacing.lg,
             right: AppSpacing.lg,
-            top: MediaQuery.of(context).padding.top + 148,
+            top: MediaQuery.of(context).padding.top + 96,
             child: IgnorePointer(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
@@ -2415,16 +3175,20 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                   if (reelPromoText.isNotEmpty)
                     _glass(
                       context,
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
                       child: Text(
                         reelPromoText,
                         textAlign: TextAlign.center,
-                        maxLines: 2,
+                        maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: AppTypography.subtitle1.copyWith(
+                        style: AppTypography.body1.copyWith(
                           color: Colors.white.withOpacity(0.98),
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 0.4,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14.5,
+                          letterSpacing: 0.1,
                           shadows: [
                             Shadow(
                               color: Colors.black.withOpacity(0.55),
@@ -2436,37 +3200,47 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                       ),
                     ),
                   if (reelCaptionLines.isNotEmpty) ...[
-                    const SizedBox(height: 10),
-                    ...reelCaptionLines.take(2).map(
-                      (line) => Padding(
-                        padding: const EdgeInsets.only(bottom: 8),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: Colors.black.withOpacity(
-                              reelCaptionStyle == 'impact-neon' ? 0.52 : 0.60,
-                            ),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(
-                              color: reelCaptionStyle == 'impact-neon'
-                                  ? const Color(0xFFFF5C93).withOpacity(0.44)
-                                  : Colors.white.withOpacity(0.16),
-                            ),
-                          ),
-                          child: Text(
-                            line,
-                            textAlign: TextAlign.center,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: AppTypography.body2.copyWith(
-                              color: Colors.white.withOpacity(0.95),
-                              fontWeight: FontWeight.w800,
-                              height: 1.2,
+                    const SizedBox(height: 6),
+                    ...reelCaptionLines
+                        .take(1)
+                        .map(
+                          (line) => Padding(
+                            padding: const EdgeInsets.only(bottom: 4),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 10,
+                                vertical: 5,
+                              ),
+                              decoration: BoxDecoration(
+                                color: Colors.black.withOpacity(
+                                  reelCaptionStyle == 'impact-neon'
+                                      ? 0.40
+                                      : 0.46,
+                                ),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: reelCaptionStyle == 'impact-neon'
+                                      ? const Color(
+                                          0xFFFF5C93,
+                                        ).withOpacity(0.44)
+                                      : Colors.white.withOpacity(0.16),
+                                ),
+                              ),
+                              child: Text(
+                                line,
+                                textAlign: TextAlign.center,
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                                style: AppTypography.body2.copyWith(
+                                  color: Colors.white.withOpacity(0.95),
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 12,
+                                  height: 1.15,
+                                ),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ),
                   ],
                 ],
               ),
@@ -2483,7 +3257,9 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                     child: Icon(
                       Icons.favorite_rounded,
                       size: 128,
-                      color: (isDark ? Colors.white : Colors.white).withOpacity(0.92),
+                      color: (isDark ? Colors.white : Colors.white).withOpacity(
+                        0.92,
+                      ),
                     ),
                   ),
                 ),
@@ -2501,10 +3277,15 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
             children: [
               if (creator.isNotEmpty)
                 GestureDetector(
-                  onTap: creatorId.isEmpty ? null : () => context.push('/creator/$creatorId'),
+                  onTap: creatorId.isEmpty
+                      ? null
+                      : () => context.push('/creator/$creatorId'),
                   child: _glass(
                     context,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -2514,7 +3295,12 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                           decoration: BoxDecoration(
                             shape: BoxShape.circle,
                             color: AppColors.accent,
-                            boxShadow: [BoxShadow(color: AppColors.accent.withOpacity(0.4), blurRadius: 10)],
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.accent.withOpacity(0.4),
+                                blurRadius: 10,
+                              ),
+                            ],
                           ),
                         ),
                         const SizedBox(width: 10),
@@ -2527,7 +3313,11 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                         ),
                         if (creatorId.isNotEmpty) ...[
                           const SizedBox(width: 8),
-                          Icon(Icons.chevron_right_rounded, size: 18, color: Colors.white.withOpacity(0.78)),
+                          Icon(
+                            Icons.chevron_right_rounded,
+                            size: 18,
+                            color: Colors.white.withOpacity(0.78),
+                          ),
                         ],
                       ],
                     ),
@@ -2536,34 +3326,37 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
               if (creator.isNotEmpty) const SizedBox(height: 10),
               Text(
                 title,
-                maxLines: 2,
+                maxLines: 1,
                 overflow: TextOverflow.ellipsis,
                 style: AppTypography.h4.copyWith(
                   color: Colors.white,
-                  fontWeight: FontWeight.w900,
-                  height: 1.1,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 21,
+                  height: 1.08,
                 ),
               ),
-              const SizedBox(height: 8),
-              if (p['description'] != null && p['description'].toString().trim().isNotEmpty)
+              const SizedBox(height: 6),
+              if (p['description'] != null &&
+                  p['description'].toString().trim().isNotEmpty)
                 Text(
                   p['description'].toString(),
-                  maxLines: 3,
+                  maxLines: 2,
                   overflow: TextOverflow.ellipsis,
                   style: AppTypography.body2.copyWith(
                     color: Colors.white.withOpacity(0.88),
-                    height: 1.3,
+                    fontSize: 14,
+                    height: 1.22,
                   ),
                 ),
               if (tags.isNotEmpty) ...[
-                const SizedBox(height: 12),
+                const SizedBox(height: 10),
                 Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: tags.take(4).map(_tagChip).toList(growable: false),
+                  spacing: 7,
+                  runSpacing: 7,
+                  children: tags.take(3).map(_tagChip).toList(growable: false),
                 ),
               ],
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               Row(
                 children: [
                   _PillButton(
@@ -2590,7 +3383,9 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
               mainAxisSize: MainAxisSize.min,
               children: [
                 _ActionButton(
-                  icon: liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                  icon: liked
+                      ? Icons.favorite_rounded
+                      : Icons.favorite_border_rounded,
                   label: likeCount.toString(),
                   active: liked,
                   onTap: () => _toggleLike(p),
@@ -2628,7 +3423,10 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
                 child: Align(
                   alignment: Alignment.center,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
                     decoration: BoxDecoration(
                       color: cs.surface.withOpacity(0.55),
                       borderRadius: BorderRadius.circular(999),
@@ -2666,120 +3464,139 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen> with AutomaticKeepA
               ],
             )
           : (_error != null)
-              ? ListView(
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.all(AppSpacing.lg),
-                  children: [
-                    const SizedBox(height: 160),
-                    Container(
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: cs.surface.withOpacity(0.6),
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(color: cs.outlineVariant.withOpacity(0.5)),
-                      ),
-                      child: Text(
-                        _error!,
-                        style: AppTypography.body2.copyWith(color: cs.onSurface),
-                      ),
+          ? ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              children: [
+                const SizedBox(height: 160),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: cs.surface.withOpacity(0.6),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: cs.outlineVariant.withOpacity(0.5),
                     ),
-                    const SizedBox(height: 14),
-                    _PillButton(
-                      icon: Icons.refresh_rounded,
-                      label: 'Retry',
-                      onTap: _loadFirst,
+                  ),
+                  child: Text(
+                    _error!,
+                    style: AppTypography.body2.copyWith(color: cs.onSurface),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                _PillButton(
+                  icon: Icons.refresh_rounded,
+                  label: 'Retry',
+                  onTap: _loadFirst,
+                ),
+              ],
+            )
+          : (_posts.isEmpty)
+          ? ListView(
+              physics: const AlwaysScrollableScrollPhysics(),
+              padding: const EdgeInsets.all(AppSpacing.lg),
+              children: [
+                const SizedBox(height: 160),
+                Container(
+                  padding: const EdgeInsets.all(18),
+                  decoration: BoxDecoration(
+                    color: cs.surface.withOpacity(0.6),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: cs.outlineVariant.withOpacity(0.5),
                     ),
-                  ],
-                )
-              : (_posts.isEmpty)
-                  ? ListView(
-                      physics: const AlwaysScrollableScrollPhysics(),
-                      padding: const EdgeInsets.all(AppSpacing.lg),
-                      children: [
-                        const SizedBox(height: 160),
-                        Container(
-                          padding: const EdgeInsets.all(18),
-                          decoration: BoxDecoration(
-                            color: cs.surface.withOpacity(0.6),
-                            borderRadius: BorderRadius.circular(18),
-                            border: Border.all(color: cs.outlineVariant.withOpacity(0.5)),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text('Arcade is empty', style: AppTypography.subtitle1.copyWith(fontWeight: FontWeight.w900, color: cs.onSurface)),
-                              const SizedBox(height: 8),
-                              Text(
-                                'Publish a WebGL project to start the feed.',
-                                style: AppTypography.body2.copyWith(color: cs.onSurfaceVariant, height: 1.35),
-                              ),
-                              const SizedBox(height: 14),
-                              _PillButton(
-                                icon: Icons.folder_open_rounded,
-                                label: 'Go to Projects',
-                                onTap: () => context.go('/dashboard?tab=projects'),
-                              ),
-                            ],
-                          ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Arcade is empty',
+                        style: AppTypography.subtitle1.copyWith(
+                          fontWeight: FontWeight.w900,
+                          color: cs.onSurface,
                         ),
-                      ],
-                    )
-                  : Stack(
-                      fit: StackFit.expand,
-                      children: [
-                        Padding(
-                          padding: EdgeInsets.only(top: MediaQuery.of(context).padding.top + 60),
-                          child: Column(
-                            children: [
-                              _buildLiveHorizontalList(),
-                              Expanded(
-                                child: PageView.builder(
-                                  controller: _pageController,
-                                  scrollDirection: Axis.vertical,
-                                  itemCount: _posts.length,
-                                  onPageChanged: (i) async {
-                                    setState(() => _activeIndex = i);
-                                    final cur = _postAt(i);
-                                    if (cur != null && _isAd(cur)) {
-                                      final campaignId = _adCampaignId(cur).trim();
-                                      final creditedCreatorId = (cur['creditedCreatorId'] ?? '').toString().trim();
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        'Publish a WebGL project to start the feed.',
+                        style: AppTypography.body2.copyWith(
+                          color: cs.onSurfaceVariant,
+                          height: 1.35,
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      _PillButton(
+                        icon: Icons.folder_open_rounded,
+                        label: 'Go to Projects',
+                        onTap: () => context.go('/dashboard?tab=projects'),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            )
+          : Stack(
+              fit: StackFit.expand,
+              children: [
+                Padding(
+                  padding: EdgeInsets.only(
+                    top: MediaQuery.of(context).padding.top + 60,
+                  ),
+                  child: Column(
+                    children: [
+                      _buildLiveHorizontalList(),
+                      Expanded(
+                        child: PageView.builder(
+                          controller: _pageController,
+                          scrollDirection: Axis.vertical,
+                          itemCount: _posts.length,
+                          onPageChanged: (i) async {
+                            setState(() => _activeIndex = i);
+                            final cur = _postAt(i);
+                            if (cur != null && _isAd(cur)) {
+                              final campaignId = _adCampaignId(cur).trim();
+                              final creditedCreatorId =
+                                  (cur['creditedCreatorId'] ?? '')
+                                      .toString()
+                                      .trim();
 
-                                      if (campaignId.isNotEmpty && !_seenAdImpressions.contains(campaignId)) {
-                                        _seenAdImpressions.add(campaignId);
-                                        final token = context.read<AuthProvider>().token;
-                                        if (token != null && token.trim().isNotEmpty) {
-                                          try {
-                                            await AdsService.track(
-                                              token: token,
-                                              campaignId: campaignId,
-                                              type: 'impression',
-                                              creditedCreatorUserId: creditedCreatorId.isEmpty ? null : creditedCreatorId,
-                                            );
-                                          } catch (_) {}
-                                        }
-                                      }
-                                    }
-                                    await _ensureActiveWebView();
-                                    await _loadMoreIfNeeded(i);
-                                  },
-                                  itemBuilder: (context, i) {
-                                    final p = _postAt(i);
-                                    if (p == null) return const SizedBox.shrink();
-                                    return _buildPage(p, i);
-                                  },
-                                ),
-                              ),
-                            ],
-                          ),
+                              if (campaignId.isNotEmpty &&
+                                  !_seenAdImpressions.contains(campaignId)) {
+                                _seenAdImpressions.add(campaignId);
+                                final token = context
+                                    .read<AuthProvider>()
+                                    .token;
+                                if (token != null && token.trim().isNotEmpty) {
+                                  try {
+                                    await AdsService.track(
+                                      token: token,
+                                      campaignId: campaignId,
+                                      type: 'impression',
+                                      creditedCreatorUserId:
+                                          creditedCreatorId.isEmpty
+                                          ? null
+                                          : creditedCreatorId,
+                                    );
+                                  } catch (_) {}
+                                }
+                              }
+                            }
+                            await _ensureActiveWebView();
+                            await _loadMoreIfNeeded(i);
+                          },
+                          itemBuilder: (context, i) {
+                            final p = _postAt(i);
+                            if (p == null) return const SizedBox.shrink();
+                            return _buildPage(p, i);
+                          },
                         ),
-                        Positioned(
-                          top: 0,
-                          left: 0,
-                          right: 0,
-                          child: _buildTopBar(),
-                        ),
-                      ],
-                    ),
+                      ),
+                    ],
+                  ),
+                ),
+                Positioned(top: 0, left: 0, right: 0, child: _buildTopBar()),
+              ],
+            ),
     );
   }
 }
@@ -2809,10 +3626,7 @@ class _NeonFrame extends StatelessWidget {
             primary: cs.primary,
             accent: AppColors.accent,
           ),
-          child: Padding(
-            padding: const EdgeInsets.all(3),
-            child: child,
-          ),
+          child: Padding(padding: const EdgeInsets.all(3), child: child),
         );
       },
     );
@@ -2867,7 +3681,10 @@ class _NeonBorderPainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant _NeonBorderPainter oldDelegate) {
-    return oldDelegate.t != t || oldDelegate.radius != radius || oldDelegate.primary != primary || oldDelegate.accent != accent;
+    return oldDelegate.t != t ||
+        oldDelegate.radius != radius ||
+        oldDelegate.primary != primary ||
+        oldDelegate.accent != accent;
   }
 }
 
@@ -2878,13 +3695,17 @@ class _MiniConfetti extends StatefulWidget {
   State<_MiniConfetti> createState() => _MiniConfettiState();
 }
 
-class _MiniConfettiState extends State<_MiniConfetti> with SingleTickerProviderStateMixin {
+class _MiniConfettiState extends State<_MiniConfetti>
+    with SingleTickerProviderStateMixin {
   late final AnimationController _c;
 
   @override
   void initState() {
     super.initState();
-    _c = AnimationController(vsync: this, duration: const Duration(milliseconds: 720))..forward();
+    _c = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 720),
+    )..forward();
   }
 
   @override
@@ -2939,19 +3760,22 @@ class _ConfettiPainter extends CustomPainter {
         const Color(0xFFFF3D8D),
         const Color(0xFF00E5FF),
         _rand(i * 19 + 1),
-      )!
-          .withOpacity((1.0 - t).clamp(0.0, 1.0));
+      )!.withOpacity((1.0 - t).clamp(0.0, 1.0));
 
       final p = Paint()..color = c;
       canvas.drawRRect(
-        RRect.fromRectAndRadius(Rect.fromCenter(center: Offset(x, y), width: s, height: s * 1.6), const Radius.circular(2)),
+        RRect.fromRectAndRadius(
+          Rect.fromCenter(center: Offset(x, y), width: s, height: s * 1.6),
+          const Radius.circular(2),
+        ),
         p,
       );
     }
   }
 
   @override
-  bool shouldRepaint(covariant _ConfettiPainter oldDelegate) => oldDelegate.t != t;
+  bool shouldRepaint(covariant _ConfettiPainter oldDelegate) =>
+      oldDelegate.t != t;
 }
 
 class _CommentsSheet extends StatefulWidget {
@@ -2959,7 +3783,8 @@ class _CommentsSheet extends StatefulWidget {
   final String postId;
   final String username;
   final List<Map<String, dynamic>> initialItems;
-  final void Function(List<Map<String, dynamic>> items, String? cursor) onItemsChanged;
+  final void Function(List<Map<String, dynamic>> items, String? cursor)
+  onItemsChanged;
   final ValueChanged<int> onCommentCountChanged;
 
   const _CommentsSheet({
@@ -3065,14 +3890,16 @@ class _CommentsSheetState extends State<_CommentsSheet> {
 
     final ok = await _ensureMicPermission();
     if (!ok) {
-      if (mounted) AppNotifier.showError('Enable microphone permission in Settings');
+      if (mounted)
+        AppNotifier.showError('Enable microphone permission in Settings');
       return;
     }
 
     try {
       final can = await _rec.hasPermission();
       if (!can) {
-        if (mounted) AppNotifier.showError('Enable microphone permission in Settings');
+        if (mounted)
+          AppNotifier.showError('Enable microphone permission in Settings');
         return;
       }
     } catch (_) {}
@@ -3097,7 +3924,8 @@ class _CommentsSheetState extends State<_CommentsSheet> {
         await HapticFeedback.mediumImpact();
       } catch (_) {}
     } catch (e) {
-      if (mounted) AppNotifier.showError('Failed to start recording: ${e.toString()}');
+      if (mounted)
+        AppNotifier.showError('Failed to start recording: ${e.toString()}');
     }
   }
 
@@ -3117,7 +3945,9 @@ class _CommentsSheetState extends State<_CommentsSheet> {
       return;
     }
 
-    final durationMs = (_recStartedAtMs > 0) ? (_nowMs() - _recStartedAtMs) : null;
+    final durationMs = (_recStartedAtMs > 0)
+        ? (_nowMs() - _recStartedAtMs)
+        : null;
     final f = File(path);
     if (!await f.exists()) {
       AppNotifier.showError('Recording file missing');
@@ -3203,7 +4033,8 @@ class _CommentsSheetState extends State<_CommentsSheet> {
         _speechReady = await _speech.initialize(
           onStatus: (s) {
             if (!mounted) return;
-            if (s.toLowerCase().contains('done') || s.toLowerCase().contains('notlistening')) {
+            if (s.toLowerCase().contains('done') ||
+                s.toLowerCase().contains('notlistening')) {
               setState(() => _listening = false);
             }
           },
@@ -3241,7 +4072,9 @@ class _CommentsSheetState extends State<_CommentsSheet> {
           if (recognized.isEmpty) return;
           if (!_inputCtrl.text.contains(recognized)) {
             _inputCtrl.text = recognized;
-            _inputCtrl.selection = TextSelection.collapsed(offset: _inputCtrl.text.length);
+            _inputCtrl.selection = TextSelection.collapsed(
+              offset: _inputCtrl.text.length,
+            );
             if (mounted) setState(() {});
           }
           if (res.finalResult) {
@@ -3274,7 +4107,11 @@ class _CommentsSheetState extends State<_CommentsSheet> {
     });
 
     try {
-      final res = await GameFeedService.listComments(token: widget.token, postId: widget.postId, limit: 30);
+      final res = await GameFeedService.listComments(
+        token: widget.token,
+        postId: widget.postId,
+        limit: 30,
+      );
       final data = res['data'];
       final list = (data is List) ? data : const [];
       final next = res['nextCursor']?.toString();
@@ -3300,7 +4137,11 @@ class _CommentsSheetState extends State<_CommentsSheet> {
     if (txt.isEmpty) return;
 
     try {
-      final res = await GameFeedService.addComment(token: widget.token, postId: widget.postId, text: txt);
+      final res = await GameFeedService.addComment(
+        token: widget.token,
+        postId: widget.postId,
+        text: txt,
+      );
       final data = res['data'];
       if (!mounted) return;
       if (data is Map) {
@@ -3344,7 +4185,7 @@ class _CommentsSheetState extends State<_CommentsSheet> {
     ];
     for (final v in candidates) {
       final s = (v ?? '').toString().trim();
-      if (s.isNotEmpty) return s;
+      if (s.isNotEmpty) return ApiService.normalizeImageUrl(s);
     }
     return '';
   }
@@ -3379,15 +4220,23 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           gradient: LinearGradient(
-                            colors: [cs.primary.withOpacity(0.9), AppColors.accent.withOpacity(0.9)],
+                            colors: [
+                              cs.primary.withOpacity(0.9),
+                              AppColors.accent.withOpacity(0.9),
+                            ],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           ),
                         ),
                         child: Center(
                           child: Text(
-                            author.isEmpty ? 'U' : author.characters.first.toUpperCase(),
-                            style: AppTypography.caption.copyWith(color: cs.onPrimary, fontWeight: FontWeight.w900),
+                            author.isEmpty
+                                ? 'U'
+                                : author.characters.first.toUpperCase(),
+                            style: AppTypography.caption.copyWith(
+                              color: cs.onPrimary,
+                              fontWeight: FontWeight.w900,
+                            ),
                           ),
                         ),
                       );
@@ -3399,15 +4248,23 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                         decoration: BoxDecoration(
                           shape: BoxShape.circle,
                           gradient: LinearGradient(
-                            colors: [cs.primary.withOpacity(0.9), AppColors.accent.withOpacity(0.9)],
+                            colors: [
+                              cs.primary.withOpacity(0.9),
+                              AppColors.accent.withOpacity(0.9),
+                            ],
                             begin: Alignment.topLeft,
                             end: Alignment.bottomRight,
                           ),
                         ),
                         child: Center(
                           child: Text(
-                            author.isEmpty ? 'U' : author.characters.first.toUpperCase(),
-                            style: AppTypography.caption.copyWith(color: cs.onPrimary, fontWeight: FontWeight.w900),
+                            author.isEmpty
+                                ? 'U'
+                                : author.characters.first.toUpperCase(),
+                            style: AppTypography.caption.copyWith(
+                              color: cs.onPrimary,
+                              fontWeight: FontWeight.w900,
+                            ),
                           ),
                         ),
                       );
@@ -3420,15 +4277,23 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
                     gradient: LinearGradient(
-                      colors: [cs.primary.withOpacity(0.9), AppColors.accent.withOpacity(0.9)],
+                      colors: [
+                        cs.primary.withOpacity(0.9),
+                        AppColors.accent.withOpacity(0.9),
+                      ],
                       begin: Alignment.topLeft,
                       end: Alignment.bottomRight,
                     ),
                   ),
                   child: Center(
                     child: Text(
-                      author.isEmpty ? 'U' : author.characters.first.toUpperCase(),
-                      style: AppTypography.caption.copyWith(color: cs.onPrimary, fontWeight: FontWeight.w900),
+                      author.isEmpty
+                          ? 'U'
+                          : author.characters.first.toUpperCase(),
+                      style: AppTypography.caption.copyWith(
+                        color: cs.onPrimary,
+                        fontWeight: FontWeight.w900,
+                      ),
                     ),
                   ),
                 ),
@@ -3437,20 +4302,35 @@ class _CommentsSheetState extends State<_CommentsSheet> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(author.isEmpty ? 'User' : author, style: AppTypography.caption.copyWith(fontWeight: FontWeight.w900)),
+                Text(
+                  author.isEmpty ? 'User' : author,
+                  style: AppTypography.caption.copyWith(
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
                 const SizedBox(height: 4),
                 if (type == 'audio' && audioUrl.trim().isNotEmpty)
                   StreamBuilder<Duration>(
                     stream: _player.positionStream,
                     builder: (context, snap) {
                       final pos = snap.data ?? Duration.zero;
-                      final playingThis = (_playingCommentId == id && _playingUrl == audioUrl.trim());
-                      final knownMs = (durationMs is num) ? durationMs.toInt() : 0;
-                      final playingTotal = _player.duration ?? Duration(milliseconds: knownMs);
-                      final total = playingThis ? playingTotal : Duration(milliseconds: knownMs);
+                      final playingThis =
+                          (_playingCommentId == id &&
+                          _playingUrl == audioUrl.trim());
+                      final knownMs = (durationMs is num)
+                          ? durationMs.toInt()
+                          : 0;
+                      final playingTotal =
+                          _player.duration ?? Duration(milliseconds: knownMs);
+                      final total = playingThis
+                          ? playingTotal
+                          : Duration(milliseconds: knownMs);
                       final totalMs = total.inMilliseconds;
-                      final posMs = (playingThis ? pos.inMilliseconds : 0).clamp(0, totalMs <= 0 ? 1 << 30 : totalMs);
-                      final frac = (totalMs > 0) ? (posMs / totalMs).clamp(0.0, 1.0) : 0.0;
+                      final posMs = (playingThis ? pos.inMilliseconds : 0)
+                          .clamp(0, totalMs <= 0 ? 1 << 30 : totalMs);
+                      final frac = (totalMs > 0)
+                          ? (posMs / totalMs).clamp(0.0, 1.0)
+                          : 0.0;
 
                       return Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -3458,21 +4338,32 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                           GestureDetector(
                             onTap: () => _togglePlayAudio(id, audioUrl),
                             child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 10,
+                              ),
                               decoration: BoxDecoration(
                                 borderRadius: BorderRadius.circular(16),
                                 gradient: LinearGradient(
                                   colors: [
-                                    cs.surfaceContainerHighest.withOpacity(0.55),
+                                    cs.surfaceContainerHighest.withOpacity(
+                                      0.55,
+                                    ),
                                     cs.surface.withOpacity(0.40),
                                   ],
                                   begin: Alignment.topLeft,
                                   end: Alignment.bottomRight,
                                 ),
-                                border: Border.all(color: cs.outlineVariant.withOpacity(0.45)),
+                                border: Border.all(
+                                  color: cs.outlineVariant.withOpacity(0.45),
+                                ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: (playingThis ? AppColors.accent : cs.primary).withOpacity(0.18),
+                                    color:
+                                        (playingThis
+                                                ? AppColors.accent
+                                                : cs.primary)
+                                            .withOpacity(0.18),
                                     blurRadius: 20,
                                     offset: const Offset(0, 12),
                                   ),
@@ -3486,13 +4377,20 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                                     decoration: BoxDecoration(
                                       shape: BoxShape.circle,
                                       gradient: LinearGradient(
-                                        colors: playingThis ? [AppColors.accent, const Color(0xFFFF3D8D)] : [cs.primary, AppColors.accent],
+                                        colors: playingThis
+                                            ? [
+                                                AppColors.accent,
+                                                const Color(0xFFFF3D8D),
+                                              ]
+                                            : [cs.primary, AppColors.accent],
                                         begin: Alignment.topLeft,
                                         end: Alignment.bottomRight,
                                       ),
                                     ),
                                     child: Icon(
-                                      playingThis && _player.playing ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                                      playingThis && _player.playing
+                                          ? Icons.pause_rounded
+                                          : Icons.play_arrow_rounded,
                                       color: cs.onPrimary,
                                       size: 22,
                                     ),
@@ -3500,22 +4398,34 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                                   const SizedBox(width: 10),
                                   Expanded(
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         Container(
                                           height: 6,
                                           decoration: BoxDecoration(
-                                            borderRadius: BorderRadius.circular(999),
-                                            color: Colors.black.withOpacity(0.18),
+                                            borderRadius: BorderRadius.circular(
+                                              999,
+                                            ),
+                                            color: Colors.black.withOpacity(
+                                              0.18,
+                                            ),
                                           ),
                                           child: FractionallySizedBox(
                                             widthFactor: frac,
                                             alignment: Alignment.centerLeft,
                                             child: Container(
                                               decoration: BoxDecoration(
-                                                borderRadius: BorderRadius.circular(999),
+                                                borderRadius:
+                                                    BorderRadius.circular(999),
                                                 gradient: LinearGradient(
-                                                  colors: [cs.primary.withOpacity(0.95), AppColors.accent.withOpacity(0.95)],
+                                                  colors: [
+                                                    cs.primary.withOpacity(
+                                                      0.95,
+                                                    ),
+                                                    AppColors.accent
+                                                        .withOpacity(0.95),
+                                                  ],
                                                 ),
                                               ),
                                             ),
@@ -3541,7 +4451,13 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                     },
                   )
                 else
-                  Text(text, style: AppTypography.body2.copyWith(color: cs.onSurface, height: 1.3)),
+                  Text(
+                    text,
+                    style: AppTypography.body2.copyWith(
+                      color: cs.onSurface,
+                      height: 1.3,
+                    ),
+                  ),
               ],
             ),
           ),
@@ -3572,7 +4488,9 @@ class _CommentsSheetState extends State<_CommentsSheet> {
               child: Container(
                 decoration: BoxDecoration(
                   color: cs.surface.withOpacity(0.86),
-                  border: Border.all(color: cs.outlineVariant.withOpacity(0.55)),
+                  border: Border.all(
+                    color: cs.outlineVariant.withOpacity(0.55),
+                  ),
                   borderRadius: BorderRadius.circular(22),
                   boxShadow: [
                     BoxShadow(
@@ -3585,13 +4503,18 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                 child: Column(
                   children: [
                     Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
                       child: Row(
                         children: [
                           Expanded(
                             child: Text(
                               'Comments',
-                              style: AppTypography.subtitle1.copyWith(fontWeight: FontWeight.w900),
+                              style: AppTypography.subtitle1.copyWith(
+                                fontWeight: FontWeight.w900,
+                              ),
                             ),
                           ),
                           IconButton(
@@ -3601,46 +4524,56 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                         ],
                       ),
                     ),
-                    Container(height: 1, color: cs.outlineVariant.withOpacity(0.4)),
+                    Container(
+                      height: 1,
+                      color: cs.outlineVariant.withOpacity(0.4),
+                    ),
                     Expanded(
                       child: _loading
                           ? const Center(child: CircularProgressIndicator())
                           : (_error != null)
-                              ? Center(
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(18),
-                                    child: Column(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Text(
-                                          'Failed to load comments',
-                                          style: AppTypography.body2.copyWith(color: cs.onSurfaceVariant),
-                                        ),
-                                        const SizedBox(height: 12),
-                                        _PillButton(
-                                          icon: Icons.refresh_rounded,
-                                          label: 'Retry',
-                                          onTap: _loadFirst,
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                )
-                              : _items.isEmpty
-                                  ? Center(
-                                      child: Padding(
-                                        padding: const EdgeInsets.all(18),
-                                        child: Text(
-                                          'Be the first to comment',
-                                          style: AppTypography.body2.copyWith(color: cs.onSurfaceVariant),
-                                        ),
+                          ? Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(18),
+                                child: Column(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      'Failed to load comments',
+                                      style: AppTypography.body2.copyWith(
+                                        color: cs.onSurfaceVariant,
                                       ),
-                                    )
-                                  : ListView.builder(
-                                      padding: const EdgeInsets.only(top: 4, bottom: 12),
-                                      itemCount: _items.length,
-                                      itemBuilder: (context, i) => _row(_items[i]),
                                     ),
+                                    const SizedBox(height: 12),
+                                    _PillButton(
+                                      icon: Icons.refresh_rounded,
+                                      label: 'Retry',
+                                      onTap: _loadFirst,
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            )
+                          : _items.isEmpty
+                          ? Center(
+                              child: Padding(
+                                padding: const EdgeInsets.all(18),
+                                child: Text(
+                                  'Be the first to comment',
+                                  style: AppTypography.body2.copyWith(
+                                    color: cs.onSurfaceVariant,
+                                  ),
+                                ),
+                              ),
+                            )
+                          : ListView.builder(
+                              padding: const EdgeInsets.only(
+                                top: 4,
+                                bottom: 12,
+                              ),
+                              itemCount: _items.length,
+                              itemBuilder: (context, i) => _row(_items[i]),
+                            ),
                     ),
                     Padding(
                       padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
@@ -3654,19 +4587,29 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                               decoration: InputDecoration(
                                 hintText: 'Write a comment…',
                                 filled: true,
-                                fillColor: cs.surfaceContainerHighest.withOpacity(0.55),
-                                contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                                fillColor: cs.surfaceContainerHighest
+                                    .withOpacity(0.55),
+                                contentPadding: const EdgeInsets.symmetric(
+                                  horizontal: 14,
+                                  vertical: 12,
+                                ),
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(999),
-                                  borderSide: BorderSide(color: cs.outlineVariant.withOpacity(0.5)),
+                                  borderSide: BorderSide(
+                                    color: cs.outlineVariant.withOpacity(0.5),
+                                  ),
                                 ),
                                 enabledBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(999),
-                                  borderSide: BorderSide(color: cs.outlineVariant.withOpacity(0.5)),
+                                  borderSide: BorderSide(
+                                    color: cs.outlineVariant.withOpacity(0.5),
+                                  ),
                                 ),
                                 focusedBorder: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(999),
-                                  borderSide: BorderSide(color: cs.primary.withOpacity(0.7)),
+                                  borderSide: BorderSide(
+                                    color: cs.primary.withOpacity(0.7),
+                                  ),
                                 ),
                               ),
                             ),
@@ -3683,24 +4626,41 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                                 shape: BoxShape.circle,
                                 gradient: LinearGradient(
                                   colors: _recording
-                                      ? [const Color(0xFFFF3D8D), AppColors.error]
-                                      : [cs.surfaceContainerHighest.withOpacity(0.65), cs.surface.withOpacity(0.45)],
+                                      ? [
+                                          const Color(0xFFFF3D8D),
+                                          AppColors.error,
+                                        ]
+                                      : [
+                                          cs.surfaceContainerHighest
+                                              .withOpacity(0.65),
+                                          cs.surface.withOpacity(0.45),
+                                        ],
                                   begin: Alignment.topLeft,
                                   end: Alignment.bottomRight,
                                 ),
                                 border: Border.all(
-                                  color: _recording ? Colors.white.withOpacity(0.22) : cs.outlineVariant.withOpacity(0.5),
+                                  color: _recording
+                                      ? Colors.white.withOpacity(0.22)
+                                      : cs.outlineVariant.withOpacity(0.5),
                                 ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: (_recording ? AppColors.error : cs.primary).withOpacity(_recording ? 0.30 : 0.16),
+                                    color:
+                                        (_recording
+                                                ? AppColors.error
+                                                : cs.primary)
+                                            .withOpacity(
+                                              _recording ? 0.30 : 0.16,
+                                            ),
                                     blurRadius: _recording ? 28 : 16,
                                     offset: const Offset(0, 12),
                                   ),
                                 ],
                               ),
                               child: Icon(
-                                _recording ? Icons.stop_rounded : Icons.fiber_manual_record_rounded,
+                                _recording
+                                    ? Icons.stop_rounded
+                                    : Icons.fiber_manual_record_rounded,
                                 color: _recording ? Colors.white : cs.onSurface,
                                 size: 22,
                               ),
@@ -3718,24 +4678,41 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                                 shape: BoxShape.circle,
                                 gradient: LinearGradient(
                                   colors: _listening
-                                      ? [AppColors.accent, const Color(0xFFFF3D8D)]
-                                      : [cs.surfaceContainerHighest.withOpacity(0.65), cs.surface.withOpacity(0.45)],
+                                      ? [
+                                          AppColors.accent,
+                                          const Color(0xFFFF3D8D),
+                                        ]
+                                      : [
+                                          cs.surfaceContainerHighest
+                                              .withOpacity(0.65),
+                                          cs.surface.withOpacity(0.45),
+                                        ],
                                   begin: Alignment.topLeft,
                                   end: Alignment.bottomRight,
                                 ),
                                 border: Border.all(
-                                  color: _listening ? Colors.white.withOpacity(0.22) : cs.outlineVariant.withOpacity(0.5),
+                                  color: _listening
+                                      ? Colors.white.withOpacity(0.22)
+                                      : cs.outlineVariant.withOpacity(0.5),
                                 ),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: (_listening ? AppColors.accent : cs.primary).withOpacity(_listening ? 0.30 : 0.16),
+                                    color:
+                                        (_listening
+                                                ? AppColors.accent
+                                                : cs.primary)
+                                            .withOpacity(
+                                              _listening ? 0.30 : 0.16,
+                                            ),
                                     blurRadius: _listening ? 26 : 16,
                                     offset: const Offset(0, 12),
                                   ),
                                 ],
                               ),
                               child: Icon(
-                                _listening ? Icons.mic_rounded : Icons.mic_none_rounded,
+                                _listening
+                                    ? Icons.mic_rounded
+                                    : Icons.mic_none_rounded,
                                 color: _listening ? Colors.white : cs.onSurface,
                                 size: 22,
                               ),
@@ -3762,7 +4739,11 @@ class _CommentsSheetState extends State<_CommentsSheet> {
                                   ),
                                 ],
                               ),
-                              child: Icon(Icons.send_rounded, color: cs.onPrimary, size: 20),
+                              child: Icon(
+                                Icons.send_rounded,
+                                color: cs.onPrimary,
+                                size: 20,
+                              ),
                             ),
                           ),
                         ],
@@ -3809,7 +4790,9 @@ class _ActionButtonState extends State<_ActionButton> {
     final cs = Theme.of(context).colorScheme;
     final scale = _down ? 0.96 : 1.0;
     final c = widget.active ? AppColors.error : Colors.white;
-    final glow = widget.active ? AppColors.error.withOpacity(0.22) : cs.primary.withOpacity(0.16);
+    final glow = widget.active
+        ? AppColors.error.withOpacity(0.22)
+        : cs.primary.withOpacity(0.16);
 
     return GestureDetector(
       onTap: widget.onTap,
