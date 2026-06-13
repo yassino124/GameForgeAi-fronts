@@ -292,7 +292,7 @@ function DualLineChart(props: {
 function RadarChart(props: {
   values01: number[];
   labels: string[];
-  tone: "cyan" | "fuchsia" | "emerald" | "amber";
+  tone: "cyan" | "emerald" | "amber";
 }) {
   const size = 180;
   const cx0 = size / 2;
@@ -305,8 +305,8 @@ function RadarChart(props: {
       ? { stroke: "stroke-emerald-300/90", fill: "rgba(52,211,153,0.18)" }
       : props.tone === "amber"
         ? { stroke: "stroke-amber-300/90", fill: "rgba(252,211,77,0.16)" }
-        : props.tone === "fuchsia"
-          ? { stroke: "stroke-fuchsia-300/90", fill: "rgba(236,72,153,0.16)" }
+        : props.tone === "cyan"
+          ? { stroke: "stroke-cyan-300/90", fill: "rgba(236,72,153,0.16)" }
           : { stroke: "stroke-cyan-300/90", fill: "rgba(34,211,238,0.16)" };
 
   function pt(i: number, v01: number) {
@@ -385,7 +385,7 @@ function RingGauge(props: {
   label: string;
   valueLabel: string;
   value01: number;
-  tone: "cyan" | "fuchsia" | "emerald" | "amber" | "red" | "zinc";
+  tone: "cyan" | "emerald" | "amber" | "red" | "zinc";
 }) {
   const r = 16;
   const c = 2 * Math.PI * r;
@@ -396,7 +396,6 @@ function RingGauge(props: {
     emerald: "stroke-emerald-300/90",
     cyan: "stroke-cyan-300/90",
     amber: "stroke-amber-300/90",
-    fuchsia: "stroke-fuchsia-300/90",
     red: "stroke-red-300/90",
     zinc: "stroke-white/30",
   };
@@ -455,15 +454,13 @@ function MiniBars(props: {
   );
 }
 
-function OpCard(props: { title: string; subtitle: string; tone: "cyan" | "fuchsia" | "amber" | "emerald"; onClick: () => void }) {
+function OpCard(props: { title: string; subtitle: string; tone: "cyan" | "amber" | "emerald"; onClick: () => void }) {
   const tone =
     props.tone === "cyan"
       ? "from-cyan-500/15 via-transparent to-transparent"
-      : props.tone === "fuchsia"
-        ? "from-fuchsia-500/15 via-transparent to-transparent"
-        : props.tone === "amber"
-          ? "from-amber-500/15 via-transparent to-transparent"
-          : "from-emerald-500/15 via-transparent to-transparent";
+      : props.tone === "amber"
+        ? "from-amber-500/15 via-transparent to-transparent"
+        : "from-emerald-500/15 via-transparent to-transparent";
   return (
     <button
       className="gf-card group relative overflow-hidden rounded-2xl border border-white/10 p-4 text-left transition-transform duration-200 hover:-translate-y-0.5"
@@ -604,7 +601,7 @@ export default function DashboardPage() {
 
   const [notifOpen, setNotifOpen] = useState(false);
 
-  const [activityLog, setActivityLog] = useState<Array<{ ts: number; type: string; msg: string; tone: "emerald" | "cyan" | "fuchsia" | "amber" | "red" }>>([]);
+  const [activityLog, setActivityLog] = useState<Array<{ ts: number; type: string; msg: string; tone: "emerald" | "cyan" | "amber" | "red" }>>([]);
 
   const [platformDist, setPlatformDist] = useState<Array<{ target: string; count: number }>>([]);
   const [platformLoading, setPlatformLoading] = useState(false);
@@ -630,7 +627,7 @@ export default function DashboardPage() {
 
   const token = useMemo(() => getToken(), []);
 
-  function pushActivity(type: string, msg: string, tone: "emerald" | "cyan" | "fuchsia" | "amber" | "red" = "cyan") {
+  function pushActivity(type: string, msg: string, tone: "emerald" | "cyan" | "amber" | "red" = "cyan") {
     const entry = { ts: Date.now(), type, msg, tone };
     setActivityLog((prev) => [entry, ...prev].slice(0, 20));
   }
@@ -2178,14 +2175,14 @@ export default function DashboardPage() {
         : null,
       feedTop.length > 0
         ? {
-          tone: "fuchsia" as const,
+          tone: "cyan" as const,
           title: "Feed is active",
           body: `Top game: ${feedTop[0]?.title || "—"} • ${feedMode === "hot" ? "hot" : "score"}: ${feedMode === "hot" ? feedTop[0]?.hotScore || 0 : feedTop[0]?.score || 0
             }`,
           href: "/dashboard",
         }
         : null,
-    ].filter(Boolean) as Array<{ tone: "cyan" | "fuchsia" | "amber" | "emerald" | "zinc"; title: string; body: string; href: string }>
+    ].filter(Boolean) as Array<{ tone: "cyan" | "amber" | "emerald" | "zinc"; title: string; body: string; href: string }>
   ).slice(0, 6);
 
   const unreadCount = notifications.filter((n) => n.tone === "amber").length;
@@ -2201,7 +2198,7 @@ export default function DashboardPage() {
   }
 
   const anomalies = (() => {
-    const out: Array<{ tone: "emerald" | "amber" | "fuchsia"; title: string; body: string; href: string }> = [];
+    const out: Array<{ tone: "emerald" | "amber" | "cyan"; title: string; body: string; href: string }> = [];
     const qNow = last(tsQueued);
     const qAvg = avgLast(tsQueued.slice(0, -1), 8) || avgLast(tsQueued, 8);
     if (tsQueued.length >= 6 && qNow > Math.max(3, qAvg * 1.8)) {
@@ -2217,13 +2214,13 @@ export default function DashboardPage() {
     const heapNow = last(tsHeapMb);
     const heapAvg = avgLast(tsHeapMb.slice(0, -1), 8) || avgLast(tsHeapMb, 8);
     if (tsHeapMb.length >= 6 && heapNow > heapAvg * 1.25 && heapNow - heapAvg > 12) {
-      out.push({ tone: "fuchsia", title: "Heap rising", body: `Heap ${heapNow.toFixed(1)} MB (avg ${heapAvg.toFixed(1)} MB)`, href: "/system" });
+      out.push({ tone: "cyan", title: "Heap rising", body: `Heap ${heapNow.toFixed(1)} MB (avg ${heapAvg.toFixed(1)} MB)`, href: "/system" });
     }
 
     const mrrNow = last(tsMrr);
     const mrrAvg = avgLast(tsMrr.slice(0, -1), 8) || avgLast(tsMrr, 8);
     if (tsMrr.length >= 6 && Math.abs(mrrNow - mrrAvg) > Math.max(50, mrrAvg * 0.15)) {
-      out.push({ tone: "fuchsia", title: "MRR changed", body: `MRR ${mrrNow.toFixed(0)} (avg ${mrrAvg.toFixed(0)})`, href: "/billing" });
+      out.push({ tone: "cyan", title: "MRR changed", body: `MRR ${mrrNow.toFixed(0)} (avg ${mrrAvg.toFixed(0)})`, href: "/billing" });
     }
 
     if (!out.length) {
@@ -2252,7 +2249,7 @@ export default function DashboardPage() {
             >
               <span className="font-mono">NOTIFS</span>
               {unreadCount > 0 ? (
-                <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-fuchsia-400/30 bg-fuchsia-500/25 px-1.5 text-[11px] font-semibold text-fuchsia-100">
+                <span className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full border border-cyan-400/30 bg-cyan-500/25 px-1.5 text-[11px] font-semibold text-cyan-100">
                   {unreadCount}
                 </span>
               ) : null}
@@ -2288,13 +2285,11 @@ export default function DashboardPage() {
                                   "h-2 w-2 rounded-full",
                                   n.tone === "amber"
                                     ? "bg-amber-300"
-                                    : n.tone === "fuchsia"
-                                      ? "bg-fuchsia-300"
-                                      : n.tone === "cyan"
-                                        ? "bg-cyan-300"
-                                        : n.tone === "emerald"
-                                          ? "bg-emerald-300"
-                                          : "bg-zinc-500",
+                                    : n.tone === "cyan"
+                                      ? "bg-cyan-300"
+                                      : n.tone === "emerald"
+                                        ? "bg-emerald-300"
+                                        : "bg-zinc-500",
                                 )}
                               />
                               <div className="truncate text-xs font-semibold text-white">{n.title}</div>
@@ -2312,7 +2307,7 @@ export default function DashboardPage() {
           </div>
 
           <div className="hidden sm:flex items-center gap-2 rounded-full border border-white/10 bg-black/20 px-2 py-1">
-            <div className="h-7 w-7 rounded-full bg-gradient-to-br from-indigo-500/40 via-fuchsia-500/30 to-cyan-500/30 ring-1 ring-white/10 grid place-items-center text-[11px] font-extrabold text-white">
+            <div className="h-7 w-7 rounded-full bg-gradient-to-br from-blue-500/40 via-cyan-500/30 to-cyan-500/30 ring-1 ring-white/10 grid place-items-center text-[11px] font-extrabold text-white">
               {loading ? "—" : avatarText || "A"}
             </div>
             <div className="min-w-0">
@@ -2336,7 +2331,7 @@ export default function DashboardPage() {
           <div className="absolute inset-0 opacity-30" style={{ backgroundImage: "linear-gradient(to right, rgba(34,211,238,0.06), transparent 22%, transparent 78%, rgba(236,72,153,0.06))" }} />
         </div>
         <div className="pointer-events-none absolute -left-28 -top-24 h-80 w-80 rounded-full bg-cyan-500/20 blur-3xl" />
-        <div className="pointer-events-none absolute -right-28 -bottom-24 h-80 w-80 rounded-full bg-fuchsia-500/20 blur-3xl" />
+        <div className="pointer-events-none absolute -right-28 -bottom-24 h-80 w-80 rounded-full bg-cyan-500/20 blur-3xl" />
         <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <NeonChip tone="cyan">
@@ -2411,13 +2406,13 @@ export default function DashboardPage() {
           label="Total Users"
           value={loading ? "—" : `${data?.dashboard?.totalUsers ?? "—"}`}
           hint={loading ? "All registered accounts" : `Banned: ${data?.dashboard?.inactiveUsers ?? 0}`}
-          accentClass="bg-gradient-to-br from-indigo-500/40 to-indigo-300/10"
+          accentClass="bg-gradient-to-br from-blue-500/40 to-blue-300/10"
         />
         <StatCard
           label="Active Projects"
           value={loading ? "—" : `${data?.dashboard?.activeProjects ?? "—"}`}
           hint="Queued + running"
-          accentClass="bg-gradient-to-br from-fuchsia-500/40 to-fuchsia-300/10"
+          accentClass="bg-gradient-to-br from-cyan-500/40 to-cyan-300/10"
         />
         <StatCard
           label="Builds"
@@ -2436,7 +2431,7 @@ export default function DashboardPage() {
       <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="gf-card group relative overflow-hidden rounded-2xl border border-white/10 p-5 lg:col-span-2">
           <div className="pointer-events-none absolute -left-24 -top-24 h-80 w-80 rounded-full bg-cyan-500/15 blur-3xl" />
-          <div className="pointer-events-none absolute -right-24 -bottom-24 h-80 w-80 rounded-full bg-fuchsia-500/12 blur-3xl" />
+          <div className="pointer-events-none absolute -right-24 -bottom-24 h-80 w-80 rounded-full bg-cyan-500/12 blur-3xl" />
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="text-xs font-medium text-zinc-400">Charts</div>
@@ -2453,7 +2448,7 @@ export default function DashboardPage() {
               a={tsRunning}
               b={tsFailed}
               aStrokeClass="stroke-cyan-300/85"
-              bStrokeClass="stroke-fuchsia-300/80"
+              bStrokeClass="stroke-cyan-300/80"
               aFillId="opsA"
               bFillId="opsB"
             />
@@ -2494,7 +2489,7 @@ export default function DashboardPage() {
           </div>
           <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-3">
             <RadarChart
-              tone={successRate >= 80 ? "emerald" : successRate >= 50 ? "amber" : "fuchsia"}
+              tone={successRate >= 80 ? "emerald" : successRate >= 50 ? "amber" : "cyan"}
               labels={["Success", "Free mem", "Low heap", "Low queue", "Ads active"]}
               values01={[
                 (loading ? 0 : successRate) / 100,
@@ -2549,7 +2544,7 @@ export default function DashboardPage() {
                   <div className="relative flex-1">
                     <div
                       className={cx(
-                        "absolute bottom-0 left-0 right-0 origin-bottom rounded-t-xl border border-white/10 bg-gradient-to-b from-amber-400/45 via-fuchsia-400/25 to-cyan-300/15 shadow-[0_-10px_40px_rgba(34,211,238,0.12)] transition-transform duration-700 ease-out",
+                        "absolute bottom-0 left-0 right-0 origin-bottom rounded-t-xl border border-white/10 bg-gradient-to-b from-amber-400/45 via-cyan-400/25 to-cyan-300/15 shadow-[0_-10px_40px_rgba(34,211,238,0.12)] transition-transform duration-700 ease-out",
                         tplUsageLoading
                           ? "animate-pulse"
                           : tplBarsOn
@@ -2592,7 +2587,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="mt-4 gf-card group relative overflow-hidden rounded-2xl border border-white/10 p-5">
-        <div className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-fuchsia-500/10 blur-3xl" />
+        <div className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-cyan-500/10 blur-3xl" />
         <div className="pointer-events-none absolute -left-24 -bottom-24 h-80 w-80 rounded-full bg-cyan-500/10 blur-3xl" />
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -2623,7 +2618,7 @@ export default function DashboardPage() {
                 TOTAL
               </button>
             </div>
-            <NeonChip tone={feedMode === "hot" ? "fuchsia" : "zinc"}>
+            <NeonChip tone={feedMode === "hot" ? "cyan" : "zinc"}>
               <PulseDot tone="cyan" />
               <span className="font-mono">MODE</span>
               <span className="text-white">{feedMode.toUpperCase()}</span>
@@ -2670,8 +2665,8 @@ export default function DashboardPage() {
                       className={cx(
                         "absolute bottom-0 left-0 right-0 origin-bottom rounded-t-xl border border-white/10 bg-gradient-to-b shadow-[0_-10px_40px_rgba(236,72,153,0.10)] transition-transform duration-700 ease-out",
                         idx % 2 === 0
-                          ? "from-fuchsia-400/45 via-indigo-400/25 to-cyan-300/15"
-                          : "from-cyan-400/35 via-fuchsia-400/20 to-indigo-300/15",
+                          ? "from-cyan-400/45 via-blue-400/25 to-cyan-300/15"
+                          : "from-cyan-400/35 via-cyan-400/20 to-blue-300/15",
                         feedLoading
                           ? "animate-pulse"
                           : feedBarsOn
@@ -2745,8 +2740,8 @@ export default function DashboardPage() {
       </div>
 
       <div className="mt-4 gf-card group relative overflow-hidden rounded-2xl border border-white/10 p-5">
-        <div className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-indigo-500/10 blur-3xl" />
-        <div className="pointer-events-none absolute -left-24 -bottom-24 h-80 w-80 rounded-full bg-fuchsia-500/10 blur-3xl" />
+        <div className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-blue-500/10 blur-3xl" />
+        <div className="pointer-events-none absolute -left-24 -bottom-24 h-80 w-80 rounded-full bg-cyan-500/10 blur-3xl" />
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="text-xs font-medium text-zinc-400">Charts</div>
@@ -2759,13 +2754,13 @@ export default function DashboardPage() {
           </NeonChip>
         </div>
         <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-3">
-          <DualLineChart a={tsMrr} b={tsHeapMb} aStrokeClass="stroke-fuchsia-300/80" bStrokeClass="stroke-emerald-300/80" />
+          <DualLineChart a={tsMrr} b={tsHeapMb} aStrokeClass="stroke-cyan-300/80" bStrokeClass="stroke-emerald-300/80" />
         </div>
       </div>
 
       <div className="mt-4 gf-card group relative overflow-hidden rounded-2xl border border-white/10 p-5">
         <div className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-cyan-500/10 blur-3xl" />
-        <div className="pointer-events-none absolute -left-24 -bottom-24 h-80 w-80 rounded-full bg-fuchsia-500/10 blur-3xl" />
+        <div className="pointer-events-none absolute -left-24 -bottom-24 h-80 w-80 rounded-full bg-cyan-500/10 blur-3xl" />
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div className="text-xs font-medium text-zinc-400">AI</div>
@@ -2914,15 +2909,15 @@ export default function DashboardPage() {
 
       <div className="mt-4 gf-card group relative overflow-hidden rounded-2xl border border-white/10 p-5">
         <div className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-amber-500/10 blur-3xl" />
-        <div className="pointer-events-none absolute -left-24 -bottom-24 h-80 w-80 rounded-full bg-fuchsia-500/10 blur-3xl" />
+        <div className="pointer-events-none absolute -left-24 -bottom-24 h-80 w-80 rounded-full bg-cyan-500/10 blur-3xl" />
         <div className="flex items-start justify-between gap-3">
           <div>
             <div className="text-xs font-medium text-zinc-400">AI</div>
             <h2 className="mt-1 text-sm font-semibold text-zinc-100">Anomaly detector</h2>
             <div className="mt-1 text-xs text-zinc-500">Trends + spikes from live telemetry</div>
           </div>
-          <NeonChip tone={anomalies.some((a) => a.tone === "amber" || a.tone === "fuchsia") ? "amber" : "emerald"}>
-            <PulseDot tone={anomalies.some((a) => a.tone === "amber" || a.tone === "fuchsia") ? "amber" : "emerald"} />
+          <NeonChip tone={anomalies.some((a) => a.tone === "amber" || a.tone === "cyan") ? "amber" : "emerald"}>
+            <PulseDot tone={anomalies.some((a) => a.tone === "amber" || a.tone === "cyan") ? "amber" : "emerald"} />
             <span className="font-mono">ALERTS</span>
             <span className="text-white">{anomalies.filter((a) => a.tone !== "emerald").length}</span>
           </NeonChip>
@@ -2942,7 +2937,7 @@ export default function DashboardPage() {
                     <span
                       className={cx(
                         "h-2 w-2 rounded-full",
-                        a.tone === "emerald" ? "bg-emerald-300" : a.tone === "amber" ? "bg-amber-300" : "bg-fuchsia-300",
+                        a.tone === "emerald" ? "bg-emerald-300" : a.tone === "amber" ? "bg-amber-300" : "bg-cyan-300",
                       )}
                     />
                     <div className="truncate text-xs font-semibold text-white">{a.title}</div>
@@ -3074,7 +3069,7 @@ export default function DashboardPage() {
 
       <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="gf-card group relative overflow-hidden rounded-2xl border border-white/10 p-5">
-          <div className="pointer-events-none absolute -right-12 -top-12 h-40 w-40 rounded-full bg-indigo-500/10 blur-3xl" />
+          <div className="pointer-events-none absolute -right-12 -top-12 h-40 w-40 rounded-full bg-blue-500/10 blur-3xl" />
           <div className="flex items-start justify-between">
             <div>
               <div className="text-xs font-medium text-zinc-400">Analytics</div>
@@ -3124,7 +3119,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="gf-card group relative overflow-hidden rounded-2xl border border-white/10 p-5">
-          <div className="pointer-events-none absolute -right-14 -top-10 h-44 w-44 rounded-full bg-fuchsia-500/10 blur-3xl" />
+          <div className="pointer-events-none absolute -right-14 -top-10 h-44 w-44 rounded-full bg-cyan-500/10 blur-3xl" />
           <div className="flex items-start justify-between">
             <div>
               <div className="text-xs font-medium text-zinc-400">Analytics</div>
@@ -3163,7 +3158,7 @@ export default function DashboardPage() {
                 <div className="mt-0.5 text-xs text-zinc-500">approx</div>
               </div>
               <div className="flex items-center gap-3">
-                <Sparkline data={tsMrr} strokeClass="stroke-fuchsia-300/80" />
+                <Sparkline data={tsMrr} strokeClass="stroke-cyan-300/80" />
               </div>
             </div>
           </div>
@@ -3251,14 +3246,14 @@ export default function DashboardPage() {
         </div>
 
         <div className="gf-card group relative overflow-hidden rounded-2xl border border-white/10 p-5">
-          <div className="pointer-events-none absolute -right-14 -top-10 h-44 w-44 rounded-full bg-gradient-to-br from-cyan-500/20 to-fuchsia-500/10 blur-3xl" />
+          <div className="pointer-events-none absolute -right-14 -top-10 h-44 w-44 rounded-full bg-gradient-to-br from-cyan-500/20 to-cyan-500/10 blur-3xl" />
           <div className="flex items-start justify-between">
             <div>
               <div className="text-xs font-medium text-zinc-400">Health Index</div>
               <h2 className="mt-1 text-sm font-semibold text-zinc-100">Composite Score</h2>
               <div className="mt-1 text-xs text-zinc-500">System + builds + memory</div>
             </div>
-            <NeonChip tone={healthScore >= 80 ? "emerald" : healthScore >= 50 ? "amber" : "fuchsia"}>
+            <NeonChip tone={healthScore >= 80 ? "emerald" : healthScore >= 50 ? "amber" : "cyan"}>
               <PulseDot tone={healthScore >= 80 ? "emerald" : healthScore >= 50 ? "amber" : "cyan"} />
               <span className="font-mono">SCORE</span>
               <span className="text-white">{loading ? "—" : healthScore}</span>
@@ -3321,8 +3316,8 @@ export default function DashboardPage() {
                 const colors: Record<string, string> = {
                   webgl: "from-cyan-500/50 to-cyan-300/20",
                   android: "from-emerald-500/50 to-emerald-300/20",
-                  windows: "from-indigo-500/50 to-indigo-300/20",
-                  macos: "from-fuchsia-500/50 to-fuchsia-300/20",
+                  windows: "from-blue-500/50 to-blue-300/20",
+                  macos: "from-cyan-500/50 to-cyan-300/20",
                   ios: "from-amber-500/50 to-amber-300/20",
                 };
                 const color = colors[p.target] || "from-zinc-500/50 to-zinc-300/20";
@@ -3344,7 +3339,7 @@ export default function DashboardPage() {
       </div>
 
       <div className="mt-4 gf-card group relative overflow-hidden rounded-2xl border border-white/10 p-5">
-        <div className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-fuchsia-500/10 blur-3xl" />
+        <div className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-cyan-500/10 blur-3xl" />
         <div className="pointer-events-none absolute -left-24 -bottom-24 h-80 w-80 rounded-full bg-cyan-500/10 blur-3xl" />
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
@@ -3352,7 +3347,7 @@ export default function DashboardPage() {
             <h2 className="mt-1 text-sm font-semibold text-zinc-100">One-click operations</h2>
             <div className="mt-1 text-xs text-zinc-500">Perform common admin tasks instantly</div>
           </div>
-          <NeonChip tone="fuchsia">
+          <NeonChip tone="cyan">
             <PulseDot tone="cyan" />
             <span className="font-mono">OPS</span>
             <span className="text-white">QUICK</span>
@@ -3390,9 +3385,9 @@ export default function DashboardPage() {
             className="gf-btn group relative overflow-hidden rounded-xl border border-white/10 bg-black/20 p-4 text-left transition hover:border-white/20 hover:bg-white/5"
             onClick={quickBroadcastNotification}
           >
-            <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-fuchsia-500/10 to-transparent opacity-0 transition group-hover:opacity-100" />
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-cyan-500/10 to-transparent opacity-0 transition group-hover:opacity-100" />
             <div className="relative">
-              <div className="text-xs font-semibold text-fuchsia-300">Broadcast</div>
+              <div className="text-xs font-semibold text-cyan-300">Broadcast</div>
               <div className="mt-1 text-[11px] text-zinc-400">Send push notification to users</div>
             </div>
           </button>
@@ -3439,8 +3434,8 @@ export default function DashboardPage() {
               {activityLog.map((a, i) => {
                 const age = Math.floor((Date.now() - a.ts) / 1000);
                 const ageStr = age < 60 ? `${age}s ago` : age < 3600 ? `${Math.floor(age / 60)}m ago` : `${Math.floor(age / 3600)}h ago`;
-                const toneCls = a.tone === "emerald" ? "bg-emerald-500/15 border-emerald-400/20" : a.tone === "cyan" ? "bg-cyan-500/15 border-cyan-400/20" : a.tone === "fuchsia" ? "bg-fuchsia-500/15 border-fuchsia-400/20" : a.tone === "amber" ? "bg-amber-500/15 border-amber-400/20" : "bg-red-500/15 border-red-400/20";
-                const dotCls = a.tone === "emerald" ? "bg-emerald-400" : a.tone === "cyan" ? "bg-cyan-400" : a.tone === "fuchsia" ? "bg-fuchsia-400" : a.tone === "amber" ? "bg-amber-400" : "bg-red-400";
+                const toneCls = a.tone === "emerald" ? "bg-emerald-500/15 border-emerald-400/20" : a.tone === "cyan" ? "bg-cyan-500/15 border-cyan-400/20" : a.tone === "amber" ? "bg-amber-500/15 border-amber-400/20" : "bg-red-500/15 border-red-400/20";
+                const dotCls = a.tone === "emerald" ? "bg-emerald-400" : a.tone === "cyan" ? "bg-cyan-400" : a.tone === "amber" ? "bg-amber-400" : "bg-red-400";
                 return (
                   <div key={i} className={`rounded-xl border px-3 py-2 ${toneCls}`}>
                     <div className="flex items-center justify-between">
@@ -3461,14 +3456,14 @@ export default function DashboardPage() {
 
       <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="gf-card group relative overflow-hidden rounded-2xl border border-white/10 p-5">
-          <div className="pointer-events-none absolute -right-14 -top-10 h-44 w-44 rounded-full bg-indigo-500/15 blur-3xl" />
+          <div className="pointer-events-none absolute -right-14 -top-10 h-44 w-44 rounded-full bg-blue-500/15 blur-3xl" />
           <div className="flex items-start justify-between">
             <div>
               <div className="text-xs font-medium text-zinc-400">Leaderboard</div>
               <h2 className="mt-1 text-sm font-semibold text-zinc-100">Top Creators</h2>
               <div className="mt-1 text-xs text-zinc-500">By projects + builds + downloads</div>
             </div>
-            <NeonChip tone="fuchsia">
+            <NeonChip tone="cyan">
               <span className="font-mono">TOP</span>
               <span className="text-white">{leaderboardLoading ? "…" : String(leaderboard.length)}</span>
             </NeonChip>
@@ -3487,7 +3482,7 @@ export default function DashboardPage() {
               leaderboard.map((u, i) => (
                 <div key={i} className="flex items-center justify-between rounded-xl border border-white/10 bg-black/20 px-3 py-2">
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="shrink-0 w-5 h-5 rounded-full bg-gradient-to-br from-indigo-500/40 to-fuchsia-500/30 grid place-items-center text-[10px] font-bold text-white">{i + 1}</span>
+                    <span className="shrink-0 w-5 h-5 rounded-full bg-gradient-to-br from-blue-500/40 to-cyan-500/30 grid place-items-center text-[10px] font-bold text-white">{i + 1}</span>
                     <span className="truncate text-xs font-medium text-zinc-200">{u.username || u.email || "—"}</span>
                   </div>
                   <div className="text-[11px] text-zinc-400">{(u.projects ?? 0) + (u.builds ?? 0) + (u.downloads ?? 0)} pts</div>
@@ -3592,14 +3587,14 @@ export default function DashboardPage() {
 
       <div className="mt-4 grid grid-cols-1 gap-4 lg:grid-cols-3">
         <div className="gf-card group relative overflow-hidden rounded-2xl border border-white/10 p-5">
-          <div className="pointer-events-none absolute -right-14 -top-10 h-44 w-44 rounded-full bg-fuchsia-500/10 blur-3xl" />
+          <div className="pointer-events-none absolute -right-14 -top-10 h-44 w-44 rounded-full bg-cyan-500/10 blur-3xl" />
           <div className="flex items-start justify-between">
             <div>
               <div className="text-xs font-medium text-zinc-400">HUD</div>
               <h2 className="mt-1 text-sm font-semibold text-zinc-100">Ads intel</h2>
               <div className="mt-1 text-xs text-zinc-500">Campaign activity</div>
             </div>
-            <NeonChip tone={adsActive?.id ? "fuchsia" : "zinc"}>
+            <NeonChip tone={adsActive?.id ? "cyan" : "zinc"}>
               <PulseDot tone="cyan" />
               <span className="font-mono">ACTIVE</span>
               <span className="text-white">{adsLoading ? "…" : adsActive?.title || "none"}</span>
@@ -3702,7 +3697,7 @@ export default function DashboardPage() {
           <div className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-2">
             <OpCard title="Build Reactor" subtitle="Queue, running, failed, ready" tone="cyan" onClick={() => router.push("/builds")} />
             <OpCard title="Users" subtitle="Roles, access, subscriptions" tone="emerald" onClick={() => router.push("/users")} />
-            <OpCard title="Projects" subtitle="Status, rebuild, delete" tone="fuchsia" onClick={() => router.push("/projects")} />
+            <OpCard title="Projects" subtitle="Status, rebuild, delete" tone="cyan" onClick={() => router.push("/projects")} />
             <OpCard
               title="Switch admin"
               subtitle="Sign out and login again"
@@ -3750,7 +3745,7 @@ export default function DashboardPage() {
         <div className="gf-card rounded-2xl border border-white/10 p-5">
           <div className="flex items-center justify-between">
             <div>
-              <NeonChip tone="fuchsia">
+              <NeonChip tone="cyan">
                 <PulseDot tone="cyan" />
                 AD ARENA
                 <span className="text-zinc-500">•</span>
@@ -4043,7 +4038,7 @@ export default function DashboardPage() {
       {/* Milestone Celebrations */}
       {totalUsers === 100 || totalUsers === 500 || totalUsers === 1000 ? (
         <div className="fixed bottom-4 right-4 z-[100] animate-bounce">
-          <div className="rounded-2xl border border-amber-400/30 bg-gradient-to-r from-amber-500/20 to-fuchsia-500/20 px-4 py-3 backdrop-blur">
+          <div className="rounded-2xl border border-amber-400/30 bg-gradient-to-r from-amber-500/20 to-cyan-500/20 px-4 py-3 backdrop-blur">
             <div className="text-xs font-semibold text-amber-200">🏆 Milestone Reached!</div>
             <div className="text-sm font-bold text-white">{totalUsers} Users</div>
           </div>
@@ -4052,7 +4047,7 @@ export default function DashboardPage() {
 
       {/* Stats Comparison Panel */}
       <div className="mt-4 gf-card group relative overflow-hidden rounded-2xl border border-white/10 p-5">
-        <div className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-gradient-to-br from-cyan-500/10 to-fuchsia-500/10 blur-3xl" />
+        <div className="pointer-events-none absolute -right-24 -top-24 h-80 w-80 rounded-full bg-gradient-to-br from-cyan-500/10 to-cyan-500/10 blur-3xl" />
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <div className="text-xs font-medium text-zinc-400">Analytics</div>
@@ -4131,7 +4126,7 @@ export default function DashboardPage() {
           { label: "Success Rate", value: `${successRate}%`, tone: successRate >= 80 ? "emerald" : "amber", icon: "✓" },
           { label: "Queue Depth", value: builds?.queued ?? 0, tone: (builds?.queued ?? 0) < 5 ? "emerald" : "amber", icon: "⏳" },
           { label: "Active Users", value: totalUsers - (data?.dashboard?.inactiveUsers ?? 0), tone: "cyan", icon: "👤" },
-          { label: "Public Templates", value: templates?.public ?? 0, tone: "fuchsia", icon: "📦" },
+          { label: "Public Templates", value: templates?.public ?? 0, tone: "cyan", icon: "📦" },
         ].map((s, i) => (
           <button
             key={i}
@@ -4146,7 +4141,7 @@ export default function DashboardPage() {
           >
             <div className="flex items-center justify-between">
               <span className="text-lg">{s.icon}</span>
-              <span className={`text-xs font-semibold ${s.tone === "emerald" ? "text-emerald-400" : s.tone === "amber" ? "text-amber-400" : s.tone === "cyan" ? "text-cyan-400" : "text-fuchsia-400"}`}>
+              <span className={`text-xs font-semibold ${s.tone === "emerald" ? "text-emerald-400" : s.tone === "amber" ? "text-amber-400" : s.tone === "cyan" ? "text-cyan-400" : "text-cyan-400"}`}>
                 {s.value}
               </span>
             </div>

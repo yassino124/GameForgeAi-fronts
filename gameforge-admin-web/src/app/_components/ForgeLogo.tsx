@@ -66,7 +66,7 @@ export default function ForgeLogo({
         </defs>
 
         {/* AMBIENT HALO */}
-        <ellipse cx="148" cy="122" rx="90" ry="75" fill="rgba(99,102,241,0.12)" filter={`url(#${bigGlow})`} />
+        <ellipse cx="148" cy="122" rx="90" ry="75" fill="rgba(37,99,235,0.12)" filter={`url(#${bigGlow})`} />
 
         {/* GAMEPAD BODY */}
         <rect x="62" y="82" width="172" height="96" rx="34" fill="#0d0e1f" stroke={`url(#${padGrad})`} strokeWidth="2" />

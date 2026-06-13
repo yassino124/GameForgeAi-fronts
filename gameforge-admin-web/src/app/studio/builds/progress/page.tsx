@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import UserShell from "@/app/_components/UserShell";
 import { apiFetch, ApiError } from "@/lib/api";
-import { getUserToken } from "@/lib/userAuth";
+import { useAuthToken } from "@/lib/stores/authStore";
 
 type BuildStatus = "queued" | "running" | "ready" | "failed";
 
@@ -50,7 +50,7 @@ const MatrixRain = () => {
               ease: "linear",
               delay: Math.random() * 5
             }}
-            className="text-[10px] font-mono text-indigo-400 leading-none writing-vertical-rl flex flex-col gap-1"
+            className="text-[10px] font-mono text-blue-400 leading-none writing-vertical-rl flex flex-col gap-1"
           >
             {Array.from({ length: 20 }).map((_, j) => (
               <span key={j} style={{ opacity: 1 - j * 0.05 }}>
@@ -69,11 +69,11 @@ const NeuralProcessor = ({ status }: { status: BuildStatus }) => (
     <MatrixRain />
     
     {/* Holographic 3D-like Projection Base */}
-    <div className="absolute -bottom-20 w-64 h-24 bg-indigo-500/10 blur-[40px] rounded-full scale-y-50" />
+    <div className="absolute -bottom-20 w-64 h-24 bg-blue-600/10 blur-[40px] rounded-full scale-y-50" />
     <motion.div 
       animate={{ opacity: [0.3, 0.6, 0.3], scale: [1, 1.1, 1] }}
       transition={{ duration: 4, repeat: Infinity }}
-      className="absolute -bottom-10 w-48 h-10 border-t-2 border-indigo-500/20 rounded-full blur-[2px]"
+      className="absolute -bottom-10 w-48 h-10 border-t-2 border-blue-500/20 rounded-full blur-[2px]"
     />
 
     {/* High-End Cybernetic HUD */}
@@ -82,12 +82,12 @@ const NeuralProcessor = ({ status }: { status: BuildStatus }) => (
         <motion.circle 
           animate={{ strokeDashoffset: [0, 400] }}
           transition={{ duration: 20, repeat: Infinity, ease: "linear" }}
-          cx="100" cy="100" r="98" fill="none" stroke="currentColor" strokeWidth="0.5" strokeDasharray="10 10" className="text-indigo-500" 
+          cx="100" cy="100" r="98" fill="none" stroke="currentColor" strokeWidth="0.5" strokeDasharray="10 10" className="text-blue-500" 
         />
         <motion.circle 
           animate={{ rotate: -360 }}
           transition={{ duration: 30, repeat: Infinity, ease: "linear" }}
-          cx="100" cy="100" r="85" fill="none" stroke="currentColor" strokeWidth="1" strokeDasharray="40 20" className="text-fuchsia-500" 
+          cx="100" cy="100" r="85" fill="none" stroke="currentColor" strokeWidth="1" strokeDasharray="40 20" className="text-blue-500" 
         />
       </svg>
     </div>
@@ -108,7 +108,7 @@ const NeuralProcessor = ({ status }: { status: BuildStatus }) => (
           scale: { duration: 2, repeat: Infinity, ease: "easeInOut" },
           opacity: { duration: 1.5, repeat: Infinity }
         }}
-        className="absolute border-2 border-indigo-500/40 rounded-full shadow-[0_0_20px_rgba(99,102,241,0.2)]"
+        className="absolute border-2 border-blue-500/40 rounded-full shadow-[0_0_20px_rgba(37,99,235,0.2)]"
         style={{ 
           width: `${80 + i * 40}%`, 
           height: `${80 + i * 40}%`,
@@ -136,7 +136,7 @@ const NeuralProcessor = ({ status }: { status: BuildStatus }) => (
             delay: i * 0.1,
             ease: "circOut"
           }}
-          className="absolute h-1.5 w-1.5 bg-gradient-to-r from-cyan-400 via-indigo-500 to-fuchsia-500 rounded-full shadow-[0_0_20px_rgba(34,211,238,1)] z-20"
+          className="absolute h-1.5 w-1.5 bg-gradient-to-r from-cyan-400 via-blue-500 to-sky-400 rounded-full shadow-[0_0_20px_rgba(34,211,238,1)] z-20"
         />
       ))}
     </AnimatePresence>
@@ -145,13 +145,13 @@ const NeuralProcessor = ({ status }: { status: BuildStatus }) => (
     <motion.div
       animate={{ 
         boxShadow: status === "running" 
-          ? ["0 0 40px rgba(99,102,241,0.4)", "0 0 120px rgba(168,85,247,0.8)", "0 0 40px rgba(99,102,241,0.4)"]
-          : "0 0 30px rgba(99,102,241,0.2)",
+          ? ["0 0 40px rgba(37,99,235,0.4)", "0 0 120px rgba(168,85,247,0.8)", "0 0 40px rgba(37,99,235,0.4)"]
+          : "0 0 30px rgba(37,99,235,0.2)",
         scale: status === "running" ? [1, 1.1, 0.95, 1.05, 1] : 1,
         skewX: status === "running" ? [0, 5, -5, 2, 0] : 0
       }}
       transition={{ duration: 2, repeat: Infinity }}
-      className="relative z-30 h-44 w-44 rounded-[56px] bg-gradient-to-br from-indigo-600 via-fuchsia-600 to-purple-700 flex items-center justify-center border-2 border-white/30 shadow-2xl backdrop-blur-xl"
+      className="relative z-30 h-44 w-44 rounded-[56px] bg-gradient-to-br from-blue-700 via-blue-600 to-sky-500 flex items-center justify-center border-2 border-white/30 shadow-2xl backdrop-blur-xl"
     >
       {/* Internal Core Glow */}
       <div className="absolute inset-3 rounded-[48px] bg-black/40 backdrop-blur-2xl border border-white/10 overflow-hidden">
@@ -203,7 +203,7 @@ const NeuralProcessor = ({ status }: { status: BuildStatus }) => (
     <motion.div 
       animate={{ opacity: [0.4, 0.8, 0.4], x: ["-50%", "-50%"], scale: [1, 1.05, 1] }}
       transition={{ duration: 2, repeat: Infinity }}
-      className="absolute -bottom-16 left-1/2 -translate-x-1/2 px-6 py-2 rounded-2xl border border-indigo-500/40 bg-indigo-500/20 backdrop-blur-2xl flex items-center gap-3 shadow-[0_0_30px_rgba(99,102,241,0.3)]"
+      className="absolute -bottom-16 left-1/2 -translate-x-1/2 px-6 py-2 rounded-2xl border border-blue-500/40 bg-blue-600/20 backdrop-blur-2xl flex items-center gap-3 shadow-[0_0_30px_rgba(37,99,235,0.3)]"
     >
       <div className="h-2 w-2 rounded-full bg-emerald-400 animate-ping" />
       <span className="text-[11px] font-black text-white uppercase tracking-[0.5em] whitespace-nowrap italic">Neural Sync Active</span>
@@ -214,7 +214,7 @@ const NeuralProcessor = ({ status }: { status: BuildStatus }) => (
 function BuildProgressPageInner() {
   const router = useRouter();
   const sp = useSearchParams();
-  const token = useMemo(() => getUserToken(), []);
+  const { token } = useAuthToken();
   const projectId = sp?.get("projectId") || "";
 
   const [project, setProject] = useState<Project | null>(null);
@@ -298,9 +298,9 @@ function BuildProgressPageInner() {
           
           {/* Main Visual Section */}
           <div className="lg:col-span-7 space-y-10">
-            <div className="gf-panel-strong rounded-[60px] p-12 flex flex-col items-center justify-center relative overflow-hidden min-h-[650px] border border-white/10 shadow-[0_0_150px_rgba(99,102,241,0.2)]">
+            <div className="gf-panel-strong rounded-[60px] p-12 flex flex-col items-center justify-center relative overflow-hidden min-h-[650px] border border-white/10 shadow-[0_0_150px_rgba(37,99,235,0.2)]">
               {/* High-End Background Effects */}
-              <div className="absolute inset-0 bg-gradient-to-b from-indigo-500/15 via-transparent to-black pointer-events-none" />
+              <div className="absolute inset-0 bg-gradient-to-b from-blue-600/15 via-transparent to-black pointer-events-none" />
               <div className="absolute inset-0 gf-grid opacity-30 pointer-events-none" />
               
               {/* Floating HUD Elements */}
@@ -312,12 +312,12 @@ function BuildProgressPageInner() {
                 transition={{ duration: 6, repeat: Infinity, ease: "easeInOut" }}
                 className="absolute top-10 left-10 p-4 rounded-2xl border border-white/5 bg-white/[0.02] backdrop-blur-md hidden xl:block"
               >
-                <div className="text-[8px] font-black text-indigo-400 uppercase tracking-[0.3em] mb-2">Protocol Buffer</div>
+                <div className="text-[8px] font-black text-blue-400 uppercase tracking-[0.3em] mb-2">Protocol Buffer</div>
                 <div className="h-1 w-24 bg-white/5 rounded-full overflow-hidden">
                   <motion.div 
                     animate={{ width: ["0%", "100%", "0%"] }}
                     transition={{ duration: 4, repeat: Infinity }}
-                    className="h-full bg-indigo-500"
+                    className="h-full bg-blue-500"
                   />
                 </div>
               </motion.div>
@@ -330,14 +330,14 @@ function BuildProgressPageInner() {
                 transition={{ duration: 5, repeat: Infinity, ease: "easeInOut", delay: 1 }}
                 className="absolute bottom-20 right-10 p-4 rounded-2xl border border-white/5 bg-white/[0.02] backdrop-blur-md hidden xl:block"
               >
-                <div className="text-[8px] font-black text-fuchsia-400 uppercase tracking-[0.3em] mb-2">Neural Entropy</div>
+                <div className="text-[8px] font-black text-blue-400 uppercase tracking-[0.3em] mb-2">Neural Entropy</div>
                 <div className="flex gap-1">
                   {[1,2,3,4].map(i => (
                     <motion.div 
                       key={i}
                       animate={{ height: [4, 12, 4] }}
                       transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }}
-                      className="w-1 bg-fuchsia-500/40 rounded-full"
+                      className="w-1 bg-blue-500/30 rounded-full"
                     />
                   ))}
                 </div>
@@ -372,7 +372,7 @@ function BuildProgressPageInner() {
               <div className="mt-16 w-full max-w-md space-y-4">
                 <div className="flex justify-between items-center px-2">
                   <span className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.4em]">Core Integrity</span>
-                  <span className="text-[10px] font-black text-indigo-400 uppercase tracking-[0.4em]">
+                  <span className="text-[10px] font-black text-blue-400 uppercase tracking-[0.4em]">
                     {status === "ready" ? "100%" : status === "running" ? "64%" : "12%"}
                   </span>
                 </div>
@@ -384,7 +384,7 @@ function BuildProgressPageInner() {
                         {active && (
                           <motion.div 
                             layoutId={`step-${i}`}
-                            className="h-full bg-gradient-to-r from-indigo-500 to-fuchsia-500 shadow-[0_0_15px_rgba(99,102,241,0.8)]" 
+                            className="h-full bg-gradient-to-r from-blue-600 to-sky-400 shadow-[0_0_15px_rgba(37,99,235,0.8)]" 
                             initial={{ x: "-100%" }}
                             animate={{ x: "0%" }}
                             transition={{ type: "spring", stiffness: 100, damping: 15, delay: i * 0.05 }}
@@ -445,7 +445,7 @@ function BuildProgressPageInner() {
                   <Timer size={60} />
                 </div>
                 <div className="flex items-center gap-3 text-zinc-500 mb-4">
-                  <Timer size={16} className="text-indigo-400" />
+                  <Timer size={16} className="text-blue-400" />
                   <span className="text-[10px] font-black uppercase tracking-[0.3em] leading-none">Telemetry</span>
                 </div>
                 <div className="text-4xl font-black text-white italic tracking-tighter gf-chromatic">{formatTime(elapsed)}</div>
@@ -457,7 +457,7 @@ function BuildProgressPageInner() {
                   <Activity size={60} />
                 </div>
                 <div className="flex items-center gap-3 text-zinc-500 mb-4">
-                  <Activity size={16} className="text-fuchsia-400" />
+                  <Activity size={16} className="text-blue-400" />
                   <span className="text-[10px] font-black uppercase tracking-[0.3em] leading-none">Load State</span>
                 </div>
                 <div className="text-2xl font-black text-white uppercase italic tracking-tighter truncate">
@@ -476,8 +476,8 @@ function BuildProgressPageInner() {
               
               <div className="flex items-center justify-between mb-8 relative z-10">
                 <div className="flex items-center gap-4">
-                  <div className="h-10 w-10 rounded-xl bg-indigo-500/10 flex items-center justify-center">
-                    <Terminal size={20} className="text-indigo-400" />
+                  <div className="h-10 w-10 rounded-xl bg-blue-600/10 flex items-center justify-center">
+                    <Terminal size={20} className="text-blue-400" />
                   </div>
                   <div>
                     <span className="text-[10px] font-black uppercase tracking-[0.3em] text-white">Neural Stream</span>
@@ -486,7 +486,7 @@ function BuildProgressPageInner() {
                 </div>
                 <div className="flex gap-2">
                   <div className="h-2 w-2 rounded-full bg-rose-500 animate-pulse" />
-                  <div className="h-2 w-2 rounded-full bg-indigo-500/20" />
+                  <div className="h-2 w-2 rounded-full bg-blue-600/20" />
                 </div>
               </div>
 
@@ -510,7 +510,7 @@ function BuildProgressPageInner() {
                     </motion.div>
                   ))}
                 </AnimatePresence>
-                <div className="flex gap-2 text-indigo-500">
+                <div className="flex gap-2 text-blue-500">
                   <span className="animate-pulse font-black text-lg">_</span>
                 </div>
               </div>
@@ -527,7 +527,7 @@ function BuildProgressPageInner() {
                       whileHover={{ scale: 1.1, rotate: 5 }}
                       className="h-12 w-full rounded-2xl bg-white/[0.03] border border-white/5 flex items-center justify-center transition-all group-hover:bg-white/10 group-hover:border-white/20"
                     >
-                      <item.icon size={18} className="text-zinc-500 group-hover:text-indigo-400 transition-colors" />
+                      <item.icon size={18} className="text-zinc-500 group-hover:text-blue-400 transition-colors" />
                     </motion.div>
                     <span className="text-[8px] font-black uppercase tracking-widest text-zinc-600 group-hover:text-zinc-400 transition-colors">{item.label}</span>
                   </div>

@@ -100,7 +100,7 @@ function CheckoutForm({
         <button
           type="submit"
           disabled={!stripe || processing}
-          className="flex-[2] bg-gradient-to-r from-indigo-500 to-fuchsia-500 hover:from-indigo-400 hover:to-fuchsia-400 text-white rounded-xl py-3 text-sm font-black shadow-[0_0_20px_rgba(99,102,241,0.3)] disabled:opacity-50 flex items-center justify-center gap-2"
+          className="flex-[2] bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-400 hover:to-cyan-400 text-white rounded-xl py-3 text-sm font-black shadow-[0_0_20px_rgba(99,102,241,0.3)] disabled:opacity-50 flex items-center justify-center gap-2"
         >
           {processing ? <Loader2 size={18} className="animate-spin" /> : "Purchase Gift"}
         </button>
@@ -199,7 +199,7 @@ export default function StripeGiftModal({
 
             {loading ? (
               <div className="py-20 flex flex-col items-center justify-center gap-4">
-                <Loader2 size={40} className="text-indigo-500 animate-spin" />
+                <Loader2 size={40} className="text-blue-500 animate-spin" />
                 <p className="text-sm text-white/50 font-medium">Securing payment intent...</p>
               </div>
             ) : clientSecret ? (

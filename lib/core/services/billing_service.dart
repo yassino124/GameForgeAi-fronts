@@ -56,12 +56,16 @@ class BillingService {
   static Future<Map<String, dynamic>> subscribeWithSetupIntent({
     required String token,
     required String priceId,
-    required String setupIntentId,
+    String? setupIntentId,
   }) async {
+    final sid = setupIntentId?.toString().trim();
     return ApiService.post(
       '/billing/subscribe',
       token: token,
-      data: {'priceId': priceId, 'setupIntentId': setupIntentId},
+      data: {
+        'priceId': priceId,
+        if (sid != null && sid.isNotEmpty) 'setupIntentId': sid,
+      },
     );
   }
 

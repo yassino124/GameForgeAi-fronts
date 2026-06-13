@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import UserShell from "@/app/_components/UserShell";
 import { apiFetch, ApiError, API_BASE_URL } from "@/lib/api";
-import { getUserToken } from "@/lib/userAuth";
+import { useAuthToken } from "@/lib/stores/authStore";
 import { normalizeImageUrl } from "@/lib/media";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
@@ -57,7 +57,7 @@ function toNum(v: any) {
 export default function TemplateDetailsPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
-  const token = useMemo(() => getUserToken(), []);
+  const { token } = useAuthToken();
   const id = (params?.id || "").toString();
 
   const [loading, setLoading] = useState(true);
@@ -148,17 +148,17 @@ export default function TemplateDetailsPage() {
                   className="h-full w-full object-cover" 
                 />
               ) : (
-                <div className="h-full w-full bg-gradient-to-br from-indigo-500/30 via-fuchsia-500/15 to-cyan-500/10" />
+                <div className="h-full w-full bg-gradient-to-br from-blue-600/30 via-sky-500/10 to-cyan-500/10" />
               )}
               
               {/* Immersive Overlays */}
               <div className="pointer-events-none absolute inset-0 bg-gradient-to-t from-[#05060a] via-black/20 to-transparent opacity-90" />
-              <div className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-indigo-500/10 via-transparent to-fuchsia-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-tr from-blue-600/10 via-transparent to-sky-500/10 opacity-0 group-hover:opacity-100 transition-opacity duration-1000" />
               
               {/* Badge System */}
               <div className="absolute top-6 left-6 flex items-center gap-3">
                 {tpl?.category && (
-                  <div className="rounded-2xl bg-indigo-500/20 border border-indigo-500/30 backdrop-blur-xl px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-indigo-300">
+                  <div className="rounded-2xl bg-blue-500/20 border border-blue-500/30 backdrop-blur-xl px-4 py-2 text-[10px] font-black uppercase tracking-[0.2em] text-blue-300">
                     {tpl.category}
                   </div>
                 )}
@@ -201,7 +201,7 @@ export default function TemplateDetailsPage() {
                     </div>
                     <div className="h-1 w-1 rounded-full bg-zinc-700" />
                     <div className="flex items-center gap-2 text-zinc-400 font-bold text-sm">
-                      <Download size={16} className="text-indigo-400" />
+                      <Download size={16} className="text-blue-400" />
                       {toNum(tpl?.downloads ?? tpl?.downloadCount).toLocaleString()} downloads
                     </div>
                   </div>
@@ -239,7 +239,7 @@ export default function TemplateDetailsPage() {
                 ].map((spec, i) => (
                   <div key={i} className="flex items-center justify-between group">
                     <div className="flex items-center gap-3">
-                      <div className="p-2 rounded-lg bg-white/5 text-zinc-500 group-hover:text-indigo-400 transition-colors">
+                      <div className="p-2 rounded-lg bg-white/5 text-zinc-500 group-hover:text-blue-400 transition-colors">
                         <spec.icon size={14} />
                       </div>
                       <span className="text-xs font-bold text-zinc-400">{spec.label}</span>
@@ -260,7 +260,7 @@ export default function TemplateDetailsPage() {
             transition={{ delay: 0.6 }}
             className="gf-panel-strong rounded-[40px] p-8 border border-white/10 relative overflow-hidden"
           >
-            <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 via-transparent to-transparent pointer-events-none" />
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-transparent to-transparent pointer-events-none" />
             
             <div className="relative z-10 space-y-8">
               <div className="flex justify-between items-center">
@@ -272,7 +272,7 @@ export default function TemplateDetailsPage() {
 
               <div className="space-y-3">
                 <button
-                  className="group relative w-full overflow-hidden rounded-[24px] bg-gradient-to-r from-indigo-500 to-fuchsia-500 py-5 font-black uppercase tracking-[0.2em] text-white transition-all hover:scale-[1.03] active:scale-[0.97] shadow-[0_20px_40px_rgba(99,102,241,0.3)]"
+                  className="group relative w-full overflow-hidden rounded-[24px] bg-gradient-to-r from-blue-700 to-sky-500 py-5 font-black uppercase tracking-[0.2em] text-white transition-all hover:scale-[1.03] active:scale-[0.97] shadow-[0_20px_40px_rgba(37,99,235,0.3)]"
                   disabled={loading}
                   onClick={() => router.push(`/studio/projects/new?templateId=${encodeURIComponent(id)}`)}
                 >
@@ -287,7 +287,7 @@ export default function TemplateDetailsPage() {
                 </button>
                 
                 <button 
-                  className="w-full rounded-[24px] bg-white/5 border border-white/5 py-5 font-black uppercase tracking-[0.2em] text-zinc-400 hover:bg-white/10 hover:text-indigo-400 hover:border-indigo-500/30 transition-all transition-transform active:scale-[0.98]"
+                  className="w-full rounded-[24px] bg-white/5 border border-white/5 py-5 font-black uppercase tracking-[0.2em] text-zinc-400 hover:bg-white/10 hover:text-blue-400 hover:border-blue-500/30 transition-all transition-transform active:scale-[0.98]"
                   onClick={handleDownload}
                 >
                   <span className="flex items-center justify-center gap-3">
@@ -301,10 +301,10 @@ export default function TemplateDetailsPage() {
                 <div className="text-[10px] font-black text-zinc-600 uppercase tracking-[0.3em] mb-4">Master Architect</div>
                 <div 
                   onClick={() => tpl?.ownerId && router.push(`/studio/profile/${encodeURIComponent(tpl.ownerId)}`)}
-                  className="flex items-center justify-between rounded-2xl bg-white/[0.03] border border-white/5 p-4 group transition-all hover:bg-white/[0.05] hover:border-indigo-500/20 cursor-pointer active:scale-[0.98]"
+                  className="flex items-center justify-between rounded-2xl bg-white/[0.03] border border-white/5 p-4 group transition-all hover:bg-white/[0.05] hover:border-blue-500/20 cursor-pointer active:scale-[0.98]"
                 >
                   <div className="flex items-center gap-4">
-                    <div className="relative h-12 w-12 rounded-xl overflow-hidden bg-indigo-500/10 flex items-center justify-center text-indigo-400 group-hover:scale-105 transition-transform">
+                    <div className="relative h-12 w-12 rounded-xl overflow-hidden bg-blue-500/10 flex items-center justify-center text-blue-400 group-hover:scale-105 transition-transform">
                       {tpl?.ownerAvatar ? (
                         <img src={normalizeImageUrl(tpl.ownerAvatar)} className="h-full w-full object-cover" alt="" />
                       ) : (
@@ -317,7 +317,7 @@ export default function TemplateDetailsPage() {
                     </div>
                     
                     <div>
-                      <div className="text-sm font-black text-white hover:text-indigo-400 transition-colors cursor-pointer uppercase italic tracking-tight">
+                      <div className="text-sm font-black text-white hover:text-blue-400 transition-colors cursor-pointer uppercase italic tracking-tight">
                         {tpl?.ownerUsername || "Nexus-1 Prime"}
                       </div>
                       <div className="text-[9px] font-bold text-zinc-500 uppercase tracking-widest mt-1">
@@ -336,7 +336,7 @@ export default function TemplateDetailsPage() {
                 <div className="text-[10px] font-black text-zinc-600 uppercase tracking-[0.3em] mb-4 text-center">Metadata Tags</div>
                 <div className="flex flex-wrap gap-2 justify-center">
                   {tpl?.tags?.length ? tpl.tags.slice(0, 12).map((tag) => (
-                    <span key={tag} className="rounded-xl border border-white/5 bg-black/40 px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-zinc-500 hover:text-indigo-400 hover:border-indigo-500/30 transition-all cursor-default">
+                    <span key={tag} className="rounded-xl border border-white/5 bg-black/40 px-3 py-1.5 text-[9px] font-black uppercase tracking-widest text-zinc-500 hover:text-blue-400 hover:border-blue-500/30 transition-all cursor-default">
                       #{tag}
                     </span>
                   )) : (

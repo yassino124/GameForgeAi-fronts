@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useState } from "react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import UserShell from "@/app/_components/UserShell";
 import { apiFetch, ApiError } from "@/lib/api";
-import { getUserToken } from "@/lib/userAuth";
+import { useAuthToken } from "@/lib/stores/authStore";
 import { 
   Bell, Check, Trash, Package, Star, 
   WarningCircle, Info, CreditCard, Users,
@@ -48,7 +49,7 @@ const NeuralParticles = () => (
     {Array.from({ length: 6 }).map((_, i) => (
       <motion.div
         key={i}
-        className="absolute w-1 h-1 bg-indigo-400 rounded-full blur-[1px]"
+        className="absolute w-1 h-1 bg-blue-400 rounded-full blur-[1px]"
         animate={{
           x: [Math.random() * 400, Math.random() * 400],
           y: [Math.random() * 200, Math.random() * 200],
@@ -83,52 +84,77 @@ const getIconForNotification = (n: Notification) => {
   if (t.includes("payment") || t.includes("wallet") || t.includes("subscription")) 
     return { icon: CreditCard, color: "text-emerald-400", bg: "bg-emerald-500/10", tone: "emerald" as const };
   if (t.includes("multiplayer") || t.includes("user") || t.includes("friend")) 
-    return { icon: Users, color: "text-purple-400", bg: "bg-purple-500/10", tone: "zinc" as const };
+    return { icon: Users, color: "text-sky-400", bg: "bg-sky-500/10", tone: "zinc" as const };
   if (t.includes("error") || t.includes("fail") || t.includes("warning")) 
-    return { icon: WarningCircle, color: "text-rose-400", bg: "bg-rose-500/10", tone: "fuchsia" as const };
+    return { icon: WarningCircle, color: "text-rose-400", bg: "bg-rose-500/10", tone: "cyan" as const };
     
-  return { icon: Bell, color: "text-indigo-400", bg: "bg-indigo-500/10", tone: "cyan" as const };
+  return { icon: Bell, color: "text-blue-400", bg: "bg-blue-500/10", tone: "cyan" as const };
 };
 
 export default function NotificationsPage() {
-  const token = useMemo(() => getUserToken(), []);
-  const [loading, setLoading] = useState(true);
-  const [notifications, setNotifications] = useState<Notification[]>([]);
-  const [error, setError] = useState<string | null>(null);
+  const { token, hydrated } = useAuthToken();
+  const queryClient = useQueryClient();
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [filterTab, setFilterTab] = useState<"all" | "unread">("all");
 
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      if (!token) return;
-      setLoading(true);
-      try {
-        const res = await apiFetch<any>("/notifications", { method: "GET", token });
-        const data = (res && typeof res === "object" && "data" in res) ? res.data : res;
-        if (!cancelled) {
-          const list = Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
-          setNotifications(list);
-        }
-      } catch (e: any) {
-        if (!cancelled) setError(e instanceof ApiError ? e.message : "Failed to load notifications");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-    load();
-    return () => { cancelled = true; };
-  }, [token]);
+  const notificationsQuery = useQuery<Notification[]>({
+    queryKey: ["notifications", token],
+    enabled: hydrated && !!token,
+    queryFn: async () => {
+      const res = await apiFetch<any>("/notifications", { method: "GET", token: token! });
+      const data = (res && typeof res === "object" && "data" in res) ? res.data : res;
+      return Array.isArray(data) ? data : (Array.isArray(data?.data) ? data.data : []);
+    },
+  });
+
+  const markAsReadMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiFetch(`/notifications/${id}`, {
+        method: "PATCH",
+        token: token!,
+        body: { isRead: true },
+      });
+      return id;
+    },
+    onSuccess: (id) => {
+      queryClient.setQueryData<Notification[]>(["notifications", token], (prev = []) =>
+        prev.map((n) => (n._id === id || n.id === id) ? { ...n, read: true } : n),
+      );
+    },
+  });
+
+  const markAllReadMutation = useMutation({
+    mutationFn: async () => {
+      await apiFetch("/notifications/read-all", { method: "POST", token: token! });
+    },
+    onSuccess: () => {
+      queryClient.setQueryData<Notification[]>(["notifications", token], (prev = []) =>
+        prev.map((n) => ({ ...n, read: true })),
+      );
+    },
+  });
+
+  const clearAllMutation = useMutation({
+    mutationFn: async () => {
+      await apiFetch("/notifications/clear-all", { method: "POST", token: token! });
+    },
+    onSuccess: () => {
+      queryClient.setQueryData<Notification[]>(["notifications", token], []);
+    },
+  });
+
+  const notifications = notificationsQuery.data ?? [];
+  const loading = !hydrated || notificationsQuery.isLoading;
+  const error = notificationsQuery.error instanceof ApiError
+    ? notificationsQuery.error.message
+    : notificationsQuery.error instanceof Error
+      ? notificationsQuery.error.message
+      : null;
 
   async function markAsRead(id: string) {
-    if (!token) return;
+    if (!token || markAsReadMutation.isPending) return;
     try {
-      await apiFetch(`/notifications/${id}`, { 
-        method: "PATCH", 
-        token,
-        body: { isRead: true }
-      });
-      setNotifications(prev => prev.map(n => (n._id === id || n.id === id) ? { ...n, read: true } : n));
+      await markAsReadMutation.mutateAsync(id);
     } catch (e) {
       // ignore
     }
@@ -138,8 +164,7 @@ export default function NotificationsPage() {
     if (!token || actionLoading) return;
     setActionLoading("mark-all");
     try {
-      await apiFetch("/notifications/read-all", { method: "POST", token });
-      setNotifications(prev => prev.map(n => ({ ...n, read: true })));
+      await markAllReadMutation.mutateAsync();
     } catch (e) {
       // ignore
     } finally {
@@ -152,8 +177,7 @@ export default function NotificationsPage() {
     if (!confirm("Are you sure you want to clear all notifications?")) return;
     setActionLoading("clear-all");
     try {
-      await apiFetch("/notifications/clear-all", { method: "POST", token });
-      setNotifications([]);
+      await clearAllMutation.mutateAsync();
     } catch (e) {
       // ignore
     } finally {
@@ -211,13 +235,13 @@ export default function NotificationsPage() {
                         {filterTab === tab.id && (
                             <motion.div 
                                 layoutId="tabIndicator"
-                                className="absolute bottom-0 left-0 right-0 h-[2px] bg-indigo-500 shadow-[0_0_12px_rgba(99,102,241,0.8)]"
+                                className="absolute bottom-0 left-0 right-0 h-[2px] bg-blue-500 shadow-[0_0_12px_rgba(99,102,241,0.8)]"
                             />
                         )}
                         <span>{tab.label}</span>
                         {tab.count > 0 && (
                             <span className={`px-1.5 py-0.5 rounded-md text-[10px] ${
-                                tab.highlight ? "bg-indigo-500/20 text-indigo-400" : "bg-white/5 text-zinc-500"
+                                tab.highlight ? "bg-blue-500/20 text-blue-400" : "bg-white/5 text-zinc-500"
                             }`}>
                                 {tab.count}
                             </span>
@@ -263,17 +287,17 @@ export default function NotificationsPage() {
               animate={{ opacity: 1, y: 0 }}
               className="gf-card rounded-[3rem] p-20 text-center bg-white/[0.01] border border-dashed border-white/10 flex flex-col items-center justify-center relative overflow-hidden"
             >
-              <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/[0.02] via-transparent to-transparent pointer-events-none" />
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/[0.02] via-transparent to-transparent pointer-events-none" />
               
               <div className="relative mb-10">
                 <motion.div 
                     initial={{ scale: 0.8 }}
                     animate={{ scale: [0.8, 1.1, 0.9, 1] }}
                     transition={{ duration: 4, repeat: Infinity }}
-                    className="absolute inset-0 bg-indigo-500/20 blur-[80px] rounded-full" 
+                    className="absolute inset-0 bg-blue-500/20 blur-[80px] rounded-full" 
                 />
                 <div className="relative w-32 h-32 rounded-3xl bg-black/40 border border-white/10 flex items-center justify-center shadow-2xl backdrop-blur-xl">
-                    <Sparkle size={64} weight="duotone" className="text-indigo-400 animate-pulse" />
+                    <Sparkle size={64} weight="duotone" className="text-blue-400 animate-pulse" />
                 </div>
                 <div className="absolute -bottom-2 -right-2 w-10 h-10 rounded-full bg-emerald-500/20 border border-emerald-400/30 flex items-center justify-center shadow-lg">
                     <Check size={20} weight="bold" className="text-emerald-400" />
@@ -337,12 +361,12 @@ export default function NotificationsPage() {
                     >
                         {!n.read && (
                             <>
-                                <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/[0.03] via-transparent to-transparent pointer-events-none" />
+                                <div className="absolute inset-0 bg-gradient-to-r from-blue-500/[0.03] via-transparent to-transparent pointer-events-none" />
                                 <div className="absolute top-0 right-0 p-4 pointer-events-none">
-                                    <Lightning size={16} weight="fill" className="text-indigo-400/20 blur-[1px]" />
+                                    <Lightning size={16} weight="fill" className="text-blue-400/20 blur-[1px]" />
                                 </div>
                                 <NeuralParticles />
-                                <div className="absolute -inset-[2px] bg-gradient-to-r from-indigo-500/20 via-purple-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 p-[2px] -z-10 blur-sm" />
+                                <div className="absolute -inset-[2px] bg-gradient-to-r from-blue-500/20 via-sky-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 p-[2px] -z-10 blur-sm" />
                             </>
                         )}
 
@@ -356,7 +380,7 @@ export default function NotificationsPage() {
                                 </motion.div>
                                 {!n.read && (
                                     <div className="absolute -top-1 -right-1">
-                                        <PulseDot tone="cyan" className="scale-90 shadow-indigo-500" />
+                                        <PulseDot tone="cyan" className="scale-90 shadow-blue-500" />
                                     </div>
                                 )}
                             </div>
@@ -367,7 +391,7 @@ export default function NotificationsPage() {
                                         {n.title}
                                     </h4>
                                     <NeonChip tone={tone} className="py-0 px-2 h-5 opacity-60 text-[9px] uppercase font-black tracking-widest">
-                                        {tone === 'cyan' ? 'SYSTEM' : tone === 'amber' ? 'REVIEW' : tone === 'emerald' ? 'FINANCE' : tone === 'fuchsia' ? 'CRITICAL' : 'SOCIAL'}
+                    {tone === 'cyan' ? 'SYSTEM' : tone === 'amber' ? 'REVIEW' : tone === 'emerald' ? 'FINANCE' : 'SOCIAL'}
                                     </NeonChip>
                                 </div>
                                 
@@ -382,7 +406,7 @@ export default function NotificationsPage() {
                                             <span>{formatRelativeTime(n.createdAt)}</span>
                                         </div>
                                         <div className="h-1 w-1 rounded-full bg-zinc-800" />
-                                        <div className={`text-[10px] font-black uppercase tracking-[0.2em] ${n.read ? 'text-zinc-700' : 'text-indigo-400/40'}`}>
+                                        <div className={`text-[10px] font-black uppercase tracking-[0.2em] ${n.read ? 'text-zinc-700' : 'text-blue-400/40'}`}>
                                             {n.read ? 'Archived' : 'Active Link'}
                                         </div>
                                     </div>

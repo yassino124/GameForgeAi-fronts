@@ -25,6 +25,38 @@ export class ApiError extends Error {
   }
 }
 
+function tryParseJsonLoose(raw: string): any | null {
+  const txt = String(raw || "").trim();
+  if (!txt) return null;
+  try {
+    return JSON.parse(txt);
+  } catch {
+    const firstObj = txt.indexOf("{");
+    const lastObj = txt.lastIndexOf("}");
+    if (firstObj >= 0 && lastObj > firstObj) {
+      const slice = txt.slice(firstObj, lastObj + 1);
+      try {
+        return JSON.parse(slice);
+      } catch {
+        return null;
+      }
+    }
+
+    const firstArr = txt.indexOf("[");
+    const lastArr = txt.lastIndexOf("]");
+    if (firstArr >= 0 && lastArr > firstArr) {
+      const slice = txt.slice(firstArr, lastArr + 1);
+      try {
+        return JSON.parse(slice);
+      } catch {
+        return null;
+      }
+    }
+
+    return null;
+  }
+}
+
 export async function apiFetch<T>(
   path: string,
   opts?: {
@@ -46,18 +78,26 @@ export async function apiFetch<T>(
   });
 
   let json: ApiOk<T> | ApiErr | null = null;
+  let rawText: string | null = null;
   try {
-    json = (await res.json()) as any;
+    rawText = await res.text();
+    json = tryParseJsonLoose(rawText) as any;
   } catch {
     json = null;
+    rawText = null;
   }
 
   if (!res.ok) {
     const msg =
       (json as any)?.message ||
       (typeof (json as any)?.error === "string" ? (json as any).error : null) ||
+      (rawText && rawText.trim() ? rawText.slice(0, 280) : null) ||
       `Request failed (${res.status})`;
     throw new ApiError(msg, res.status);
+  }
+
+  if (!json && rawText && rawText.trim()) {
+    throw new ApiError(`Invalid JSON response from server. Snippet: ${rawText.slice(0, 280)}`, res.status);
   }
 
   // Most endpoints return {success,data,message}
@@ -92,18 +132,26 @@ export async function apiFetchForm<T>(
   });
 
   let json: ApiOk<T> | ApiErr | null = null;
+  let rawText: string | null = null;
   try {
-    json = (await res.json()) as any;
+    rawText = await res.text();
+    json = tryParseJsonLoose(rawText) as any;
   } catch {
     json = null;
+    rawText = null;
   }
 
   if (!res.ok) {
     const msg =
       (json as any)?.message ||
       (typeof (json as any)?.error === "string" ? (json as any).error : null) ||
+      (rawText && rawText.trim() ? rawText.slice(0, 280) : null) ||
       `Request failed (${res.status})`;
     throw new ApiError(msg, res.status);
+  }
+
+  if (!json && rawText && rawText.trim()) {
+    throw new ApiError(`Invalid JSON response from server. Snippet: ${rawText.slice(0, 280)}`, res.status);
   }
 
   if (json && typeof json === "object" && "success" in json) {

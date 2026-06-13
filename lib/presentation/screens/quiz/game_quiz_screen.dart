@@ -21,7 +21,14 @@ import '../../widgets/daily_wallet_sheet.dart';
 import '../../widgets/reward_confetti_overlay.dart';
 
 class GameQuizScreen extends StatefulWidget {
-  const GameQuizScreen({super.key});
+  final String? challengeId;
+  final int? scoreToBeat;
+
+  const GameQuizScreen({
+    super.key,
+    this.challengeId,
+    this.scoreToBeat,
+  });
 
   @override
   State<GameQuizScreen> createState() => _GameQuizScreenState();
@@ -1328,15 +1335,29 @@ class _GameQuizScreenState extends State<GameQuizScreen> {
 
     String title;
     String subtitle;
-    if (_score >= total - 1) {
-      title = 'Legend!';
-      subtitle = 'You really know your game dev.';
-    } else if (_score >= (total * 0.7).floor()) {
-      title = 'Great run!';
-      subtitle = 'Nice instincts. Keep the streak.';
+    
+    if (widget.challengeId != null) {
+      if (_score > (widget.scoreToBeat ?? 0)) {
+        title = 'You Won!';
+        subtitle = 'You beat the challenge score of ${widget.scoreToBeat}!';
+      } else if (_score == (widget.scoreToBeat ?? 0)) {
+        title = 'It\'s a Tie!';
+        subtitle = 'You matched the challenge score of ${widget.scoreToBeat}.';
+      } else {
+        title = 'Nice Try!';
+        subtitle = 'The score to beat was ${widget.scoreToBeat}.';
+      }
     } else {
-      title = 'Good start!';
-      subtitle = 'Try again tomorrow and level up.';
+      if (_score >= total - 1) {
+        title = 'Legend!';
+        subtitle = 'You really know your game dev.';
+      } else if (_score >= (total * 0.7).floor()) {
+        title = 'Great run!';
+        subtitle = 'Nice instincts. Keep the streak.';
+      } else {
+        title = 'Good start!';
+        subtitle = 'Try again tomorrow and level up.';
+      }
     }
 
     return Center(
@@ -1349,11 +1370,13 @@ class _GameQuizScreenState extends State<GameQuizScreen> {
               width: 86,
               height: 86,
               decoration: BoxDecoration(
-                gradient: AppColors.primaryGradient,
+                gradient: widget.challengeId != null && _score >= (widget.scoreToBeat ?? 0)
+                    ? LinearGradient(colors: [AppColors.success.withOpacity(0.8), AppColors.success], begin: Alignment.topLeft, end: Alignment.bottomRight)
+                    : AppColors.primaryGradient,
                 borderRadius: BorderRadius.circular(28),
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withOpacity(0.12),
+                    color: (widget.challengeId != null && _score >= (widget.scoreToBeat ?? 0) ? AppColors.success : Colors.black).withOpacity(0.12),
                     blurRadius: 26,
                     offset: const Offset(0, 14),
                   ),
@@ -1375,9 +1398,39 @@ class _GameQuizScreenState extends State<GameQuizScreen> {
               ),
               child: Column(
                 children: [
-                  Text('Your score', style: Theme.of(context).textTheme.titleMedium?.copyWith(color: cs.onSurfaceVariant)),
-                  const SizedBox(height: 6),
-                  Text('$_score / $total', style: Theme.of(context).textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w900)),
+                  if (widget.challengeId != null) ...[
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        Column(
+                          children: [
+                            Text('You', style: Theme.of(context).textTheme.titleMedium?.copyWith(color: cs.onSurfaceVariant)),
+                            const SizedBox(height: 6),
+                            Text('$_score', style: Theme.of(context).textTheme.displayMedium?.copyWith(fontWeight: FontWeight.w900, color: _score > (widget.scoreToBeat ?? 0) ? AppColors.success : Colors.white)),
+                          ],
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: cs.primary.withOpacity(0.2),
+                            borderRadius: BorderRadius.circular(16),
+                          ),
+                          child: Text('VS', style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w900, color: cs.primary)),
+                        ),
+                        Column(
+                          children: [
+                            Text('Friend', style: Theme.of(context).textTheme.titleMedium?.copyWith(color: cs.onSurfaceVariant)),
+                            const SizedBox(height: 6),
+                            Text('${widget.scoreToBeat}', style: Theme.of(context).textTheme.displayMedium?.copyWith(fontWeight: FontWeight.w900, color: _score < (widget.scoreToBeat ?? 0) ? AppColors.success : Colors.white)),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ] else ...[
+                    Text('Your score', style: Theme.of(context).textTheme.titleMedium?.copyWith(color: cs.onSurfaceVariant)),
+                    const SizedBox(height: 6),
+                    Text('$_score / $total', style: Theme.of(context).textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w900)),
+                  ],
                   const SizedBox(height: AppSpacing.lg),
                   Row(
                     children: [
@@ -1491,6 +1544,39 @@ class _GameQuizScreenState extends State<GameQuizScreen> {
                 ),
               ],
             ),
+            const SizedBox(height: AppSpacing.md),
+            if (widget.challengeId == null)
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: cs.primary,
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: () async {
+                    final p = context.read<AuthProvider>();
+                    if (p.token == null) return;
+                    context.push('/challenge/created?score=$_score');
+                  },
+                  icon: const Icon(Icons.bolt_rounded),
+                  label: const Text('Challenge a Friend'),
+                ),
+              )
+            else
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: cs.primary,
+                    foregroundColor: Colors.white,
+                  ),
+                  onPressed: () {
+                    context.go('/dashboard');
+                  },
+                  icon: const Icon(Icons.check_circle_rounded),
+                  label: const Text('Use This Score & Return'),
+                ),
+              ),
             const SizedBox(height: AppSpacing.md),
             Text(
               'Come back tomorrow to keep your streak.',

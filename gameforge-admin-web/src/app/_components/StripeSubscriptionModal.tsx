@@ -5,7 +5,7 @@ import { Elements, PaymentElement, useElements, useStripe } from "@stripe/react-
 import { loadStripe } from "@stripe/stripe-js";
 import { X, Loader2, ShieldCheck, Coins } from "lucide-react";
 import { AnimatePresence, motion } from "framer-motion";
-import { getUserToken } from "@/lib/userAuth";
+import { useAuthToken } from "@/lib/stores/authStore";
 
 const STRIPE_PUBLISHABLE_KEY = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY || "";
 const stripePromise = STRIPE_PUBLISHABLE_KEY ? loadStripe(STRIPE_PUBLISHABLE_KEY) : null;
@@ -116,7 +116,7 @@ function CheckoutForm({
         <button
           type="submit"
           disabled={!stripe || processing}
-          className="flex-[2] bg-gradient-to-r from-indigo-500 to-fuchsia-500 hover:from-indigo-400 hover:to-fuchsia-400 text-white rounded-xl py-3 text-sm font-black shadow-[0_0_20px_rgba(99,102,241,0.3)] disabled:opacity-50 flex items-center justify-center gap-2"
+          className="flex-[2] bg-gradient-to-r from-blue-500 to-cyan-500 hover:from-blue-400 hover:to-cyan-400 text-white rounded-xl py-3 text-sm font-black shadow-[0_0_20px_rgba(99,102,241,0.3)] disabled:opacity-50 flex items-center justify-center gap-2"
         >
           {processing ? <Loader2 size={18} className="animate-spin" /> : "Subscribe"}
         </button>
@@ -141,7 +141,7 @@ export default function StripeSubscriptionModal({
   plan: { id: "pro" | "studio"; name: string; price: number } | null;
   onActivated: () => void;
 }) {
-  const token = useMemo(() => getUserToken(), []);
+  const { token } = useAuthToken();
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -317,7 +317,7 @@ export default function StripeSubscriptionModal({
 
             {loading ? (
               <div className="py-20 flex flex-col items-center justify-center gap-4">
-                <Loader2 size={40} className="text-indigo-500 animate-spin" />
+                <Loader2 size={40} className="text-blue-500 animate-spin" />
                 <p className="text-sm text-white/50 font-medium">Preparing secure payment…</p>
               </div>
             ) : clientSecret ? (

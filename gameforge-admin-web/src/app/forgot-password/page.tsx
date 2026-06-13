@@ -36,8 +36,8 @@ export default function ForgotPasswordPage() {
       <div className="pointer-events-none absolute inset-0">
         <div className="gf-grid absolute inset-0 opacity-20" />
         <div className="gf-noise absolute inset-0 opacity-[0.03]" />
-        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-indigo-500/10 rounded-full blur-[120px] animate-pulse" />
-        <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] bg-fuchsia-500/10 rounded-full blur-[120px] animate-pulse" />
+        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-blue-500/10 rounded-full blur-[120px] animate-pulse" />
+        <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] bg-cyan-500/10 rounded-full blur-[120px] animate-pulse" />
       </div>
 
       <div className="relative mx-auto w-full max-w-lg px-6 py-12">
@@ -47,7 +47,7 @@ export default function ForgotPasswordPage() {
               <p className="text-xs text-zinc-500 font-medium tracking-wider uppercase">GameForge</p>
               <h1 className="mt-1 text-2xl font-bold tracking-tight text-white">Reset Password</h1>
             </div>
-            <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-indigo-500/20 to-fuchsia-500/20 flex items-center justify-center text-2xl shadow-lg border border-white/10">
+            <div className="h-12 w-12 rounded-2xl bg-gradient-to-br from-blue-500/20 to-cyan-500/20 flex items-center justify-center text-2xl shadow-lg border border-white/10">
               🔑
             </div>
           </div>
@@ -61,7 +61,7 @@ export default function ForgotPasswordPage() {
               <div className="space-y-2">
                 <label className="block text-xs font-semibold text-zinc-400 ml-1">Email Address</label>
                 <input
-                  className="gf-input w-full rounded-2xl px-4 py-3.5 text-sm bg-black/40 border-white/10 focus:border-indigo-500/50 focus:ring-1 focus:ring-indigo-500/50 transition-all duration-300 outline-none"
+                  className="gf-input w-full rounded-2xl px-4 py-3.5 text-sm bg-black/40 border-white/10 focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all duration-300 outline-none"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="you@domain.com"
@@ -79,7 +79,7 @@ export default function ForgotPasswordPage() {
 
               <button
                 disabled={email.trim().length < 4 || loading}
-                className="w-full rounded-2xl bg-gradient-to-r from-indigo-500 to-fuchsia-500 py-4 text-sm font-bold text-white transition-all duration-300 shadow-lg shadow-indigo-500/20 hover:shadow-indigo-500/40 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100"
+                className="w-full rounded-2xl bg-gradient-to-r from-blue-500 to-cyan-500 py-4 text-sm font-bold text-white transition-all duration-300 shadow-lg shadow-blue-500/20 hover:shadow-blue-500/40 hover:scale-[1.02] active:scale-[0.98] disabled:opacity-50 disabled:hover:scale-100"
                 type="submit"
               >
                 {loading ? (
@@ -99,11 +99,11 @@ export default function ForgotPasswordPage() {
               </div>
               <h2 className="text-xl font-bold text-white mb-2">Email Sent!</h2>
               <p className="text-sm text-zinc-400 leading-relaxed mb-8">
-                Check your inbox at <span className="text-indigo-400 font-medium">{email}</span> for instructions to reset your password.
+                Check your inbox at <span className="text-blue-400 font-medium">{email}</span> for instructions to reset your password.
               </p>
               <button
                 onClick={() => router.push("/signin")}
-                className="text-sm font-semibold text-indigo-400 hover:text-indigo-300 transition-colors"
+                className="text-sm font-semibold text-blue-400 hover:text-blue-300 transition-colors"
               >
                 Return to sign in
               </button>
@@ -117,7 +117,7 @@ export default function ForgotPasswordPage() {
             >
               <span>←</span> Go back
             </button>
-            <a href="/signin" className="text-xs text-zinc-500 hover:text-indigo-400 transition-colors">
+            <a href="/signin" className="text-xs text-zinc-500 hover:text-blue-400 transition-colors">
               Sign in instead
             </a>
           </div>

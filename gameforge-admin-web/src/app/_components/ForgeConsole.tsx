@@ -36,11 +36,11 @@ export default function ForgeConsole() {
       <div className="max-w-7xl mx-auto flex flex-col items-start gap-2">
         <button 
           onClick={() => setIsOpen(!isOpen)}
-          className="pointer-events-auto gf-holographic px-4 py-1.5 rounded-t-xl border-b-0 text-[9px] font-black uppercase tracking-[0.2em] text-indigo-400 flex items-center gap-2 hover:bg-white/5 transition-all"
+          className="pointer-events-auto gf-holographic px-4 py-1.5 rounded-t-xl border-b-0 text-[9px] font-black uppercase tracking-[0.2em] text-blue-400 flex items-center gap-2 hover:bg-white/5 transition-all"
         >
           <Terminal size={12} />
           System Console
-          <div className="h-1 w-1 rounded-full bg-emerald-500 animate-pulse" />
+          <div className="h-1 w-1 rounded-full bg-blue-400 animate-pulse shadow-[0_0_8px_rgba(59,130,246,0.8)]" />
         </button>
 
         <AnimatePresence>
@@ -58,7 +58,7 @@ export default function ForgeConsole() {
                   logs.map((log) => (
                     <div key={log.id} className="flex gap-4">
                       <span className="text-zinc-700 shrink-0">[{log.time}]</span>
-                      <span className="text-indigo-500 shrink-0 uppercase font-black">[{log.type}]</span>
+                      <span className="text-blue-500 shrink-0 uppercase font-black">[{log.type}]</span>
                       <span className="text-zinc-400">{log.msg}</span>
                     </div>
                   ))

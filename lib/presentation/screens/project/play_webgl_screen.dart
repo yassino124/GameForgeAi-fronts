@@ -13,11 +13,13 @@ import 'package:speech_to_text/speech_to_text.dart' as stt;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:video_player/video_player.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:flutter_tts/flutter_tts.dart';
 
 import '../../../core/constants/app_constants.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/api_service.dart';
 import '../../../core/services/app_notifier.dart';
+import '../../../core/services/coach_tutor_service.dart';
 import '../../../core/services/multiplayer_controller.dart';
 import '../../../core/services/projects_service.dart';
 import '../../../core/services/trailers_service.dart';
@@ -374,6 +376,16 @@ class _PlayWebglScreenState extends State<PlayWebglScreen>
   bool _coachReportShown = false;
   bool _coachReportInFlight = false;
 
+  bool _tutorBusy = false;
+  String? _activeTutorTip;
+  final FlutterTts _tts = FlutterTts();
+  Timer? _realtimeTutorTimer;
+  Map<String, dynamic>? _lastTutorResponse;
+  Map<String, bool> _completedChallenges = {};
+  bool _autoReadTutor = true;
+  Map<String, dynamic>? _previousConfig;
+  final List<Map<String, dynamic>> _tutorLastRuns = <Map<String, dynamic>>[];
+
   static const _kPrefControllerSkinPrefix = 'gameforge.controllerSkin.';
   _ControllerSkin _controllerSkin = _ControllerSkin.arcade;
 
@@ -422,6 +434,970 @@ class _PlayWebglScreenState extends State<PlayWebglScreen>
       await _startVoiceListening();
     }
     AppNotifier.showSuccess(next ? 'Voice Play ON' : 'Voice Play OFF');
+  }
+
+  Future<void> _speak(String text) async {
+    if (text.trim().isEmpty) return;
+    try {
+      await _tts.setLanguage("en-US");
+      await _tts.setPitch(1.0);
+      await _tts.speak(text);
+    } catch (_) {}
+  }
+
+  void _recordTutorRun(Map<String, dynamic>? run) {
+    if (run == null || run.isEmpty) return;
+    final entry = <String, dynamic>{
+      ...run,
+      'ts': DateTime.now().millisecondsSinceEpoch,
+    };
+    _tutorLastRuns.insert(0, entry);
+    if (_tutorLastRuns.length > 8) {
+      _tutorLastRuns.removeRange(8, _tutorLastRuns.length);
+    }
+  }
+
+  Future<Map<String, dynamic>?> _probeTutorRunTelemetry() async {
+    try {
+      final run = await _probeGameResultTelemetry();
+      _recordTutorRun(run);
+      return run;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  void _applyTweak(Map<String, dynamic> tweak) {
+    final key = (tweak['key'] ?? '').toString();
+    final val = tweak['value'];
+    if (key.isEmpty || val == null) return;
+
+    final js =
+        "window.runtimeConfig = window.runtimeConfig || {}; window.runtimeConfig['$key'] = $val;";
+    _controller.runJavaScript(js);
+    AppNotifier.showSuccess('Coach applied: $key = $val');
+  }
+
+  Future<void> _applyTweakAndSave(Map<String, dynamic> tweak) async {
+    _applyTweak(tweak);
+    final key = (tweak['key'] ?? '').toString().trim();
+    final val = tweak['value'];
+    if (key.isEmpty || val == null) return;
+
+    final pid = (_projectId ?? '').trim();
+    final token = context.read<AuthProvider>().token;
+    if (pid.isEmpty || token == null || token.trim().isEmpty) return;
+
+    double? asDouble(dynamic v) {
+      if (v is num) return v.toDouble();
+      final s = (v ?? '').toString().trim();
+      if (s.isEmpty) return null;
+      return double.tryParse(s);
+    }
+
+    int? asInt(dynamic v) {
+      if (v is int) return v;
+      if (v is num) return v.toInt();
+      final s = (v ?? '').toString().trim();
+      if (s.isEmpty) return null;
+      return int.tryParse(s);
+    }
+
+    bool? asBool(dynamic v) {
+      if (v is bool) return v;
+      final s = (v ?? '').toString().trim().toLowerCase();
+      if (s == 'true' || s == '1' || s == 'on') return true;
+      if (s == 'false' || s == '0' || s == 'off') return false;
+      return null;
+    }
+
+    Future<Map<String, dynamic>> save() {
+      switch (key) {
+        case 'speed':
+        case 'playerSpeed':
+        case 'gameSpeed':
+          return ProjectsService.updateProject(
+            token: token,
+            projectId: pid,
+            speed: asDouble(val),
+          );
+        case 'timeScale':
+          return ProjectsService.updateProject(
+            token: token,
+            projectId: pid,
+            timeScale: asDouble(val),
+          );
+        case 'difficulty':
+          return ProjectsService.updateProject(
+            token: token,
+            projectId: pid,
+            difficulty: asDouble(val),
+          );
+        case 'theme':
+          return ProjectsService.updateProject(
+            token: token,
+            projectId: pid,
+            theme: val.toString(),
+          );
+        case 'notes':
+          return ProjectsService.updateProject(
+            token: token,
+            projectId: pid,
+            notes: val.toString(),
+          );
+        case 'genre':
+          return ProjectsService.updateProject(
+            token: token,
+            projectId: pid,
+            genre: val.toString(),
+          );
+        case 'assetsType':
+          return ProjectsService.updateProject(
+            token: token,
+            projectId: pid,
+            assetsType: val.toString(),
+          );
+        case 'mechanics':
+          return ProjectsService.updateProject(
+            token: token,
+            projectId: pid,
+            mechanics: (val is List)
+                ? val.map((e) => e.toString()).toList()
+                : val.toString().split(',').map((e) => e.trim()).toList(),
+          );
+        case 'primaryColor':
+          return ProjectsService.updateProject(
+            token: token,
+            projectId: pid,
+            primaryColor: val.toString(),
+          );
+        case 'secondaryColor':
+          return ProjectsService.updateProject(
+            token: token,
+            projectId: pid,
+            secondaryColor: val.toString(),
+          );
+        case 'accentColor':
+          return ProjectsService.updateProject(
+            token: token,
+            projectId: pid,
+            accentColor: val.toString(),
+          );
+        case 'playerColor':
+          return ProjectsService.updateProject(
+            token: token,
+            projectId: pid,
+            playerColor: val.toString(),
+          );
+        case 'fogEnabled':
+          return ProjectsService.updateProject(
+            token: token,
+            projectId: pid,
+            fogEnabled: asBool(val),
+          );
+        case 'fogDensity':
+          return ProjectsService.updateProject(
+            token: token,
+            projectId: pid,
+            fogDensity: asDouble(val),
+          );
+        case 'cameraZoom':
+          return ProjectsService.updateProject(
+            token: token,
+            projectId: pid,
+            cameraZoom: asDouble(val),
+          );
+        case 'gravityY':
+          return ProjectsService.updateProject(
+            token: token,
+            projectId: pid,
+            gravityY: asDouble(val),
+          );
+        case 'jumpForce':
+          return ProjectsService.updateProject(
+            token: token,
+            projectId: pid,
+            jumpForce: asDouble(val),
+          );
+        case 'scoreMultiplier':
+          return ProjectsService.updateProject(
+            token: token,
+            projectId: pid,
+            scoreMultiplier: asDouble(val),
+          );
+        case 'enemyMultiplier':
+          return ProjectsService.updateProject(
+            token: token,
+            projectId: pid,
+            enemyMultiplier: asDouble(val),
+          );
+        case 'bloomEnabled':
+          return ProjectsService.updateProject(
+            token: token,
+            projectId: pid,
+            bloomEnabled: asBool(val),
+          );
+        case 'bloomIntensity':
+          return ProjectsService.updateProject(
+            token: token,
+            projectId: pid,
+            bloomIntensity: asDouble(val),
+          );
+        case 'godMode':
+          return ProjectsService.updateProject(
+            token: token,
+            projectId: pid,
+            godMode: asBool(val),
+          );
+        case 'infiniteJump':
+          return ProjectsService.updateProject(
+            token: token,
+            projectId: pid,
+            infiniteJump: asBool(val),
+          );
+        case 'playerScale':
+          return ProjectsService.updateProject(
+            token: token,
+            projectId: pid,
+            playerScale: asDouble(val),
+          );
+        case 'gameMode':
+          return ProjectsService.updateProject(
+            token: token,
+            projectId: pid,
+            gameMode: val.toString(),
+          );
+        case 'skyboxTheme':
+          return ProjectsService.updateProject(
+            token: token,
+            projectId: pid,
+            skyboxTheme: val.toString(),
+          );
+        case 'ambientLightColor':
+          return ProjectsService.updateProject(
+            token: token,
+            projectId: pid,
+            ambientLightColor: val.toString(),
+          );
+        case 'bgMusicUrl':
+          return ProjectsService.updateProject(
+            token: token,
+            projectId: pid,
+            bgMusicUrl: val.toString(),
+          );
+        case 'bgImageUrl':
+          return ProjectsService.updateProject(
+            token: token,
+            projectId: pid,
+            bgImageUrl: val.toString(),
+          );
+        case 'timeLimit':
+          return ProjectsService.updateProject(
+            token: token,
+            projectId: pid,
+            timeLimit: asInt(val),
+          );
+        case 'lives':
+          return ProjectsService.updateProject(
+            token: token,
+            projectId: pid,
+            lives: asInt(val),
+          );
+        case 'playerSpriteUrl':
+          return ProjectsService.updateProject(
+            token: token,
+            projectId: pid,
+            playerSpriteUrl: val.toString(),
+          );
+        case 'backgroundImageUrl':
+          return ProjectsService.updateProject(
+            token: token,
+            projectId: pid,
+            backgroundImageUrl: val.toString(),
+          );
+        case 'soundFileUrl':
+          return ProjectsService.updateProject(
+            token: token,
+            projectId: pid,
+            soundFileUrl: val.toString(),
+          );
+      }
+      return Future.value(<String, dynamic>{'success': false});
+    }
+
+    try {
+      final res = await save();
+      if (res['success'] == true) {
+        AppNotifier.showSuccess('Saved to project');
+      } else {
+        AppNotifier.showError('Could not save tweak');
+      }
+    } catch (_) {
+      AppNotifier.showError('Could not save tweak');
+    }
+  }
+
+  void _startRealtimeTutor() {
+    _realtimeTutorTimer?.cancel();
+    _realtimeTutorTimer =
+        Timer.periodic(const Duration(seconds: 30), (timer) async {
+      if (!mounted || _tutorBusy) return;
+      final token = context.read<AuthProvider>().token;
+      if (token == null || token.trim().isEmpty) return;
+
+      final pid = (_projectId ?? '').trim();
+      if (pid.isEmpty) return;
+
+      final run = await _probeTutorRunTelemetry();
+
+      final res = await CoachTutorService.tutor(
+        token: token,
+        projectId: pid,
+        gameType: 'project',
+        run: {
+          if (run != null) ...run,
+          'projectId': pid,
+        },
+        lastRuns: List<dynamic>.from(_tutorLastRuns),
+        currentConfig: _lastRuntimeConfig,
+      );
+
+      if (res['success'] == true && res['data'] != null) {
+        final data = res['data'] as Map<String, dynamic>;
+        final tips = data['tips'] as List?;
+        if (tips != null && tips.isNotEmpty) {
+          final firstTip = tips.first['tip']?.toString();
+          if (firstTip != null) {
+            setState(() {
+              _activeTutorTip = firstTip;
+              _lastTutorResponse = data;
+            });
+            if (_autoReadTutor) _speak(firstTip);
+          }
+        }
+      }
+    });
+  }
+
+  Future<void> _openTutorSheet() async {
+    if (_tutorBusy) return;
+    final token = context.read<AuthProvider>().token;
+    if (token == null || token.trim().isEmpty) {
+      AppNotifier.showError('Sign in required');
+      return;
+    }
+
+    final pid = (_projectId ?? '').trim();
+    if (pid.isEmpty) {
+      AppNotifier.showError('Project not detected');
+      return;
+    }
+
+    setState(() => _tutorBusy = true);
+    Map<String, dynamic> tutor;
+    try {
+      Map<String, dynamic>? run;
+      try {
+        run = await _probeGameResultTelemetry();
+      } catch (_) {
+        run = null;
+      }
+
+      final res = await CoachTutorService.tutor(
+        token: token,
+        projectId: pid,
+        gameType: 'project',
+        userStyle: 'auto',
+        run: {
+          if (run != null) ...run,
+          'projectId': pid,
+        },
+        currentConfig: _lastRuntimeConfig ?? const <String, dynamic>{},
+        lastRuns: List<dynamic>.from(_tutorLastRuns),
+        timeout: const Duration(seconds: 90),
+      );
+
+      if (res['success'] != true) {
+        AppNotifier.showError(res['message']?.toString() ?? 'Tutor failed');
+        return;
+      }
+      final data = res['data'];
+      if (data is! Map) {
+        AppNotifier.showError('Tutor failed');
+        return;
+      }
+      tutor = Map<String, dynamic>.from(data as Map);
+    } catch (e) {
+      AppNotifier.showError(e.toString());
+      return;
+    } finally {
+      if (mounted) setState(() => _tutorBusy = false);
+    }
+
+    if (!mounted) return;
+    final cs = Theme.of(context).colorScheme;
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        final tips = (tutor['tips'] is List)
+            ? List<Map<String, dynamic>>.from(
+                (tutor['tips'] as List)
+                    .where((e) => e is Map)
+                    .map((e) => Map<String, dynamic>.from(e as Map)),
+              )
+            : const <Map<String, dynamic>>[];
+        final micro = (tutor['microChallenges'] is List)
+            ? List<Map<String, dynamic>>.from(
+                (tutor['microChallenges'] as List)
+                    .where((e) => e is Map)
+                    .map((e) => Map<String, dynamic>.from(e as Map)),
+              )
+            : const <Map<String, dynamic>>[];
+        final tweaks = (tutor['controlTweaks'] is List)
+            ? List<Map<String, dynamic>>.from(
+                (tutor['controlTweaks'] as List)
+                    .where((e) => e is Map)
+                    .map((e) => Map<String, dynamic>.from(e as Map)),
+              )
+            : const <Map<String, dynamic>>[];
+
+        Color accent() => cs.primary;
+
+        IconData sectionIcon(String title) {
+          final x = title.toLowerCase();
+          if (x.contains('tip')) return Icons.lightbulb_rounded;
+          if (x.contains('micro')) return Icons.flag_rounded;
+          if (x.contains('tweak')) return Icons.tune_rounded;
+          return Icons.auto_awesome_rounded;
+        }
+
+        Widget sectionTitle(String t) => Padding(
+              padding: const EdgeInsets.fromLTRB(18, 18, 18, 10),
+              child: Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(12),
+                      gradient: LinearGradient(
+                        colors: [
+                          accent().withOpacity(0.22),
+                          Colors.white.withOpacity(0.06),
+                        ],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      border: Border.all(
+                        color: accent().withOpacity(0.28),
+                        width: 1,
+                      ),
+                    ),
+                    child: Icon(
+                      sectionIcon(t),
+                      size: 18,
+                      color: Colors.white.withOpacity(0.92),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      t,
+                      style: AppTypography.subtitle1.copyWith(
+                        fontWeight: FontWeight.w900,
+                        color: Colors.white.withOpacity(0.96),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+
+        Widget card({required Widget child}) => Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(22),
+                gradient: LinearGradient(
+                  colors: [
+                    const Color(0xFF0B1220).withOpacity(0.82),
+                    const Color(0xFF111B2E).withOpacity(0.76),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                border: Border.all(
+                  color: accent().withOpacity(0.20),
+                  width: 1.2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.35),
+                    blurRadius: 28,
+                    offset: const Offset(0, 16),
+                  ),
+                  BoxShadow(
+                    color: accent().withOpacity(0.14),
+                    blurRadius: 44,
+                    offset: const Offset(0, 18),
+                  ),
+                ],
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(22),
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                  child: Padding(
+                    padding: const EdgeInsets.all(14),
+                    child: child,
+                  ),
+                ),
+              ),
+            );
+
+        Widget finalWhy(Map<String, dynamic> t) {
+          final why = (t['why'] ?? '').toString().trim();
+          if (why.isEmpty) return const SizedBox.shrink();
+          return Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              why,
+              style: AppTypography.caption.copyWith(
+                color: Colors.white.withOpacity(0.70),
+              ),
+            ),
+          );
+        }
+
+        return SafeArea(
+          child: Container(
+            margin: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [
+                  const Color(0xFF070A12).withOpacity(0.82),
+                  const Color(0xFF0C1120).withOpacity(0.76),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(26),
+              border: Border.all(
+                color: accent().withOpacity(0.28),
+                width: 1.0,
+              ),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(26),
+              child: BackdropFilter(
+                filter: ImageFilter.blur(sigmaX: 22, sigmaY: 22),
+                child: Material(
+                  color: Colors.transparent,
+                  child: SingleChildScrollView(
+                    padding: EdgeInsets.only(
+                      bottom: 18 + MediaQuery.of(ctx).viewInsets.bottom,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const SizedBox(height: 10),
+                        Center(
+                          child: Container(
+                            width: 46,
+                            height: 5,
+                            decoration: BoxDecoration(
+                              color: Colors.white.withOpacity(0.18),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 12, 10, 8),
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 38,
+                                height: 38,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(14),
+                                  gradient: LinearGradient(
+                                    colors: [
+                                      accent().withOpacity(0.25),
+                                      Colors.white.withOpacity(0.06),
+                                    ],
+                                    begin: Alignment.topLeft,
+                                    end: Alignment.bottomRight,
+                                  ),
+                                  border: Border.all(
+                                    color: accent().withOpacity(0.28),
+                                    width: 1,
+                                  ),
+                                ),
+                                child: Icon(
+                                  Icons.psychology_rounded,
+                                  color: Colors.white.withOpacity(0.94),
+                                ),
+                              ),
+                              const SizedBox(width: 10),
+                              Expanded(
+                                child: Text(
+                                  'AI Game Tutor',
+                                  style: AppTypography.titleLarge.copyWith(
+                                    fontWeight: FontWeight.w900,
+                                    color: Colors.white,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              IconButton(
+                                onPressed: () => Navigator.of(ctx).pop(),
+                                icon: Icon(
+                                  Icons.close_rounded,
+                                  color: Colors.white.withOpacity(0.84),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          child: Row(
+                            children: [
+                              Text(
+                                'Auto-read tips',
+                                style: AppTypography.caption.copyWith(
+                                  color: Colors.white70,
+                                ),
+                              ),
+                              const Spacer(),
+                              Switch.adaptive(
+                                value: _autoReadTutor,
+                                onChanged: (v) =>
+                                    setState(() => _autoReadTutor = v),
+                                activeColor: accent(),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                          child: Text(
+                            'Project-aware tips based on your latest attempt.',
+                            style: AppTypography.caption.copyWith(
+                              color: Colors.white.withOpacity(0.70),
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+
+                        if (_tutorLastRuns.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 0, 16, 2),
+                            child: Row(
+                              children: [
+                                Text(
+                                  'Runs analyzed: ${_tutorLastRuns.length}',
+                                  style: AppTypography.caption.copyWith(
+                                    color: Colors.white.withOpacity(0.72),
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Text(
+                                  'Challenges done: ${_completedChallenges.values.where((v) => v == true).length}',
+                                  style: AppTypography.caption.copyWith(
+                                    color: Colors.white.withOpacity(0.72),
+                                    fontWeight: FontWeight.w800,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        if (tips.isNotEmpty) ...[
+                          sectionTitle('Tips'),
+                          for (final t in tips)
+                            card(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        Icons.bolt_rounded,
+                                        color: accent().withOpacity(0.95),
+                                        size: 18,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          (t['title'] ?? '').toString(),
+                                          style:
+                                              AppTypography.subtitle2.copyWith(
+                                            fontWeight: FontWeight.w900,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                                      IconButton(
+                                        visualDensity: VisualDensity.compact,
+                                        onPressed: () =>
+                                            _speak((t['tip'] ?? '').toString()),
+                                        icon: Icon(
+                                          Icons.volume_up_rounded,
+                                          color: Colors.white.withOpacity(0.78),
+                                          size: 18,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    (t['tip'] ?? '').toString(),
+                                    style: AppTypography.body2.copyWith(
+                                      color: Colors.white.withOpacity(0.92),
+                                      height: 1.25,
+                                    ),
+                                  ),
+                                  finalWhy(t),
+                                ],
+                              ),
+                            ),
+                        ],
+                        if (micro.isNotEmpty) ...[
+                          sectionTitle('Micro-challenges'),
+                          for (final m in micro)
+                            card(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        Icons.emoji_events_rounded,
+                                        color:
+                                            Colors.amberAccent.withOpacity(0.95),
+                                        size: 18,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          (m['title'] ?? '').toString(),
+                                          style:
+                                              AppTypography.subtitle2.copyWith(
+                                            fontWeight: FontWeight.w900,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    (m['objective'] ?? '').toString(),
+                                    style: AppTypography.body2.copyWith(
+                                      color: Colors.white.withOpacity(0.92),
+                                      height: 1.25,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    (m['successMetric'] ?? '').toString(),
+                                    style: AppTypography.caption.copyWith(
+                                      color: Colors.white.withOpacity(0.72),
+                                      fontWeight: FontWeight.w800,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  ClipRRect(
+                                    borderRadius: BorderRadius.circular(8),
+                                    child: LinearProgressIndicator(
+                                      value:
+                                          _completedChallenges[m['title']] ==
+                                                  true
+                                              ? 1.0
+                                              : 0.3,
+                                      backgroundColor: Colors.white10,
+                                      color:
+                                          _completedChallenges[m['title']] ==
+                                                  true
+                                              ? Colors.greenAccent
+                                              : accent(),
+                                      minHeight: 6,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 12),
+                                  Row(
+                                    children: [
+                                      if (_completedChallenges[m['title']] ==
+                                          true)
+                                        const Text(
+                                          'Completed ✅',
+                                          style: TextStyle(
+                                            color: Colors.greenAccent,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        )
+                                      else
+                                        ElevatedButton(
+                                          onPressed: () {
+                                            setState(() =>
+                                                _completedChallenges[m['title']
+                                                        .toString()] =
+                                                    true);
+                                            AppNotifier.showSuccess(
+                                              'Challenge marked as completed!',
+                                            );
+                                          },
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor:
+                                                accent().withOpacity(0.2),
+                                            foregroundColor: Colors.white,
+                                          ),
+                                          child: const Text('Complete'),
+                                        ),
+                                      const Spacer(),
+                                      TextButton(
+                                        onPressed: () => setState(() =>
+                                            _completedChallenges.remove(
+                                                m['title'])),
+                                        child: const Text(
+                                          'Reset',
+                                          style: TextStyle(
+                                            color: Colors.white54,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                        if (tweaks.isNotEmpty) ...[
+                          sectionTitle('Suggested tweaks'),
+                          for (final tw in tweaks)
+                            card(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      Icon(
+                                        Icons.tune_rounded,
+                                        color:
+                                            Colors.cyanAccent.withOpacity(0.90),
+                                        size: 18,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          (tw['label'] ?? tw['key'] ?? '')
+                                              .toString(),
+                                          style:
+                                              AppTypography.subtitle2.copyWith(
+                                            fontWeight: FontWeight.w900,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          borderRadius:
+                                              BorderRadius.circular(999),
+                                          color: Colors.white.withOpacity(0.08),
+                                          border: Border.all(
+                                            color:
+                                                Colors.white.withOpacity(0.12),
+                                          ),
+                                        ),
+                                        child: Text(
+                                          'Suggestion',
+                                          style:
+                                              AppTypography.caption.copyWith(
+                                            color:
+                                                Colors.white.withOpacity(0.75),
+                                            fontWeight: FontWeight.w900,
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    '→ ${(tw['value'] ?? '').toString()}',
+                                    style: AppTypography.body2.copyWith(
+                                      fontWeight: FontWeight.w800,
+                                      color: Colors.white.withOpacity(0.92),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 6),
+                                  Text(
+                                    (tw['reason'] ?? '').toString(),
+                                    style: AppTypography.caption.copyWith(
+                                      color: Colors.white.withOpacity(0.72),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  Row(
+                                    children: [
+                                      Expanded(
+                                        child: ElevatedButton(
+                                          onPressed: () => _applyTweak(tw),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor:
+                                                accent().withOpacity(0.20),
+                                            foregroundColor: Colors.white,
+                                          ),
+                                          child: const Text('Apply'),
+                                        ),
+                                      ),
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: ElevatedButton(
+                                          onPressed: () =>
+                                              _applyTweakAndSave(tw),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor:
+                                                Colors.white.withOpacity(0.10),
+                                            foregroundColor: Colors.white,
+                                          ),
+                                          child: const Text('Apply & Save'),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
+                        if (tips.isEmpty && micro.isEmpty && tweaks.isEmpty)
+                          Padding(
+                            padding: const EdgeInsets.all(18),
+                            child: Text(
+                              'Tutor returned no suggestions for this run.',
+                              style: AppTypography.body2.copyWith(
+                                color: Colors.white.withOpacity(0.70),
+                              ),
+                            ),
+                          ),
+                        const SizedBox(height: 10),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _openAutoTrailerPreviewSheet({
@@ -488,9 +1464,9 @@ class _PlayWebglScreenState extends State<PlayWebglScreen>
     }
 
     await _maybeShowPostGameCoachReport(force: true);
-    if (!context.mounted) return;
+    if (!mounted) return;
 
-    if (!context.mounted) return;
+    if (!mounted) return;
     if (context.canPop()) {
       context.pop();
     } else {
@@ -6934,6 +7910,8 @@ class _PlayWebglScreenState extends State<PlayWebglScreen>
         ),
       )
       ..loadRequest(Uri.parse(_withCacheBuster(_resolvedUrl)));
+
+    _startRealtimeTutor();
   }
 
   @override
@@ -6942,6 +7920,10 @@ class _PlayWebglScreenState extends State<PlayWebglScreen>
     _cancelHealthMonitor();
     _releaseAllKeys();
     _applySystemFullscreen(false);
+    _realtimeTutorTimer?.cancel();
+    try {
+      _tts.stop();
+    } catch (_) {}
     _mp.removeListener(_onMpUpdate);
     _mp.disconnect();
     _mpText.dispose();
@@ -7714,6 +8696,20 @@ class _PlayWebglScreenState extends State<PlayWebglScreen>
                 title: Text('Play', style: AppTypography.subtitle1),
                 actions: [
                   IconButton(
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                    constraints: const BoxConstraints(),
+                    iconSize: 20,
+                    tooltip: 'AI Tutor',
+                    onPressed: _tutorBusy ? null : _openTutorSheet,
+                    icon: Icon(
+                      _tutorBusy
+                          ? Icons.hourglass_top_rounded
+                          : Icons.psychology_rounded,
+                      color: _tutorBusy ? null : AppColors.accent,
+                    ),
+                  ),
+                  IconButton(
                     onPressed: _toggle3dMode,
                     icon: Icon(
                       _is3dMode
@@ -7864,6 +8860,97 @@ class _PlayWebglScreenState extends State<PlayWebglScreen>
             _ghostOverlay(),
 
             _mpFeedOverlay(),
+
+            if (_activeTutorTip != null)
+              Positioned(
+                bottom: _isFullscreen ? 110 : 140,
+                left: 18,
+                right: 18,
+                child: TweenAnimationBuilder<double>(
+                  duration: const Duration(milliseconds: 500),
+                  tween: Tween(begin: 0, end: 1),
+                  builder: (context, val, child) {
+                    return Opacity(
+                      opacity: val,
+                      child: Transform.translate(
+                        offset: Offset(0, 18 * (1 - val)),
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.translucent,
+                    onTap: _openTutorSheet,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 14,
+                      ),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [
+                            const Color(0xFF0F172A).withOpacity(0.95),
+                            const Color(0xFF1E293B).withOpacity(0.90),
+                          ],
+                        ),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: Theme.of(context)
+                              .colorScheme
+                              .primary
+                              .withOpacity(0.40),
+                          width: 1.5,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.40),
+                            blurRadius: 20,
+                            offset: const Offset(0, 10),
+                          ),
+                        ],
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.psychology_rounded,
+                            color: Theme.of(context).colorScheme.primary,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Text(
+                              _activeTutorTip!,
+                              style: AppTypography.body2.copyWith(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                          ),
+                          IconButton(
+                            visualDensity: VisualDensity.compact,
+                            icon: const Icon(
+                              Icons.volume_up_rounded,
+                              color: Colors.white70,
+                              size: 18,
+                            ),
+                            onPressed: () => _speak(_activeTutorTip!),
+                          ),
+                          IconButton(
+                            visualDensity: VisualDensity.compact,
+                            icon: const Icon(
+                              Icons.close_rounded,
+                              color: Colors.white54,
+                              size: 18,
+                            ),
+                            onPressed: () =>
+                                setState(() => _activeTutorTip = null),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
 
             if (_isFullscreen &&
                 !_loading &&

@@ -28,10 +28,13 @@ import '../../../core/themes/app_theme.dart';
 import '../../widgets/daily_wallet_sheet.dart';
 import '../../widgets/reward_confetti_overlay.dart';
 import '../../widgets/widgets.dart';
+import '../../widgets/goal_card.dart';
 import '../marketplace/marketplace.dart';
 import '../profile/profile.dart';
 import '../notifications/notifications.dart';
 import '../arcade/arcade_feed_screen.dart';
+import '../../../core/services/goals_service.dart';
+import '../../../data/models/goal_model.dart';
 
 void _noop() {}
 
@@ -1241,6 +1244,76 @@ class _HomeDashboardState extends State<HomeDashboard> with TickerProviderStateM
   String _coachTipMessage = _coachTipPoolsByLang['ar']!['general']!.first;
   bool _coachCardDismissed = false;
 
+  Widget _buildMyGoalsCtaCard() {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(22),
+      onTap: () => context.push('/goals'),
+      child: Container(
+        height: 86,
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF6A5CFF), Color(0xFF4F46E5)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: Colors.white.withOpacity(0.08)),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF6A5CFF).withOpacity(0.25),
+              blurRadius: 24,
+              offset: const Offset(0, 12),
+            ),
+          ],
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 18),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.15),
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: Colors.white.withOpacity(0.2)),
+              ),
+              child: const Icon(Icons.track_changes_rounded, color: Colors.white),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'MY GOALS',
+                    style: AppTypography.labelLarge.copyWith(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    'Track your progress automatically',
+                    style: AppTypography.body3.copyWith(
+                      color: isDark ? Colors.white.withOpacity(0.75) : cs.onPrimary.withOpacity(0.8),
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: Colors.white, size: 26),
+          ],
+        ),
+      ),
+    );
+  }
+
   int? _cachedProjectsCount;
   int? _cachedGenerationsCount;
   int? _cachedDownloadsCount;
@@ -2235,6 +2308,47 @@ class _HomeDashboardState extends State<HomeDashboard> with TickerProviderStateM
                     ),
             ),
           ),
+          const SizedBox(height: 18),
+          if (auth.token != null)
+            _introEntry(
+              index: 20,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+                child: FutureBuilder<List<GoalModel>>(
+                  future: GoalsService.getGoals(token: auth.token!),
+                  builder: (context, snapshot) {
+                    final goals = snapshot.data ?? const <GoalModel>[];
+                    if (snapshot.connectionState == ConnectionState.waiting) {
+                      return Container(
+                        height: 86,
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.04),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.white.withOpacity(0.06)),
+                        ),
+                        child: const Center(
+                          child: SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
+                      );
+                    }
+
+                    if (goals.isEmpty) {
+                      return _buildMyGoalsCtaCard();
+                    }
+
+                    return GoalCard(
+                      goal: goals.first,
+                      onTap: () => context.push('/goals'),
+                      onAddProgress: () => context.push('/goals'),
+                    );
+                  },
+                ),
+              ),
+            ),
           const SizedBox(height: 28),
           _introEntry(
             index: 5,
@@ -2604,49 +2718,111 @@ class _HomeDashboardState extends State<HomeDashboard> with TickerProviderStateM
               ),
             ),
           const SizedBox(height: 40),
-          _introEntry(index: 7, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 24), child: Text('Quick Actions', style: AppTypography.titleMedium))),
-          const SizedBox(height: 16),
-          _introEntry(index: 8, child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              children: [
-                Expanded(child: _buildQuickActionButton('Create\nNew Game', Icons.add, AppColors.primaryGradient, () => context.go('/create-project'))),
-                const SizedBox(width: 16),
-                Expanded(child: _buildQuickActionButton('Browse\nTemplates', Icons.grid_view, null, () { _trackDailyFlag(_kPrefDailyMarketplaceVisit); setState(() => _selectedIndex = 2); }, isOutlined: true)),
-              ],
-            ),
-          )),
-          const SizedBox(height: 16),
-          _introEntry(index: 9, child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              children: [
-                Expanded(child: _buildQuickActionButton('Claude\nAI Game', Icons.auto_awesome, const LinearGradient(colors: [Color(0xFF6A5CFF), Color(0xFFAA44FF)]), () => context.go('/ai-claude-game'))),
-                const SizedBox(width: 16),
-                Expanded(child: _buildQuickActionButton('Phaser\nInstant Game', Icons.bolt, const LinearGradient(colors: [Color(0xFF0EA5E9), Color(0xFF6A5CFF)]), () => context.go('/ai-phaser-game'))),
-              ],
-            ),
-          )),
-          const SizedBox(height: 16),
-          _introEntry(index: 10, child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20),
-            child: Row(
-              children: [
-                Expanded(child: _buildQuickActionButton('3D Game 🎲', Icons.view_in_ar_rounded, const LinearGradient(colors: [Color(0xFF0EA5E9), Color(0xFF6A5CFF)]), () => context.go('/ai-threejs-game'))),
-              ],
-            ),
-          )),
-          const SizedBox(height: 16),
+          _introEntry(index: 10, child: Padding(padding: const EdgeInsets.symmetric(horizontal: 24), child: Text('Quick Actions', style: AppTypography.titleMedium.copyWith(fontWeight: FontWeight.w900, letterSpacing: 0.5)))),
+          const SizedBox(height: 20),
           _introEntry(index: 11, child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20),
             child: Row(
               children: [
-                Expanded(child: _buildQuickActionButton('Quiz\nChallenge', Icons.quiz_rounded, null, () => context.go('/game-quiz'), isOutlined: true)),
+                Expanded(child: _buildQuickActionButton('Create\nNew Game', Icons.add_rounded, AppColors.primaryGradient, () => context.go('/create-project'))),
                 const SizedBox(width: 16),
-                Expanded(child: _buildQuickActionButton('Multiplayer\nLobby', Icons.groups_rounded, AppColors.primaryGradient, () => context.go('/multiplayer'))),
+                Expanded(child: _buildQuickActionButton('Browse\nTemplates', Icons.grid_view_rounded, null, () { _trackDailyFlag(_kPrefDailyMarketplaceVisit); setState(() => _selectedIndex = 2); }, isOutlined: true)),
               ],
             ),
           )),
+          const SizedBox(height: 16),
+          _introEntry(index: 12, child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              children: [
+                Expanded(child: _buildQuickActionButton('GameGen\nAI', Icons.auto_awesome_rounded, const LinearGradient(colors: [Color(0xFF8B5CF6), Color(0xFF6366F1)]), () => context.go('/ai-game-gen'))),
+                const SizedBox(width: 16),
+                Expanded(child: _buildQuickActionButton('AI Game\nStudio', Icons.auto_awesome_motion_rounded, const LinearGradient(colors: [Color(0xFF00E5FF), Color(0xFF7C3AED)]), () => context.go('/ai-game-studio'))),
+              ],
+            ),
+          )),
+          const SizedBox(height: 16),
+          _introEntry(index: 13, child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              children: [
+                Expanded(child: _buildQuickActionButton('SoundForge\nAudio IA', Icons.music_note_rounded, const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFFB923C)]), () => context.go('/sound-forge'))),
+                const SizedBox(width: 16),
+                Expanded(child: _buildQuickActionButton('AssetForge\nOllama AI', Icons.auto_fix_high_rounded, const LinearGradient(colors: [Color(0xFFEF4444), Color(0xFFF87171)]), () => context.go('/asset-forge'))),
+              ],
+            ),
+          )),
+          const SizedBox(height: 16),
+          _introEntry(index: 14, child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: SizedBox(
+              width: double.infinity,
+              child: _buildQuickActionButton('Tournaments\nArena', Icons.emoji_events_rounded, const LinearGradient(colors: [Color(0xFF38BDF8), Color(0xFF6A5CFF)]), () => context.go('/tournaments')),
+            ),
+          )),
+          const SizedBox(height: 16),
+          _introEntry(index: 15, child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              children: [
+                Expanded(child: _buildQuickActionButton('Global\nRadar', Icons.radar_rounded, const LinearGradient(colors: [Color(0xFFF59E0B), Color(0xFFEF4444)]), () => context.go('/global-events'))),
+                const SizedBox(width: 16),
+                Expanded(child: _buildQuickActionButton('Quiz\nChallenge', Icons.quiz_rounded, const LinearGradient(colors: [Color(0xFF475569), Color(0xFF1E293B)]), () => context.go('/game-quiz'))),
+              ],
+            ),
+          )),
+          const SizedBox(height: 16),
+          _introEntry(index: 16, child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20),
+            child: Row(
+              children: [
+                Expanded(child: _buildQuickActionButton('Scratch\nBlock Game', Icons.extension_rounded, const LinearGradient(colors: [Color(0xFFF59E0B), Color(0xFFD97706)]), () => context.go('/ai-scratch-game'))),
+                const SizedBox(width: 16),
+                Expanded(child: _buildQuickActionButton('Multiplayer\nLobby', Icons.groups_rounded, const LinearGradient(colors: [Color(0xFF6A5CFF), Color(0xFF38BDF8)]), () => context.go('/multiplayer'))),
+              ],
+            ),
+          )),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStudioToolsGrid() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Expanded(child: _buildQuickActionButton('GameGen\nAI', Icons.auto_awesome_rounded, const LinearGradient(colors: [Color(0xFF8B5CF6), Color(0xFF6A5CFF)]), () => context.go('/ai-game-gen'))),
+              const SizedBox(width: 16),
+              Expanded(child: _buildQuickActionButton('AI Game\nStudio', Icons.auto_awesome_motion_rounded, const LinearGradient(colors: [Color(0xFF00E5FF), Color(0xFF7C3AED)]), () => context.go('/ai-game-studio'))),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(child: _buildQuickActionButton('SoundForge\nAudio IA', Icons.music_note_rounded, const LinearGradient(colors: [Color(0xFF8B5CF6), Color(0xFF6366F1)]), () => context.go('/sound-forge'))),
+              const SizedBox(width: 16),
+              Expanded(child: _buildQuickActionButton('AssetForge\nOllama AI', Icons.auto_fix_high_rounded, const LinearGradient(colors: [Color(0xFFF97316), Color(0xFFEF4444)]), () => context.go('/asset-forge'))),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(child: _buildQuickActionButton('Tournaments\nArena', Icons.emoji_events_rounded, const LinearGradient(colors: [Color(0xFF38BDF8), Color(0xFF6A5CFF)]), () => context.go('/tournaments'))),
+              const SizedBox(width: 16),
+              Expanded(child: _buildQuickActionButton('GF\nWorlds', Icons.public_rounded, const LinearGradient(colors: [Color(0xFF10B981), Color(0xFF3B82F6)]), () => context.go('/worlds'))),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(child: _buildQuickActionButton('Global\nRadar', Icons.public_rounded, const LinearGradient(colors: [Color(0xFFF59E0B), Color(0xFFEF4444)]), () => context.go('/global-events'))),
+              const SizedBox(width: 16),
+              const Spacer(),
+            ],
+          ),
         ],
       ),
     );
@@ -3263,7 +3439,6 @@ class _HomeDashboardState extends State<HomeDashboard> with TickerProviderStateM
       animation: _wowAnim,
       builder: (context, child) {
         return Container(
-          margin: const EdgeInsets.only(bottom: 0),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(999),
             boxShadow: [
@@ -3283,7 +3458,10 @@ class _HomeDashboardState extends State<HomeDashboard> with TickerProviderStateM
                 padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                    colors: [AppColors.primary.withOpacity(0.85), const Color(0xFFA855F7).withOpacity(0.85)],
+                    colors: [
+                      AppColors.primary.withOpacity(0.85),
+                      const Color(0xFFA855F7).withOpacity(0.85),
+                    ],
                   ),
                   borderRadius: BorderRadius.circular(999),
                   border: Border.all(
@@ -3311,7 +3489,11 @@ class _HomeDashboardState extends State<HomeDashboard> with TickerProviderStateM
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.auto_awesome_rounded, color: Colors.white, size: 20),
+                        const Icon(
+                          Icons.auto_awesome_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
                         const SizedBox(width: 10),
                         Text(
                           'AI Coach',
@@ -3508,6 +3690,14 @@ class _HomeDashboardState extends State<HomeDashboard> with TickerProviderStateM
                 const Divider(),
                 ListTile(leading: const Icon(Icons.person_outline), title: const Text('Profile'), onTap: () { Navigator.pop(context); setState(() => _selectedIndex = 4); }),
                 ListTile(leading: const Icon(Icons.settings_outlined), title: const Text('Settings'), onTap: () => context.push('/settings')),
+                ListTile(
+                  leading: const Icon(Icons.lightbulb_rounded),
+                  title: const Text('Idea Vault'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    context.go('/idea-vault');
+                  },
+                ),
                 if (auth.isAdmin || auth.isDevl) ...[
                   const Divider(),
                   ListTile(

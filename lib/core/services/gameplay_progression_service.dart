@@ -9,6 +9,10 @@ class GameplayProgressionService {
     return ApiService.get('/gameplay/cards', token: token);
   }
 
+  static Future<Map<String, dynamic>> rewards({required String token}) {
+    return ApiService.get('/gameplay/rewards/me', token: token);
+  }
+
   static Future<Map<String, dynamic>> syncRewards({required String token}) {
     return ApiService.post('/gameplay/progression/sync-rewards', token: token);
   }

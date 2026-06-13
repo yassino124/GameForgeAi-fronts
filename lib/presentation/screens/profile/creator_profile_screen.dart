@@ -18,6 +18,7 @@ import '../../../core/services/game_feed_service.dart';
 import '../../../core/services/users_service.dart';
 import '../../../core/themes/app_theme.dart';
 import '../../widgets/widgets.dart';
+import '../project/project_insights_screen.dart';
 
 class CreatorProfileScreen extends StatefulWidget {
   final String creatorId;
@@ -312,6 +313,42 @@ class _CreatorProfileScreenState extends State<CreatorProfileScreen> {
                     maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                     style: AppTypography.subtitle2.copyWith(color: Colors.white, fontWeight: FontWeight.w900),
+                  ),
+                ),
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: GestureDetector(
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ProjectInsightsScreen(
+                            gameId: post['_id'] ?? post['id'] ?? '',
+                            gameName: title,
+                          ),
+                        ),
+                      );
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        gradient: const LinearGradient(colors: [AppColors.primary, AppColors.secondary]),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.white.withOpacity(0.4)),
+                        boxShadow: [
+                          BoxShadow(color: AppColors.primary.withOpacity(0.6), blurRadius: 15, spreadRadius: 3),
+                        ],
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.auto_awesome, color: Colors.white, size: 14),
+                          SizedBox(width: 4),
+                          Text('AI REVIEWS', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                        ],
+                      ),
+                    ),
                   ),
                 ),
               ],
@@ -1008,6 +1045,42 @@ class _CreatorProfileScreenState extends State<CreatorProfileScreen> {
                             begin: Alignment.topCenter,
                             end: Alignment.bottomCenter,
                             stops: const [0.62, 1.0],
+                          ),
+                        ),
+                      ),
+                    ),
+                    Positioned(
+                      top: 8,
+                      right: 8,
+                      child: GestureDetector(
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => ProjectInsightsScreen(
+                                gameId: post['_id'] ?? post['id'] ?? '',
+                                gameName: title,
+                              ),
+                            ),
+                          );
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(colors: [AppColors.primary, AppColors.secondary]),
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: Colors.white.withOpacity(0.4)),
+                            boxShadow: [
+                              BoxShadow(color: AppColors.primary.withOpacity(0.6), blurRadius: 15, spreadRadius: 3),
+                            ],
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.auto_awesome, color: Colors.white, size: 14),
+                              SizedBox(width: 4),
+                              Text('AI REVIEWS', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                            ],
                           ),
                         ),
                       ),

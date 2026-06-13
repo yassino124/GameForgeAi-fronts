@@ -477,7 +477,7 @@ export default function NotificationsAdminPage() {
                         "w-full rounded-xl border px-3 py-2 text-left transition",
                         isRead
                           ? "border-white/10 bg-black/20"
-                          : "border-indigo-400/20 bg-indigo-500/10 hover:border-indigo-300/40",
+                          : "border-blue-400/20 bg-blue-500/10 hover:border-blue-300/40",
                       )}
                     >
                       <div className="truncate text-xs font-semibold text-white">{n.title || "Notification"}</div>

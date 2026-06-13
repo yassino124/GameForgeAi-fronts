@@ -108,7 +108,7 @@ function RoleSelector({ value, onChange, disabled }: { value: string; onChange: 
         className={cx(
           "gf-btn flex items-center gap-3 h-10 px-4 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 transition-all",
           disabled && "opacity-50 cursor-not-allowed",
-          isOpen && "ring-2 ring-indigo-500/50 border-indigo-500/50"
+          isOpen && "ring-2 ring-blue-500/50 border-blue-500/50"
         )}
       >
         <current.icon size={14} className={cx(
@@ -128,7 +128,7 @@ function RoleSelector({ value, onChange, disabled }: { value: string; onChange: 
               exit={{ opacity: 0, y: 10, scale: 0.95 }}
               className="absolute right-0 top-full mt-2 w-48 z-50 rounded-2xl border border-white/10 bg-[#16161c]/95 backdrop-blur-2xl p-2 shadow-2xl overflow-hidden"
             >
-              <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 via-transparent to-transparent pointer-events-none" />
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/5 via-transparent to-transparent pointer-events-none" />
               {roles.map((r) => (
                 <button
                   key={r.id}
@@ -154,7 +154,7 @@ function RoleSelector({ value, onChange, disabled }: { value: string; onChange: 
                     </div>
                   </div>
                   {value === r.id && (
-                    <div className="ml-auto h-1.5 w-1.5 rounded-full bg-indigo-500 shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
+                    <div className="ml-auto h-1.5 w-1.5 rounded-full bg-blue-500 shadow-[0_0_8px_rgba(99,102,241,0.8)]" />
                   )}
                 </button>
               ))}

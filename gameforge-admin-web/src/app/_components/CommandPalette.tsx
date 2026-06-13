@@ -384,7 +384,7 @@ export default function CommandPalette(props: {
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={close} />
       <div className="gf-panel-strong relative mx-4 w-full max-w-2xl overflow-hidden rounded-2xl">
         <div className="flex items-center gap-3 border-b border-white/10 px-4 py-3">
-          <div className="h-9 w-9 rounded-2xl bg-gradient-to-br from-indigo-500/25 via-fuchsia-500/20 to-cyan-500/20" />
+          <div className="h-9 w-9 rounded-2xl bg-gradient-to-br from-blue-500/25 via-cyan-500/20 to-cyan-500/20" />
           <input
             ref={inputRef}
             value={query}

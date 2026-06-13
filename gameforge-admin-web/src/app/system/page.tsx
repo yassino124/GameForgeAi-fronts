@@ -183,7 +183,7 @@ export default function SystemPage() {
           label="Node"
           value={loading ? "—" : String(data?.runtime?.node || "—")}
           hint="runtime"
-          accent="bg-gradient-to-br from-indigo-500/35 to-indigo-300/10"
+          accent="bg-gradient-to-br from-blue-500/35 to-blue-300/10"
         />
         <StatCard
           label="Builds"
@@ -195,7 +195,7 @@ export default function SystemPage() {
           label="Unity"
           value={loading ? "—" : data?.env?.unityEditorConfigured ? "configured" : "missing"}
           hint="UNITY_EDITOR_PATH"
-          accent="bg-gradient-to-br from-fuchsia-500/35 to-fuchsia-300/10"
+          accent="bg-gradient-to-br from-cyan-500/35 to-cyan-300/10"
         />
       </div>
 

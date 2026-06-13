@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
@@ -10,7 +10,7 @@ import {
 } from "@phosphor-icons/react";
 import UserShell from "@/app/_components/UserShell";
 import { apiFetch } from "@/lib/api";
-import { getUserToken } from "@/lib/userAuth";
+import { useAuthToken } from "@/lib/stores/authStore";
 import { normalizeImageUrl, resolveMediaUrl } from "@/lib/media";
 
 function cx(...parts: Array<string | false | null | undefined>) {
@@ -27,7 +27,7 @@ export default function UserProfilePage() {
   const params = useParams();
   const router = useRouter();
   const userId = params?.id as string;
-  const token = useMemo(() => getUserToken(), []);
+  const { token } = useAuthToken();
 
   const [me, setMe] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -95,7 +95,7 @@ export default function UserProfilePage() {
     return (
       <UserShell title="Creator Profile" subtitle="Loading neural data...">
         <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="h-12 w-12 border-4 border-indigo-500 border-t-transparent animate-spin rounded-full" />
+          <div className="h-12 w-12 border-4 border-blue-500 border-t-transparent animate-spin rounded-full" />
         </div>
       </UserShell>
     );
@@ -152,13 +152,13 @@ export default function UserProfilePage() {
           animate={{ opacity: 1, y: 0 }}
           className="gf-panel-strong rounded-[48px] p-10 relative overflow-hidden border border-white/10"
         >
-          <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 via-transparent to-fuchsia-500/10" />
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-transparent to-cyan-500/10" />
           <div className="relative z-10 flex flex-col md:flex-row items-center gap-10">
-            <div className="h-40 w-40 rounded-[48px] bg-gradient-to-br from-indigo-600 to-fuchsia-600 flex items-center justify-center text-white text-6xl font-black shadow-2xl border-4 border-white/10 overflow-hidden">
+            <div className="h-40 w-40 rounded-[48px] bg-gradient-to-br from-blue-600 to-cyan-600 flex items-center justify-center text-white text-6xl font-black shadow-2xl border-4 border-white/10 overflow-hidden">
               {avatarUrl ? (
                 <img src={avatarUrl} className="h-full w-full object-cover" alt={username} />
               ) : (
-                <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-indigo-500 to-fuchsia-600 font-mono">
+                <div className="h-full w-full flex items-center justify-center bg-gradient-to-br from-blue-500 to-cyan-600 font-mono">
                   {username.substring(0, 1).toUpperCase()}
                 </div>
               )}
@@ -166,7 +166,7 @@ export default function UserProfilePage() {
             <div className="flex-1 text-center md:text-left space-y-4">
               <div className="flex flex-col md:flex-row md:items-center gap-4">
                 <h2 className="text-5xl font-black text-white tracking-tighter italic uppercase gf-chromatic">{username}</h2>
-                <div className="px-4 py-1 rounded-full bg-indigo-500/20 border border-indigo-500/30 text-indigo-400 text-[10px] font-black uppercase tracking-widest flex items-center gap-2 self-center md:self-auto">
+                <div className="px-4 py-1 rounded-full bg-blue-500/20 border border-blue-500/30 text-blue-400 text-[10px] font-black uppercase tracking-widest flex items-center gap-2 self-center md:self-auto">
                   <Crown size={12} weight="fill" />
                   {profile.ownerRole === "admin" ? "System Architect" : profile.ownerRole || "Verified Creator"}
                 </div>
@@ -176,10 +176,10 @@ export default function UserProfilePage() {
               </p>
               <div className="flex flex-wrap justify-center md:justify-start gap-6 pt-4">
                 <div className="flex items-center gap-2 text-zinc-500 text-xs font-bold uppercase tracking-widest">
-                  <GameController size={16} weight="duotone" className="text-indigo-400" /> {games.length} Games
+                  <GameController size={16} weight="duotone" className="text-blue-400" /> {games.length} Games
                 </div>
                 <div className="flex items-center gap-2 text-zinc-500 text-xs font-bold uppercase tracking-widest">
-                  <Users size={16} weight="duotone" className="text-fuchsia-400" /> {profile.followerCount || "1.2k"} Followers
+                  <Users size={16} weight="duotone" className="text-cyan-400" /> {profile.followerCount || "1.2k"} Followers
                 </div>
                 <div className="flex items-center gap-2 text-zinc-500 text-xs font-bold uppercase tracking-widest">
                   <Trophy size={16} weight="duotone" className="text-amber-400" /> {games.reduce((acc, g) => acc + toNum(g.playCount || g.views || 0), 0).toLocaleString()} Plays
@@ -210,7 +210,7 @@ export default function UserProfilePage() {
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ delay: idx * 0.1 }}
                   whileHover={{ y: -10 }}
-                  className="gf-panel group rounded-[40px] overflow-hidden border border-white/5 hover:border-indigo-500/30 transition-all bg-white/[0.02]"
+                  className="gf-panel group rounded-[40px] overflow-hidden border border-white/5 hover:border-blue-500/30 transition-all bg-white/[0.02]"
                 >
                   <div className="aspect-[16/10] relative overflow-hidden bg-zinc-900">
                     <img
@@ -229,7 +229,7 @@ export default function UserProfilePage() {
                   <div className="p-6 flex items-center justify-between">
                     <div className="flex items-center gap-4">
                       <div className="flex items-center gap-1.5 text-[10px] font-black text-zinc-500 uppercase tracking-widest">
-                        <Play size={12} weight="fill" className="text-indigo-400" /> {game.playCount || game.views || 0}
+                        <Play size={12} weight="fill" className="text-blue-400" /> {game.playCount || game.views || 0}
                       </div>
                       <button
                         onClick={() => handleLike(game.id || game._id)}

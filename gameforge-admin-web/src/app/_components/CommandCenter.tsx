@@ -63,7 +63,7 @@ export default function CommandCenter() {
         className="relative w-full max-w-2xl bg-[#0a0b14] border border-white/10 rounded-[32px] shadow-[0_0_100px_rgba(99,102,241,0.2)] overflow-hidden"
       >
         <div className="flex items-center px-6 py-5 border-b border-white/5">
-          <Search className="text-indigo-400 mr-4" size={20} />
+          <Search className="text-blue-400 mr-4" size={20} />
           <input 
             autoFocus
             className="flex-1 bg-transparent border-none outline-none text-lg text-white placeholder:text-zinc-600 font-medium"
@@ -96,7 +96,7 @@ export default function CommandCenter() {
                         }}
                         className="w-full flex items-center gap-4 px-4 py-3 rounded-2xl hover:bg-white/[0.03] transition-all group text-left"
                       >
-                        <div className="h-10 w-10 rounded-xl bg-white/5 flex items-center justify-center text-zinc-400 group-hover:text-indigo-400 transition-colors">
+                        <div className="h-10 w-10 rounded-xl bg-white/5 flex items-center justify-center text-zinc-400 group-hover:text-blue-400 transition-colors">
                           <item.icon size={20} />
                         </div>
                         <div className="flex-1">
@@ -126,8 +126,8 @@ export default function CommandCenter() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <Zap size={12} className="text-indigo-500" />
-            <span className="text-[9px] font-black text-indigo-500/60 uppercase tracking-[0.2em]">Neural Command v1.0</span>
+            <Zap size={12} className="text-blue-500" />
+            <span className="text-[9px] font-black text-blue-500/60 uppercase tracking-[0.2em]">Neural Command v1.0</span>
           </div>
         </div>
       </motion.div>

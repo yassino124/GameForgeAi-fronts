@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { MessageSquare, Sparkles, X, Send, Bot, User, Zap, Code, Lightbulb } from "lucide-react";
+import { MessageSquare, X, Send, Bot, User, Zap, Code, Lightbulb } from "lucide-react";
 
 type Message = {
   id: string;
@@ -113,15 +113,16 @@ export default function AIDesignCoach() {
 
   return (
     <>
-      {/* Trigger Button */}
+      {/* Trigger Button - S-Tier Glassmorphism */}
       <motion.button
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-8 right-8 z-[100] h-16 w-16 rounded-full bg-indigo-500 text-white shadow-[0_0_30px_rgba(99,102,241,0.5)] flex items-center justify-center group"
+        className="fixed bottom-10 right-10 z-[100] h-16 w-16 rounded-full bg-[var(--gf-shell-bg)]/90 backdrop-blur-xl border border-[var(--gf-border-accent)] text-cyan-500/80 shadow-[0_20px_40px_var(--gf-glow-primary),inset_0_0_20px_rgba(34,211,238,0.1)] flex items-center justify-center group overflow-hidden"
       >
-        <div className="absolute inset-0 rounded-full bg-indigo-400 animate-ping opacity-20" />
-        <Sparkles className="group-hover:rotate-12 transition-transform" size={28} />
+        <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/20 to-blue-500/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+        <div className="absolute inset-0 rounded-full border-[1.5px] border-cyan-400 opacity-20 animate-ping shadow-[0_0_15px_rgba(34,211,238,0.8)]" style={{ animationDuration: '3s' }} />
+  <MessageSquare className="relative z-10 group-hover:scale-110 group-hover:drop-shadow-[0_0_12px_rgba(34,211,238,0.8)] transition-all" size={28} />
       </motion.button>
 
       {/* Chat Window */}
@@ -131,19 +132,20 @@ export default function AIDesignCoach() {
             initial={{ opacity: 0, scale: 0.9, y: 20, x: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0, x: 0 }}
             exit={{ opacity: 0, scale: 0.9, y: 20, x: 20 }}
-            className="fixed bottom-28 right-8 z-[101] w-[min(420px,92vw)] h-[min(640px,78vh)] gf-panel-strong gf-stroke-gradient rounded-[32px] shadow-2xl overflow-hidden flex flex-col bg-[#0a0b14]/95 backdrop-blur-2xl"
+            className="fixed bottom-32 right-10 z-[101] w-[min(420px,92vw)] h-[min(640px,78vh)] rounded-[32px] shadow-[0_30px_80px_rgba(0,0,0,0.8),inset_0_0_30px_rgba(34,211,238,0.05)] overflow-hidden flex flex-col bg-[var(--gf-shell-bg)]/90 backdrop-blur-[60px] border border-[var(--gf-border-accent)]"
           >
             {/* Header */}
-            <div className="p-6 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-xl bg-indigo-500/20 flex items-center justify-center text-indigo-400">
-                  <Bot size={22} />
+            <div className="p-6 border-b border-[var(--gf-border)] flex items-center justify-between bg-gradient-to-r from-cyan-500/5 via-blue-500/5 to-transparent relative">
+              <div className="absolute top-0 inset-x-0 h-px bg-gradient-to-r from-transparent via-[var(--gf-border-accent)] to-transparent" />
+              <div className="flex items-center gap-4 relative z-10">
+                <div className="h-10 w-10 rounded-[14px] bg-[var(--gf-panel-bg)] border border-[var(--gf-border-accent)] flex items-center justify-center text-cyan-500/80 shadow-[0_0_15px_var(--gf-glow-primary)]">
+                  <MessageSquare size={22} />
                 </div>
                 <div>
-                  <div className="text-sm font-black text-white uppercase tracking-tight">Support Coach</div>
-                  <div className="flex items-center gap-1.5">
-                    <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                    <span className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Ollama Active</span>
+                  <div className="text-sm font-black text-[var(--foreground)] tracking-widest uppercase">System Assist</div>
+                  <div className="flex items-center gap-1.5 mt-0.5">
+                    <div className="h-1.5 w-1.5 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(34,211,238,0.9)] animate-pulse" />
+                    <span className="text-[9px] font-black text-cyan-500/80 uppercase tracking-[0.2em]">Neural Engine Online</span>
                   </div>
                 </div>
               </div>
@@ -206,21 +208,21 @@ export default function AIDesignCoach() {
                 >
                   <div className={`max-w-[85%] flex gap-3 ${m.role === "user" ? "flex-row-reverse" : "flex-row"}`}>
                     <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${
-                      m.role === "assistant" ? "bg-indigo-500/10 text-indigo-400" : "bg-white/5 text-zinc-400"
+                      m.role === "assistant" ? "bg-blue-500/10 text-blue-400" : "bg-white/5 text-zinc-400"
                     }`}>
                       {m.role === "assistant" ? <Bot size={16} /> : <User size={16} />}
                     </div>
                     <div className={`p-4 rounded-2xl text-sm leading-relaxed ${
                       m.role === "user" 
-                        ? "bg-indigo-500 text-white font-medium" 
+                        ? "bg-blue-500 text-white font-medium" 
                         : "bg-white/[0.03] border border-white/5 text-zinc-300"
                     }`}>
                       {m.type === "code" ? (
                         <div className="space-y-3">
-                          <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-indigo-400">
+                          <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-blue-400">
                             <Code size={12} /> Generated Snippet
                           </div>
-                          <pre className="p-3 rounded-xl bg-black/40 border border-white/5 font-mono text-xs text-indigo-300 overflow-x-auto">
+                          <pre className="p-3 rounded-xl bg-black/40 border border-white/5 font-mono text-xs text-blue-300 overflow-x-auto">
                             {m.content.replace(/```javascript\n|```/g, '')}
                           </pre>
                         </div>
@@ -239,7 +241,7 @@ export default function AIDesignCoach() {
               {loading ? (
                 <div className="flex justify-start">
                   <div className="max-w-[85%] flex gap-3">
-                    <div className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0 bg-indigo-500/10 text-indigo-400">
+                    <div className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0 bg-blue-500/10 text-blue-400">
                       <Bot size={16} />
                     </div>
                     <div className="p-4 rounded-2xl text-sm leading-relaxed bg-white/[0.03] border border-white/5 text-zinc-300">
@@ -264,13 +266,13 @@ export default function AIDesignCoach() {
                   }}
                   rows={2}
                   placeholder="Ask about anything in the GameForge AI app… (Enter to send, Shift+Enter new line)"
-                  className="w-full resize-none bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-sm text-white placeholder:text-zinc-600 outline-none focus:border-indigo-500/50 transition-all"
+                  className="w-full resize-none bg-white/5 border border-white/10 rounded-2xl px-5 py-4 text-sm text-white placeholder:text-zinc-600 outline-none focus:border-blue-500/50 transition-all"
                 />
                 <motion.button
                   whileHover={{ scale: 1.05 }}
                   whileTap={{ scale: 0.95 }}
                   onClick={handleSend}
-                  className="h-12 w-12 rounded-xl bg-indigo-500 text-white flex items-center justify-center shadow-lg disabled:opacity-50"
+                  className="h-12 w-12 rounded-xl bg-blue-500 text-white flex items-center justify-center shadow-lg disabled:opacity-50"
                   disabled={loading || !input.trim()}
                 >
                   <Send size={18} />
@@ -278,10 +280,10 @@ export default function AIDesignCoach() {
               </div>
               <div className="mt-4 flex items-center gap-4">
                 <div className="flex items-center gap-1.5 text-[9px] font-black text-zinc-600 uppercase tracking-widest">
-                  <Zap size={10} className="text-indigo-500" /> Support Mode
+                  <Zap size={10} className="text-blue-500" /> Support Mode
                 </div>
                 <div className="flex items-center gap-1.5 text-[9px] font-black text-zinc-600 uppercase tracking-widest">
-                  <Code size={10} className="text-fuchsia-500" /> Troubleshoot
+                  <Code size={10} className="text-cyan-500" /> Troubleshoot
                 </div>
               </div>
             </div>

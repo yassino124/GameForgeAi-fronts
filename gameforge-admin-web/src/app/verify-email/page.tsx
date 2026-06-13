@@ -126,7 +126,7 @@ function VerifyEmailContent() {
   return (
     <div className="gf-panel-strong w-full rounded-[2.5rem] p-8 sm:p-10 border border-white/10 backdrop-blur-3xl bg-white/[0.03] shadow-[0_0_80px_rgba(0,0,0,0.5)] relative overflow-hidden">
       {/* Card Internal Glow */}
-      <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 blur-3xl -mr-16 -mt-16" />
+      <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 blur-3xl -mr-16 -mt-16" />
 
       <AnimatePresence mode="wait">
         {success ? (
@@ -148,10 +148,10 @@ function VerifyEmailContent() {
           <div className="relative z-10">
             <div className="text-center mb-10">
               <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-zinc-200 mb-6">
-                <Mail size={10} className="text-indigo-400 animate-pulse" />
+                <Mail size={10} className="text-blue-400 animate-pulse" />
                 Identity Security
               </div>
-              <h1 className="text-3xl font-black tracking-tight text-white italic mb-3">Check your <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-fuchsia-400">email</span></h1>
+              <h1 className="text-3xl font-black tracking-tight text-white italic mb-3">Check your <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-cyan-400">email</span></h1>
               <p className="text-sm text-zinc-400 font-medium max-w-xs mx-auto leading-relaxed">
                 Enter the 6-digit terminal code sent to<br/>
                 <span className="text-white font-bold">{email}</span>
@@ -169,7 +169,7 @@ function VerifyEmailContent() {
                     value={digit}
                     onChange={(e) => handleChange(idx, e.target.value)}
                     onKeyDown={(e) => handleKeyDown(idx, e)}
-                    className="w-full h-14 sm:h-16 bg-zinc-950/40 border border-white/10 rounded-xl text-center text-2xl font-black text-white focus:outline-none focus:border-indigo-500/50 focus:bg-zinc-950/60 transition-all duration-300 shadow-inner"
+                    className="w-full h-14 sm:h-16 bg-zinc-950/40 border border-white/10 rounded-xl text-center text-2xl font-black text-white focus:outline-none focus:border-blue-500/50 focus:bg-zinc-950/60 transition-all duration-300 shadow-inner"
                   />
                 ))}
               </div>
@@ -186,7 +186,7 @@ function VerifyEmailContent() {
                 disabled={!canVerify}
                 className="relative h-12 w-full group overflow-hidden rounded-xl transition-all duration-500 disabled:opacity-30 disabled:grayscale"
               >
-                <div className="absolute inset-0 bg-gradient-to-r from-indigo-600 via-fuchsia-600 to-cyan-500 group-hover:scale-105 transition-transform duration-500" />
+                <div className="absolute inset-0 bg-gradient-to-r from-blue-600 via-cyan-600 to-cyan-500 group-hover:scale-105 transition-transform duration-500" />
                 <div className="relative flex items-center justify-center gap-2 text-xs font-black text-white uppercase tracking-[0.2em]">
                   {loading ? <Loader2 size={16} className="animate-spin" /> : <>Complete Verification <ArrowRight size={16} className="group-hover:translate-x-1 transition-transform" /></>}
                 </div>
@@ -212,17 +212,17 @@ function VerifyEmailContent() {
 
 export default function EmailVerificationPage() {
   return (
-    <div className="min-h-screen bg-zinc-950 font-sans selection:bg-indigo-500/30 overflow-hidden relative">
+    <div className="min-h-screen bg-zinc-950 font-sans selection:bg-blue-500/30 overflow-hidden relative">
       {/* Background - Stabilized matching Admin Login style */}
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-24 left-1/2 h-[600px] w-[1000px] -translate-x-1/2 rounded-full bg-gradient-to-r from-indigo-600/30 via-fuchsia-600/20 to-cyan-500/20 blur-[120px] opacity-50" />
+        <div className="absolute -top-24 left-1/2 h-[600px] w-[1000px] -translate-x-1/2 rounded-full bg-gradient-to-r from-blue-600/30 via-cyan-600/20 to-cyan-500/20 blur-[120px] opacity-50" />
       </div>
 
       <div className="relative mx-auto flex min-h-screen max-w-7xl items-center justify-center px-6 py-16 z-10">
         <div className="w-full max-w-md">
           <Suspense fallback={
             <div className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-12 text-center backdrop-blur-3xl">
-              <div className="h-10 w-10 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin mx-auto" />
+              <div className="h-10 w-10 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mx-auto" />
             </div>
           }>
             <VerifyEmailContent />
@@ -237,7 +237,7 @@ export default function EmailVerificationPage() {
             <div className="flex items-center justify-center gap-6">
               <Link href="/signin" className="text-[10px] font-black text-zinc-500 hover:text-white uppercase tracking-widest transition-all group relative">
                 Back to Identity
-                <span className="absolute -bottom-1 left-0 w-0 h-[1px] bg-indigo-500 group-hover:w-full transition-all duration-300" />
+                <span className="absolute -bottom-1 left-0 w-0 h-[1px] bg-blue-500 group-hover:w-full transition-all duration-300" />
               </Link>
               <div className="w-1 h-1 rounded-full bg-zinc-800" />
               <Link href="/" className="text-[10px] font-black text-zinc-500 hover:text-white uppercase tracking-widest transition-all group relative">

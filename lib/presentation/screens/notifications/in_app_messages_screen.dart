@@ -216,10 +216,13 @@ class _InAppMessagesScreenState extends State<InAppMessagesScreen> {
         ],
       ),
 
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _showCreateTicketDialog,
-        icon: const Icon(Icons.add_comment_outlined),
-        label: const Text('New Ticket'),
+      floatingActionButton: Padding(
+        padding: const EdgeInsets.only(bottom: 76),
+        child: FloatingActionButton.extended(
+          onPressed: _showCreateTicketDialog,
+          icon: const Icon(Icons.add_comment_outlined),
+          label: const Text('New Ticket'),
+        ),
       ),
 
       body: Column(

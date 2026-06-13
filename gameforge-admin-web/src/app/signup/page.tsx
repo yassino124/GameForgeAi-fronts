@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { apiFetch } from "@/lib/api";
@@ -11,28 +11,107 @@ import {
   Mail,
   Lock,
   ShieldCheck,
-  Sparkles,
   Rocket,
   ArrowRight,
   CheckCircle2,
-  ChevronRight,
-  Info,
-  Laptop,
-  Gamepad2,
   AlertCircle,
-  Loader2
+  Loader2,
+  Eye,
+  EyeOff,
+  Gamepad2,
+  Code2,
 } from "lucide-react";
+import ForgeLogo from "@/app/_components/ForgeLogo";
 
-type RegisterResponse = {
-  access_token?: string;
-  refresh_token?: string;
-  user?: {
-    id?: string;
-    email?: string;
-    username?: string;
-    role?: string;
-  };
-};
+// === Background ===
+function Orbs() {
+  return (
+    <div className="pointer-events-none fixed inset-0 z-0 overflow-hidden">
+      <motion.div
+        animate={{ x: [0, -60, 0], y: [0, 50, 0], scale: [1, 1.2, 1] }}
+        transition={{ duration: 22, repeat: Infinity, ease: "easeInOut" }}
+        className="absolute -top-[25%] right-[5%] h-[650px] w-[650px] rounded-full bg-blue-700/14 blur-[130px]"
+      />
+      <motion.div
+        animate={{ x: [0, 50, 0], y: [0, -30, 0], scale: [1.1, 1, 1.1] }}
+        transition={{
+          duration: 18,
+          repeat: Infinity,
+          ease: "easeInOut",
+          delay: 3,
+        }}
+        className="absolute -bottom-[20%] left-[0%] h-[600px] w-[600px] rounded-full bg-blue-700/15 blur-[120px]"
+      />
+      <motion.div
+        animate={{ x: [0, -30, 0], scale: [1, 1.1, 1] }}
+        transition={{
+          duration: 25,
+          repeat: Infinity,
+          ease: "easeInOut",
+          delay: 6,
+        }}
+        className="absolute top-[50%] right-[15%] h-[350px] w-[350px] rounded-full bg-cyan-600/7 blur-[90px]"
+      />
+      <div
+        className="absolute inset-0 opacity-[0.05]"
+        style={{
+          backgroundImage:
+            "linear-gradient(to right,rgba(255,255,255,0.5) 1px,transparent 1px),linear-gradient(to bottom,rgba(255,255,255,0.5) 1px,transparent 1px)",
+          backgroundSize: "52px 52px",
+        }}
+      />
+    </div>
+  );
+}
+
+// === Password Strength ===
+function PasswordStrength({ password }: { password: string }) {
+  const checks = [
+    { label: "8+ chars", ok: password.length >= 8 },
+    { label: "Uppercase", ok: /[A-Z]/.test(password) },
+    { label: "Number", ok: /\d/.test(password) },
+    { label: "Special", ok: /[@$!%*?&]/.test(password) },
+  ];
+  const score = checks.filter((c) => c.ok).length;
+  const colors = [
+    "",
+    "bg-red-500",
+    "bg-orange-500",
+    "bg-amber-500",
+    "bg-emerald-500",
+  ];
+  const labels = ["", "Weak", "Fair", "Good", "Strong"];
+  if (!password) return null;
+  return (
+    <div className="mt-2 space-y-2">
+      <div className="flex gap-1.5">
+        {[1, 2, 3, 4].map((s) => (
+          <div
+            key={s}
+            className={`h-1 flex-1 rounded-full transition-all duration-300 ${score >= s ? colors[score] : "bg-white/[0.07]"}`}
+          />
+        ))}
+      </div>
+      <div className="flex items-center justify-between">
+        <div className="flex gap-2 flex-wrap">
+          {checks.map((c) => (
+            <span
+              key={c.label}
+              className={`text-[9px] font-bold transition-colors ${c.ok ? "text-emerald-400" : "text-zinc-700"}`}
+            >
+              {c.ok ? "✓" : "○"} {c.label}
+            </span>
+          ))}
+        </div>
+        <span
+          className={`text-[9px] font-black uppercase tracking-widest ${colors[score]?.replace("bg-", "text-") || "text-zinc-700"}`}
+        >
+          {labels[score]}
+        </span>
+      </div>
+    </div>
+  );
+}
 
 export default function SignUpPage() {
   const router = useRouter();
@@ -40,35 +119,44 @@ export default function SignUpPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [role, setRole] = useState("devl");
+  const [showPass, setShowPass] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+  const [role, setRole] = useState<"devl" | "user">("devl");
   const [agreedToTerms, setAgreedToTerms] = useState(false);
-  const [showTerms, setShowTerms] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
   const isEmailValid = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  const isPasswordStrong = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]/.test(password);
+  const isPasswordStrong =
+    /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])/.test(password);
 
-  const canSubmit = useMemo(() => {
-    return (
+  const canSubmit = useMemo(
+    () =>
       username.trim().length >= 2 &&
       isEmailValid &&
       password.length >= 8 &&
       isPasswordStrong &&
       password === confirmPassword &&
       agreedToTerms &&
-      !loading
-    );
-  }, [username, email, isEmailValid, password, isPasswordStrong, confirmPassword, agreedToTerms, loading]);
+      !loading,
+    [
+      username,
+      email,
+      isEmailValid,
+      password,
+      isPasswordStrong,
+      confirmPassword,
+      agreedToTerms,
+      loading,
+    ],
+  );
 
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!canSubmit) return;
-
     setError(null);
     setLoading(true);
-
     try {
       await apiFetch("/auth/register", {
         method: "POST",
@@ -79,388 +167,476 @@ export default function SignUpPage() {
           role,
         },
       });
-
       setSuccess(true);
-      setTimeout(() => {
-        router.push(`/verify-email?email=${encodeURIComponent(email.trim())}`);
-      }, 1500);
+      setTimeout(
+        () =>
+          router.push(
+            `/verify-email?email=${encodeURIComponent(email.trim())}`,
+          ),
+        1500,
+      );
     } catch (err: any) {
-      setError(err?.message || "Sign up failed");
+      setError(err?.message || "Sign up failed. Please try again.");
     } finally {
       setLoading(false);
     }
   }
 
+  const ROLES = [
+    {
+      id: "devl" as const,
+      label: "Developer",
+      desc: "Build & ship games",
+      icon: Code2,
+      color: "blue",
+      grad: "from-blue-600/15 to-blue-600/5",
+      border: "border-blue-500/40",
+      iconColor: "text-blue-400",
+      dot: "bg-blue-500",
+    },
+    {
+      id: "user" as const,
+      label: "Player",
+      desc: "Play & discover",
+      icon: Gamepad2,
+      color: "sky",
+      grad: "from-sky-500/15 to-sky-500/5",
+      border: "border-sky-500/40",
+      iconColor: "text-sky-400",
+      dot: "bg-sky-500",
+    },
+  ];
+
   return (
-    <div className="min-h-screen bg-zinc-950 font-sans selection:bg-indigo-500/30 overflow-hidden relative">
-      {/* Background - Stabilized matching Admin Login style */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <div className="absolute -top-24 left-1/2 h-[600px] w-[1000px] -translate-x-1/2 rounded-full bg-gradient-to-r from-indigo-600/30 via-fuchsia-600/20 to-cyan-500/20 blur-[120px] opacity-50" />
-      </div>
+    <div className="min-h-screen bg-[#06060a] font-sans selection:bg-blue-600/30 overflow-hidden">
+      <Orbs />
 
-      <div className="relative mx-auto flex min-h-screen max-w-7xl items-center justify-center px-6 py-16 z-10">
-        <div className="w-full max-w-2xl">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5 }}
-            className="rounded-[2rem] border border-white/10 bg-white/[0.03] p-8 sm:p-10 shadow-[0_0_0_1px_rgba(255,255,255,0.06),0_24px_60px_rgba(0,0,0,0.6)] backdrop-blur-3xl relative overflow-hidden"
-          >
-            {/* Subtle Gradient Glow inside card */}
-            <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 blur-3xl -mr-16 -mt-16" />
+      <div className="relative z-10 w-full min-h-screen flex">
+        {/* ── Form panel (left) ── */}
+        <div className="w-full lg:w-[55%] xl:w-[52%] flex items-center justify-center px-6 py-12">
+          <div className="w-full max-w-[440px]">
+            {/* Logo */}
+            <div className="mb-8">
+              <ForgeLogo size={44} />
+            </div>
 
-            <div className="mb-10 relative z-10 text-center">
-              <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[10px] font-bold uppercase tracking-widest text-zinc-200">
-                <Sparkles size={10} className="text-emerald-400 animate-pulse" />
-                Join the Genesis
-              </div>
-              <h1 className="mt-6 text-4xl sm:text-5xl font-black tracking-tight text-white italic">
-                Forge Your <span className="text-transparent bg-clip-text bg-gradient-to-r from-indigo-400 to-fuchsia-400">Identity</span>
-              </h1>
-              <p className="mt-2 text-sm text-zinc-400 font-medium">
-                Join the next generation of creative game architects.
+            {/* Header */}
+            <div className="mb-8">
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="inline-flex items-center gap-2 rounded-full border border-blue-500/20 bg-blue-600/8 px-3 py-1 text-[9px] font-black uppercase tracking-[0.22em] text-sky-300 mb-4"
+              >
+                <span className="h-1.5 w-1.5 rounded-full bg-blue-400 shadow-[0_0_6px_rgba(37,99,235,0.9)] animate-pulse" />
+                Join Genesis
+              </motion.div>
+              <motion.h1
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.05 }}
+                className="text-[2.1rem] font-black tracking-tight text-white leading-tight"
+              >
+                Forge Your
+                <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-sky-300">
+                  {" "}
+                  Identity
+                </span>
+              </motion.h1>
+              <p className="mt-1.5 text-sm text-zinc-500 font-medium">
+                Join thousands of creators building the next generation of
+                games.
               </p>
             </div>
+
             <AnimatePresence mode="wait">
               {success ? (
                 <motion.div
                   key="success"
-                  initial={{ opacity: 0, scale: 0.9 }}
+                  initial={{ opacity: 0, scale: 0.93 }}
                   animate={{ opacity: 1, scale: 1 }}
-                  className="py-16 text-center"
+                  className="py-14 text-center"
                 >
-                  <div className="relative inline-flex mb-8">
+                  <motion.div
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    transition={{ type: "spring", stiffness: 200, damping: 18 }}
+                    className="relative inline-flex mb-6"
+                  >
+                    <div className="h-20 w-20 rounded-full bg-blue-600/10 border border-blue-500/25 flex items-center justify-center shadow-[0_0_40px_rgba(37,99,235,0.18)]">
+                      <Rocket size={36} className="text-blue-400" />
+                    </div>
                     <motion.div
-                      initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      className="h-24 w-24 rounded-full bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20 shadow-[0_0_40px_rgba(99,102,241,0.15)]"
-                    >
-                      <Rocket size={48} className="text-indigo-400" />
-                    </motion.div>
-                    <motion.div
-                      animate={{ scale: [1, 1.2, 1], opacity: [0.5, 0.2, 0.5] }}
+                      animate={{ scale: [1, 1.4, 1], opacity: [0.4, 0.1, 0.4] }}
                       transition={{ duration: 2, repeat: Infinity }}
-                      className="absolute inset-0 rounded-full bg-indigo-500/20 blur-xl -z-10"
+                      className="absolute inset-0 rounded-full bg-blue-600/20 blur-xl -z-10"
                     />
-                  </div>
-                  <h2 className="text-2xl font-bold text-white mb-2">Account Created</h2>
-                  <p className="text-zinc-400 text-sm">Redirecting to verification terminal...</p>
+                  </motion.div>
+                  <h2 className="text-xl font-black text-white mb-2">
+                    Account Created!
+                  </h2>
+                  <p className="text-sm text-zinc-500">
+                    Redirecting to verification…
+                  </p>
+                  <motion.div
+                    initial={{ width: "0%" }}
+                    animate={{ width: "100%" }}
+                    transition={{ duration: 1.4, ease: "linear" }}
+                    className="h-0.5 bg-gradient-to-r from-blue-600 to-sky-400 rounded-full mt-8"
+                  />
                 </motion.div>
               ) : (
-                <form onSubmit={onSubmit} className="space-y-7 relative z-10">
-                  {/* Form Grid */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-                    <div className="group space-y-2">
-                      <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest ml-1 group-focus-within:text-indigo-400 transition-colors flex items-center gap-2">
-                        <User size={10} /> Username
+                <motion.form
+                  key="form"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  onSubmit={onSubmit}
+                  className="space-y-5"
+                >
+                  {/* Role selector */}
+                  <div className="grid grid-cols-2 gap-3">
+                    {ROLES.map((r) => {
+                      const Icon = r.icon;
+                      const active = role === r.id;
+                      return (
+                        <button
+                          key={r.id}
+                          type="button"
+                          onClick={() => setRole(r.id)}
+                          className={`relative flex items-center gap-3 p-4 rounded-[16px] border transition-all duration-250 text-left overflow-hidden ${
+                            active
+                              ? `bg-gradient-to-br ${r.grad} ${r.border} shadow-[0_0_20px_rgba(37,99,235,0.1)]`
+                              : "bg-white/[0.02] border-white/[0.06] hover:border-white/[0.1] hover:bg-white/[0.04]"
+                          }`}
+                        >
+                          {active && (
+                            <div
+                              className={`absolute inset-0 bg-gradient-to-br ${r.grad} pointer-events-none`}
+                            />
+                          )}
+                          <div
+                            className={`relative z-10 h-9 w-9 rounded-[12px] flex items-center justify-center border transition-all ${active ? `border-${r.color}-500/30 bg-${r.color}-500/15` : "border-white/[0.06] bg-white/[0.03]"}`}
+                          >
+                            <Icon
+                              size={16}
+                              className={active ? r.iconColor : "text-zinc-600"}
+                            />
+                          </div>
+                          <div className="relative z-10 min-w-0">
+                            <p
+                              className={`text-[12px] font-bold ${active ? "text-white" : "text-zinc-500"}`}
+                            >
+                              {r.label}
+                            </p>
+                            <p className="text-[10px] text-zinc-700">
+                              {r.desc}
+                            </p>
+                          </div>
+                          {active && (
+                            <div
+                              className={`absolute bottom-0 left-0 right-0 h-[2px] bg-gradient-to-r from-transparent via-${r.dot.replace("bg-", "")} to-transparent`}
+                            />
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Fields grid */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    {/* Username */}
+                    <div className="group space-y-1.5">
+                      <label className="block text-[10px] font-black text-zinc-600 uppercase tracking-[0.22em] ml-0.5 group-focus-within:text-blue-400 transition-colors">
+                        Username
                       </label>
-                      <input
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
-                        placeholder="nexus_architect"
-                        className={`w-full bg-black/40 border ${username.length > 0 && username.length < 2 ? 'border-red-500/50' : 'border-white/5'} rounded-2xl px-5 py-3.5 text-sm text-white placeholder:text-zinc-700 focus:outline-none focus:border-indigo-500/50 focus:bg-black/60 transition-all duration-300`}
-                        required
-                      />
+                      <div className="relative">
+                        <User
+                          size={14}
+                          className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within:text-blue-400 transition-colors pointer-events-none"
+                        />
+                        <input
+                          value={username}
+                          onChange={(e) => setUsername(e.target.value)}
+                          placeholder="nexus_dev"
+                          className={`gf-input h-11 w-full rounded-[14px] pl-10 pr-4 text-sm ${username.length > 0 && username.length < 2 ? "border-red-500/40 focus:border-red-500/60" : ""}`}
+                          required
+                        />
+                      </div>
                       {username.length > 0 && username.length < 2 && (
-                        <p className="text-[9px] text-red-400 ml-1">Minimum 2 characters</p>
+                        <p className="text-[9px] text-red-400 ml-0.5">
+                          Min. 2 characters
+                        </p>
                       )}
                     </div>
-                    <div className="group space-y-2">
-                      <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest ml-1 group-focus-within:text-indigo-400 transition-colors flex items-center gap-2">
-                        <Mail size={10} /> Email Address
+
+                    {/* Email */}
+                    <div className="group space-y-1.5">
+                      <label className="block text-[10px] font-black text-zinc-600 uppercase tracking-[0.22em] ml-0.5 group-focus-within:text-blue-400 transition-colors">
+                        Email
                       </label>
-                      <input
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="you@nebula.com"
-                        className={`w-full bg-black/40 border ${email.length > 0 && !isEmailValid ? 'border-red-500/50' : 'border-white/5'} rounded-2xl px-5 py-3.5 text-sm text-white placeholder:text-zinc-700 focus:outline-none focus:border-indigo-500/50 focus:bg-black/60 transition-all duration-300`}
-                        required
+                      <div className="relative">
+                        <Mail
+                          size={14}
+                          className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within:text-blue-400 transition-colors pointer-events-none"
+                        />
+                        <input
+                          type="email"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          placeholder="you@domain.com"
+                          className={`gf-input h-11 w-full rounded-[14px] pl-10 pr-4 text-sm ${email.length > 0 && !isEmailValid ? "border-red-500/40" : ""}`}
+                          required
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Password */}
+                  <div className="group space-y-1.5">
+                    <label className="block text-[10px] font-black text-zinc-600 uppercase tracking-[0.22em] ml-0.5 group-focus-within:text-blue-400 transition-colors">
+                      Password
+                    </label>
+                    <div className="relative">
+                      <Lock
+                        size={14}
+                        className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within:text-blue-400 transition-colors pointer-events-none"
                       />
-                      {email.length > 0 && !isEmailValid && (
-                        <p className="text-[9px] text-red-400 ml-1">Invalid email format</p>
-                      )}
-                    </div>
-                    <div className="group space-y-2">
-                      <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest ml-1 group-focus-within:text-fuchsia-400 transition-colors flex items-center gap-2">
-                        <Lock size={10} /> Password
-                      </label>
                       <input
-                        type="password"
+                        type={showPass ? "text" : "password"}
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         placeholder="••••••••"
-                        className={`w-full bg-black/40 border ${password.length > 0 && (!isPasswordStrong || password.length < 8) ? 'border-red-500/50' : 'border-white/5'} rounded-2xl px-5 py-3.5 text-sm text-white placeholder:text-zinc-700 focus:outline-none focus:border-fuchsia-500/50 focus:bg-black/60 transition-all duration-300`}
+                        className="gf-input h-11 w-full rounded-[14px] pl-10 pr-11 text-sm"
                         required
                       />
-                      {password.length > 0 && password.length < 8 && (
-                        <p className="text-[9px] text-red-400 ml-1">Minimum 8 characters</p>
-                      )}
-                      {password.length >= 8 && !isPasswordStrong && (
-                        <p className="text-[9px] text-amber-400 ml-1 leading-tight">Must include Upper, Lower, Number & Special</p>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() => setShowPass(!showPass)}
+                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400 transition-colors"
+                      >
+                        {showPass ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
                     </div>
-                    <div className="group space-y-2">
-                      <label className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest ml-1 group-focus-within:text-fuchsia-400 transition-colors flex items-center gap-2">
-                        <ShieldCheck size={10} /> Confirm
-                      </label>
+                    <PasswordStrength password={password} />
+                  </div>
+
+                  {/* Confirm password */}
+                  <div className="group space-y-1.5">
+                    <label className="block text-[10px] font-black text-zinc-600 uppercase tracking-[0.22em] ml-0.5 group-focus-within:text-blue-400 transition-colors">
+                      Confirm Password
+                    </label>
+                    <div className="relative">
+                      <ShieldCheck
+                        size={14}
+                        className="absolute left-3.5 top-1/2 -translate-y-1/2 text-zinc-600 group-focus-within:text-blue-400 transition-colors pointer-events-none"
+                      />
                       <input
-                        type="password"
+                        type={showConfirm ? "text" : "password"}
                         value={confirmPassword}
                         onChange={(e) => setConfirmPassword(e.target.value)}
                         placeholder="••••••••"
-                        className={`w-full bg-black/40 border ${confirmPassword.length > 0 && password !== confirmPassword ? 'border-red-500/50' : 'border-white/5'} rounded-2xl px-5 py-3.5 text-sm text-white placeholder:text-zinc-700 focus:outline-none focus:border-fuchsia-500/50 focus:bg-black/60 transition-all duration-300`}
+                        className={`gf-input h-11 w-full rounded-[14px] pl-10 pr-11 text-sm ${confirmPassword.length > 0 && password !== confirmPassword ? "border-red-500/40" : confirmPassword.length > 0 && password === confirmPassword ? "border-emerald-500/40" : ""}`}
                         required
                       />
-                      {confirmPassword.length > 0 && password !== confirmPassword && (
-                        <p className="text-[9px] text-red-400 ml-1">Passwords do not match</p>
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirm(!showConfirm)}
+                        className="absolute right-3.5 top-1/2 -translate-y-1/2 text-zinc-600 hover:text-zinc-400 transition-colors"
+                      >
+                        {showConfirm ? <EyeOff size={14} /> : <Eye size={14} />}
+                      </button>
+                    </div>
+                    {confirmPassword.length > 0 &&
+                      password !== confirmPassword && (
+                        <p className="text-[9px] text-red-400 ml-0.5">
+                          Passwords don't match
+                        </p>
+                      )}
+                    {confirmPassword.length > 0 &&
+                      password === confirmPassword && (
+                        <p className="text-[9px] text-emerald-400 ml-0.5 flex items-center gap-1">
+                          <CheckCircle2 size={9} /> Match confirmed
+                        </p>
+                      )}
+                  </div>
+
+                  {/* Terms checkbox */}
+                  <label className="flex items-start gap-3 cursor-pointer group">
+                    <div
+                      onClick={() => setAgreedToTerms(!agreedToTerms)}
+                      className={`mt-0.5 h-4 w-4 shrink-0 rounded-[5px] border flex items-center justify-center transition-all duration-200 ${
+                        agreedToTerms
+                          ? "bg-blue-600 border-blue-500 shadow-[0_0_10px_rgba(37,99,235,0.4)]"
+                          : "border-white/15 bg-white/[0.02] hover:border-blue-500/40"
+                      }`}
+                    >
+                      {agreedToTerms && (
+                        <motion.div
+                          initial={{ scale: 0 }}
+                          animate={{ scale: 1 }}
+                        >
+                          <CheckCircle2 size={10} className="text-white" />
+                        </motion.div>
                       )}
                     </div>
-                  </div>
-
-                  {/* Role Selection */}
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between px-1">
-                      <span className="text-[10px] font-black text-zinc-500 uppercase tracking-[0.2em]">Select Professional Role</span>
-                      <div className="h-px bg-white/5 flex-1 ml-4" />
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
-                      <button
-                        type="button"
-                        onClick={() => setRole("user")}
-                        className={`group relative flex flex-col items-center justify-center p-5 rounded-2xl border transition-all duration-500 overflow-hidden ${role === "user"
-                            ? "bg-indigo-500/10 border-indigo-500/50 shadow-[0_0_40px_rgba(99,102,241,0.15)] ring-1 ring-indigo-500/20"
-                            : "bg-black/20 border-white/5 hover:border-white/10 hover:bg-white/5"
-                          }`}
-                      >
-                        <div className={`h-10 w-10 rounded-xl border-2 flex items-center justify-center mb-3 transition-all duration-500 ${role === "user" ? "border-indigo-500 bg-indigo-500/20 rotate-12" : "border-zinc-800 rotate-0"
-                          }`}>
-                          <span className="text-xl">👤</span>
-                        </div>
-                        <p className={`text-xs font-black tracking-wider uppercase ${role === "user" ? "text-indigo-400" : "text-zinc-500"}`}>Player</p>
-                        {role === "user" && (
-                          <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-indigo-500 to-transparent" />
-                        )}
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setRole("devl")}
-                        className={`group relative flex flex-col items-center justify-center p-5 rounded-2xl border transition-all duration-500 overflow-hidden ${role === "devl"
-                            ? "bg-fuchsia-500/10 border-fuchsia-500/50 shadow-[0_0_40px_rgba(217,70,239,0.15)] ring-1 ring-fuchsia-500/20"
-                            : "bg-black/20 border-white/5 hover:border-white/10 hover:bg-white/5"
-                          }`}
-                      >
-                        <div className={`h-10 w-10 rounded-xl border-2 flex items-center justify-center mb-3 transition-all duration-500 ${role === "devl" ? "border-fuchsia-500 bg-fuchsia-500/20 -rotate-12" : "border-zinc-800 rotate-0"
-                          }`}>
-                          <span className="text-xl">💻</span>
-                        </div>
-                        <p className={`text-xs font-black tracking-wider uppercase ${role === "devl" ? "text-fuchsia-400" : "text-zinc-500"}`}>Developer</p>
-                        {role === "devl" && (
-                          <div className="absolute bottom-0 left-0 right-0 h-1 bg-gradient-to-r from-transparent via-fuchsia-500 to-transparent" />
-                        )}
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Terms & Conditions */}
-                  <div className="pt-2">
-                    <label className="flex items-start gap-3 cursor-pointer group">
-                      <div
-                        onClick={() => setAgreedToTerms(!agreedToTerms)}
-                        className={`mt-0.5 w-5 h-5 rounded-lg border flex items-center justify-center transition-all duration-300 ${agreedToTerms ? 'bg-emerald-500/20 border-emerald-500/50 shadow-[0_0_15px_rgba(16,185,129,0.2)]' : 'bg-white/5 border-white/10 group-hover:border-white/20'
-                          }`}
-                      >
-                        {agreedToTerms && <CheckCircle2 size={12} className="text-emerald-400" />}
-                      </div>
-                      <span className="text-[11px] leading-relaxed text-zinc-500 group-hover:text-zinc-400 transition-colors">
-                        I certify that I have read and accepted the{" "}
-                        <button
-                          type="button"
-                          onClick={(e) => { e.stopPropagation(); setShowTerms(true); }}
-                          className="text-indigo-400 hover:text-indigo-300 font-bold underline underline-offset-4"
-                        >
-                          Terms of Service
-                        </button>
-                        {" "}governing the Forge AI protocols.
+                    <span className="text-[11px] leading-relaxed text-zinc-600 group-hover:text-zinc-400 transition-colors">
+                      I agree to the{" "}
+                      <span className="text-blue-400 font-bold cursor-pointer hover:text-sky-300">
+                        Terms of Service
+                      </span>{" "}
+                      and{" "}
+                      <span className="text-blue-400 font-bold cursor-pointer hover:text-sky-300">
+                        Privacy Policy
                       </span>
-                    </label>
-                  </div>
+                    </span>
+                  </label>
 
-                  {/* Error State */}
+                  {/* Error */}
                   <AnimatePresence>
                     {error && (
                       <motion.div
-                        initial={{ opacity: 0, y: -10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        className="flex items-center gap-3 p-4 rounded-xl bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-medium"
+                        initial={{ opacity: 0, height: 0, y: -5 }}
+                        animate={{ opacity: 1, height: "auto", y: 0 }}
+                        exit={{ opacity: 0, height: 0 }}
+                        className="flex items-center gap-2.5 px-4 py-3 rounded-[14px] bg-red-500/8 border border-red-500/18 text-red-400 text-xs font-medium"
                       >
-                        <AlertCircle size={14} className="shrink-0" />
+                        <AlertCircle size={13} className="shrink-0" />
                         {error}
                       </motion.div>
                     )}
                   </AnimatePresence>
 
-                  {/* Submit Button */}
-                  <AnimatePresence>
-                    {canSubmit && (
-                      <motion.button
-                        key="submit-btn"
-                        initial={{ opacity: 0, y: 20, scale: 0.95 }}
-                        animate={{ opacity: 1, y: 0, scale: 1 }}
-                        exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                        type="submit"
-                        disabled={loading}
-                        className="group relative w-full rounded-2xl py-4.5 transition-all duration-500 disabled:opacity-30 disabled:grayscale disabled:cursor-not-allowed"
-                      >
-                        <div className="absolute inset-0 bg-gradient-to-r from-indigo-600 to-fuchsia-600 group-hover:scale-105 transition-transform duration-500" />
-                        <div className="relative flex items-center justify-center gap-3 text-sm font-black text-white uppercase tracking-[0.2em]">
-                          {loading ? (
-                            <>
-                              <Loader2 size={18} className="animate-spin" />
-                              Forging Identity...
-                            </>
-                          ) : (
-                            <>
-                              Create Studio Account
-                              <ArrowRight size={18} className="group-hover:translate-x-1 transition-transform" />
-                            </>
-                          )}
-                        </div>
-                      </motion.button>
-                    )}
-                  </AnimatePresence>
+                  {/* Submit */}
+                  <motion.button
+                    type="submit"
+                    disabled={!canSubmit}
+                    whileHover={canSubmit ? { scale: 1.02 } : {}}
+                    whileTap={canSubmit ? { scale: 0.98 } : {}}
+                    className="relative h-12 w-full overflow-hidden rounded-[14px] disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    <div className="absolute inset-0 bg-gradient-to-r from-blue-700 via-blue-600 to-sky-500 bg-[length:200%_100%] animate-[gradient_3s_linear_infinite]" />
+                    <motion.div
+                      animate={{ x: ["-100%", "200%"] }}
+                      transition={{
+                        duration: 2.5,
+                        repeat: Infinity,
+                        ease: "linear",
+                        repeatDelay: 1.5,
+                      }}
+                      className="absolute inset-0 bg-gradient-to-r from-transparent via-white/25 to-transparent skew-x-12"
+                    />
+                    <div className="relative flex items-center justify-center gap-2.5 text-[11px] font-black text-white uppercase tracking-widest">
+                      {loading ? (
+                        <Loader2 size={16} className="animate-spin" />
+                      ) : (
+                        <>
+                          Create Studio Account <ArrowRight size={15} />
+                        </>
+                      )}
+                    </div>
+                  </motion.button>
 
-                  <div className="flex items-center justify-center gap-6 pt-8 border-t border-white/5">
-                    <Link href="/signin" className="text-[10px] font-black text-zinc-500 hover:text-white uppercase tracking-widest transition-all group relative">
-                      Already Registered
-                      <span className="absolute -bottom-1 left-0 w-0 h-[1px] bg-indigo-500 group-hover:w-full transition-all duration-300" />
+                  {/* Footer */}
+                  <div className="flex items-center justify-center gap-5">
+                    <Link
+                      href="/signin"
+                      className="text-[10px] font-bold text-zinc-600 hover:text-white uppercase tracking-widest transition-colors"
+                    >
+                      Sign In
                     </Link>
-                    <div className="w-1 h-1 rounded-full bg-zinc-800" />
-                    <Link href="/login" className="text-[10px] font-black text-zinc-500 hover:text-white uppercase tracking-widest transition-all group relative">
-                      Admin Portal
-                      <span className="absolute -bottom-1 left-0 w-0 h-[1px] bg-fuchsia-500 group-hover:w-full transition-all duration-300" />
+                    <div className="h-3 w-px bg-white/[0.08]" />
+                    <Link
+                      href="/"
+                      className="text-[10px] font-bold text-zinc-600 hover:text-white uppercase tracking-widest transition-colors"
+                    >
+                      Home
                     </Link>
-                    <div className="w-1 h-1 rounded-full bg-zinc-800" />
-                    <Link href="/" className="text-[10px] font-black text-zinc-500 hover:text-white uppercase tracking-widest transition-all group relative">
-                      Main Terminal
-                      <span className="absolute -bottom-1 left-0 w-0 h-[1px] bg-cyan-500 group-hover:w-full transition-all duration-300" />
+                    <div className="h-3 w-px bg-white/[0.08]" />
+                    <Link
+                      href="/login"
+                      className="text-[10px] font-bold text-zinc-600 hover:text-white uppercase tracking-widest transition-colors"
+                    >
+                      Admin
                     </Link>
                   </div>
-                </form>
+                </motion.form>
               )}
             </AnimatePresence>
-          </motion.div>
+          </div>
+        </div>
+
+        {/* ── Right branding panel ── */}
+        <div className="hidden lg:flex flex-col lg:w-[45%] xl:w-[48%] relative overflow-hidden">
+          <div className="hidden lg:block absolute left-0 top-[10%] bottom-[10%] w-px bg-white/[0.05]" />
+          <div className="absolute inset-0 bg-gradient-to-bl from-blue-600/10 via-transparent to-sky-500/6" />
+
+          <div className="relative z-10 flex-1 flex flex-col justify-between p-12 xl:p-16">
+            {/* Feature list */}
+            <div className="mt-auto" />
+
+            <div className="space-y-8">
+              <div>
+                <h2 className="text-4xl xl:text-5xl font-black tracking-tight text-white leading-tight">
+                  Start building<br />
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-sky-300">
+                    in seconds.
+                  </span>
+                </h2>
+                <p className="text-zinc-500 font-medium mt-3 max-w-sm leading-relaxed">
+                  No experience required. Describe your game and our neural
+                  engine builds it for you.
+                </p>
+              </div>
+
+              {/* Feature cards */}
+              <div className="space-y-3">
+                {[
+                  { emoji: "⚡", title: "AI-powered generation", desc: "Full game from a single prompt" },
+                  { emoji: "🎮", title: "5+ export platforms", desc: "WebGL, iOS, Android, PC, Mac" },
+                  { emoji: "🧠", title: "Neural coaching", desc: "Get smart suggestions as you build" },
+                  { emoji: "🌐", title: "Community arcade", desc: "Publish and share instantly" },
+                ].map((f, i) => (
+                  <motion.div
+                    key={f.title}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.1 + i * 0.08 }}
+                    className="flex items-center gap-4 p-4 rounded-[16px] border border-white/[0.04] bg-white/[0.02] hover:bg-white/[0.04] transition-colors group"
+                  >
+                    <div className="h-10 w-10 rounded-[12px] bg-white/[0.04] border border-white/[0.06] flex items-center justify-center text-lg shrink-0 group-hover:scale-110 transition-transform">
+                      {f.emoji}
+                    </div>
+                    <div>
+                      <p className="text-[13px] font-bold text-white leading-tight">{f.title}</p>
+                      <p className="text-[11px] text-zinc-600 font-medium mt-0.5">{f.desc}</p>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+
+            {/* Social proof */}
+            <div className="flex items-center gap-4">
+              <div className="flex -space-x-2">
+                {["#2563eb", "#0ea5e9", "#10b981", "#f59e0b", "#8b5cf6"].map(
+                  (c, i) => (
+                    <div
+                      key={i}
+                      className="h-8 w-8 rounded-full border-2 border-[#06060a] flex items-center justify-center text-[10px] font-black text-white"
+                      style={{ backgroundColor: `${c}40`, zIndex: 5 - i }}
+                    >
+                      {String.fromCharCode(65 + i * 3)}
+                    </div>
+                  ),
+                )}
+              </div>
+              <div>
+                <p className="text-[12px] font-bold text-white">12,400+ creators</p>
+                <p className="text-[10px] text-zinc-600">already building with GameForge</p>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
-
-      {/* Modern Terms Modal */}
-      <AnimatePresence>
-        {showTerms && (
-          <div className="fixed inset-0 z-[100] flex items-center justify-center p-6">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setShowTerms(false)}
-              className="absolute inset-0 bg-black/90 backdrop-blur-md"
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.9, y: 20 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="gf-panel-strong relative w-full max-w-2xl max-h-[80vh] rounded-[2.5rem] bg-[#0a0a0d]/90 border border-white/10 shadow-[0_0_100px_rgba(99,102,241,0.1)] flex flex-col overflow-hidden"
-            >
-              <div className="p-8 border-b border-white/5 flex items-center justify-between">
-                <div className="flex items-center gap-4">
-                  <div className="h-12 w-12 rounded-2xl bg-indigo-500/10 flex items-center justify-center border border-indigo-500/20 text-indigo-400">
-                    <Info size={24} />
-                  </div>
-                  <div>
-                    <h3 className="text-2xl font-black italic tracking-tight">Terms of Service</h3>
-                    <p className="text-[10px] font-bold text-zinc-500 uppercase tracking-widest">Protocol v2.4.0 • Updated April 2026</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setShowTerms(false)}
-                  className="h-10 w-10 rounded-full bg-white/5 flex items-center justify-center hover:bg-white/10 transition-colors"
-                >
-                  <X size={20} className="text-zinc-500" />
-                </button>
-              </div>
-
-              <div className="flex-1 overflow-y-auto p-8 custom-scrollbar space-y-8">
-                <section className="space-y-3">
-                  <h4 className="text-xs font-black uppercase tracking-widest text-indigo-400 flex items-center gap-2">
-                    <div className="h-1 w-4 bg-indigo-500 rounded-full" /> 01. Platform Access
-                  </h4>
-                  <p className="text-sm text-zinc-400 leading-relaxed">
-                    By accessing GameForge AI Studio, you enter an ecosystem of high-end game development tools. You agree to use these tools for legitimate creative purposes and respect our ethical AI guidelines.
-                  </p>
-                </section>
-                <section className="space-y-3">
-                  <h4 className="text-xs font-black uppercase tracking-widest text-fuchsia-400 flex items-center gap-2">
-                    <div className="h-1 w-4 bg-fuchsia-500 rounded-full" /> 02. Intellectual Property
-                  </h4>
-                  <p className="text-sm text-zinc-400 leading-relaxed">
-                    Games generated through our AI remain your creative property. However, the proprietary algorithms, models, and platform architecture are the exclusive property of GameForge AI.
-                  </p>
-                </section>
-                <section className="space-y-3">
-                  <h4 className="text-xs font-black uppercase tracking-widest text-emerald-400 flex items-center gap-2">
-                    <div className="h-1 w-4 bg-emerald-500 rounded-full" /> 03. Usage Limits
-                  </h4>
-                  <p className="text-sm text-zinc-400 leading-relaxed">
-                    Accounts are intended for individual or professional team use. Automated scraping or reverse engineering of our AI generation pipeline is strictly prohibited and will result in immediate termination.
-                  </p>
-                </section>
-                <section className="space-y-3">
-                  <h4 className="text-xs font-black uppercase tracking-widest text-amber-400 flex items-center gap-2">
-                    <div className="h-1 w-4 bg-amber-500 rounded-full" /> 04. Privacy & Data
-                  </h4>
-                  <p className="text-sm text-zinc-400 leading-relaxed">
-                    We process your prompts and data to improve your game generation experience. We never sell your personal data to third parties. Your projects are encrypted and stored with industry-leading standards.
-                  </p>
-                </section>
-              </div>
-
-              <div className="p-8 border-t border-white/5 bg-black/40 flex gap-4">
-                <button
-                  onClick={() => setShowTerms(false)}
-                  className="flex-1 rounded-2xl bg-white/5 py-4 font-bold text-zinc-400 hover:text-white transition-colors"
-                >
-                  Review Again
-                </button>
-                <button
-                  onClick={() => { setAgreedToTerms(true); setShowTerms(false); }}
-                  className="flex-[2] rounded-2xl bg-gradient-to-r from-indigo-600 to-fuchsia-600 py-4 font-black text-white shadow-xl shadow-indigo-500/20"
-                >
-                  Accept & Complete
-                </button>
-              </div>
-            </motion.div>
-          </div>
-        )}
-      </AnimatePresence>
     </div>
   );
 }
-
-function X({ size, className }: { size?: number, className?: string }) {
-  return (
-    <svg
-      width={size || 24}
-      height={size || 24}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      className={className}
-    >
-      <path d="M18 6L6 18M6 6l12 12" />
-    </svg>
-  );
-}
-

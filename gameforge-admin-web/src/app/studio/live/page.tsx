@@ -33,7 +33,7 @@ import {
 } from "livekit-client";
 import UserShell from "@/app/_components/UserShell";
 import { apiFetch } from "@/lib/api";
-import { getUserToken } from "@/lib/userAuth";
+import { readAuthToken } from "@/lib/stores/authStore";
 import { normalizeImageUrl } from "@/lib/media";
 
 type UserProfile = {
@@ -208,7 +208,7 @@ export default function LiveStudioPage() {
     let cancelled = false;
     async function loadProfile() {
       try {
-        const token = getUserToken();
+  const token = readAuthToken();
         if (!token) return;
         const res = await apiFetch<any>("/auth/profile", { method: "GET", token });
         const data = (res && typeof res === "object" && "data" in res) ? res.data : res;
@@ -583,7 +583,7 @@ export default function LiveStudioPage() {
           }}
         >
           <span className="inline-flex items-center gap-2">
-            <Sparkles size={16} className={sfx ? "text-fuchsia-300" : "text-zinc-400"} />
+            <Sparkles size={16} className={sfx ? "text-cyan-300" : "text-zinc-400"} />
             SFX
           </span>
         </button>
@@ -601,7 +601,7 @@ export default function LiveStudioPage() {
 
         <button className="gf-btn rounded-xl px-3 py-2 text-sm" title="Settings (coming soon)">
           <span className="inline-flex items-center gap-2">
-            <Settings size={16} className="text-indigo-300" />
+            <Settings size={16} className="text-blue-300" />
             Settings
           </span>
         </button>
@@ -624,7 +624,7 @@ export default function LiveStudioPage() {
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-[1.7fr_1fr]">
         {/* Main stage */}
         <div className="gf-panel-strong gf-stroke-gradient relative overflow-hidden rounded-[28px] p-4">
-          <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/8 via-transparent to-fuchsia-500/6 pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/8 via-transparent to-cyan-500/6 pointer-events-none" />
 
           <div className="relative">
             <div className="flex items-center justify-between gap-3">
@@ -662,12 +662,12 @@ export default function LiveStudioPage() {
                 <button
                   className={cx(
                     "gf-btn rounded-xl px-3 py-2 text-sm",
-                    camOn && "border-fuchsia-400/30 bg-fuchsia-500/10",
+                    camOn && "border-cyan-400/30 bg-cyan-500/10",
                   )}
                   onClick={camOn ? stopCam : startCam}
                 >
                   <span className="inline-flex items-center gap-2">
-                    {camOn ? <Video size={16} className="text-fuchsia-300" /> : <VideoOff size={16} className="text-zinc-300" />}
+                    {camOn ? <Video size={16} className="text-cyan-300" /> : <VideoOff size={16} className="text-zinc-300" />}
                     {camOn ? "Cam On" : "Cam Off"}
                   </span>
                 </button>
@@ -820,17 +820,39 @@ export default function LiveStudioPage() {
               <AnimatePresence>
                 {!screenOn && !camOn && (
                   <motion.div
-                    initial={{ opacity: 0, scale: 0.98 }}
+                    initial={{ opacity: 0, scale: 0.97 }}
                     animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.98 }}
+                    exit={{ opacity: 0, scale: 0.97 }}
                     className="absolute inset-0 flex items-center justify-center"
                   >
                     <div className="text-center">
-                      <div className="mx-auto mb-3 flex h-14 w-14 items-center justify-center rounded-2xl bg-indigo-500/15 text-indigo-300 border border-indigo-500/20">
-                        <Camera size={22} />
+                      <div className="relative mx-auto mb-5 w-20 h-20">
+                        <motion.div
+                          animate={{ scale: [1, 1.6, 1], opacity: [0.2, 0.05, 0.2] }}
+                          transition={{ duration: 2.5, repeat: Infinity }}
+                          className="absolute inset-0 rounded-full bg-red-500/30 blur-xl"
+                        />
+                        <div className="relative h-full w-full rounded-full bg-[var(--gf-shell-bg)] border border-red-500/20 flex items-center justify-center backdrop-blur-md">
+                          <Radio size={28} className="text-red-400" />
+                        </div>
+                        <motion.div
+                          animate={{ opacity: [1, 0, 1] }}
+                          transition={{ duration: 1.2, repeat: Infinity }}
+                          className="absolute top-1 right-1 h-3 w-3 rounded-full bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.8)]"
+                        />
                       </div>
-                      <p className="text-sm font-semibold">Share your gameplay</p>
-                      <p className="mt-1 text-xs text-zinc-400">Click “Share Screen” to start capturing your game.</p>
+                      <p className="text-base font-black text-[var(--foreground)] uppercase tracking-wider">Broadcast Ready</p>
+                      <p className="mt-2 text-xs text-zinc-500 max-w-[200px] mx-auto leading-relaxed">
+                        Enable Screen Share or Camera to begin your live session
+                      </p>
+                      <div className="mt-4 flex items-center justify-center gap-3">
+                        {["SCREEN", "CAM", "MIC"].map((s) => (
+                          <div key={s} className="flex items-center gap-1.5 bg-white/[0.04] border border-white/[0.06] rounded-lg px-3 py-1.5">
+                            <div className="h-1.5 w-1.5 rounded-full bg-zinc-600" />
+                            <span className="text-[9px] font-black uppercase tracking-wider text-zinc-600">{s}</span>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   </motion.div>
                 )}
@@ -845,7 +867,7 @@ export default function LiveStudioPage() {
                     exit={{ opacity: 0, y: 12, scale: 0.98 }}
                     className="absolute bottom-3 right-3 w-[30%] max-w-[220px] overflow-hidden rounded-2xl border border-white/12 bg-black/40 shadow-2xl"
                   >
-                    <div className="absolute inset-0 bg-gradient-to-br from-fuchsia-500/10 via-transparent to-cyan-500/8 pointer-events-none" />
+                    <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 via-transparent to-cyan-500/8 pointer-events-none" />
                     <video ref={camPipRef} autoPlay playsInline muted className="relative h-full w-full object-cover" />
                     <div className="absolute left-2 top-2 rounded-full border border-white/10 bg-black/45 px-2 py-1 text-[10px] text-zinc-200">
                       CAM
@@ -855,7 +877,7 @@ export default function LiveStudioPage() {
               </AnimatePresence>
 
               {/* chat overlay hint */}
-              <div className="absolute left-3 top-3 rounded-full border border-white/10 bg-black/45 px-3 py-1.5 text-[11px] text-zinc-200 inline-flex items-center gap-2">
+              <div className="absolute left-3 top-3 rounded-full border border-white/10 bg-[var(--gf-shell-bg)]/45 px-3 py-1.5 text-[11px] text-zinc-200 inline-flex items-center gap-2">
                 <MessageCircle size={14} className="text-white/70" />
                 Live chat
               </div>
@@ -937,82 +959,121 @@ export default function LiveStudioPage() {
             )}
           </AnimatePresence>
 
-          <div className="gf-panel-strong rounded-[24px] p-4">
-            <div className="flex items-center justify-between">
-              <p className="text-sm font-semibold">Go Live</p>
-              <span className="text-[10px] font-black uppercase tracking-[0.22em] text-white/35">beta</span>
+          <div className="gf-panel-strong rounded-[24px] border border-white/[0.07] overflow-hidden">
+            {/* Go Live header */}
+            <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.05]">
+              <div className="flex items-center gap-3">
+                <div className="h-8 w-8 rounded-xl bg-red-500/15 flex items-center justify-center border border-red-500/25">
+                  <Radio size={16} className="text-red-400" />
+                </div>
+                <span className="text-sm font-black text-[var(--foreground)] uppercase tracking-wider">Broadcast Control</span>
+              </div>
+              <span className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-600 border border-white/5 px-2 py-1 rounded-lg">BETA</span>
             </div>
 
-            <div className="mt-3 rounded-2xl border border-white/8 bg-black/30 p-3 text-xs text-zinc-300">
-              This is the studio preview. Next step is wiring LiveKit tokens and room join.
-            </div>
-
-            <button
-              className={cx(
-                "mt-3 w-full rounded-2xl px-4 py-3 text-sm font-semibold transition",
-                liveReady
-                  ? "bg-gradient-to-r from-cyan-500/80 via-indigo-500/80 to-fuchsia-500/80 hover:brightness-110"
-                  : "border border-white/10 bg-white/5 text-white/40 cursor-not-allowed",
-              )}
-              disabled={!liveReady}
-              onClick={() => {
-                if (connected) {
-                  disconnectLivekit();
-                } else {
-                  connectAndGoLive();
-                }
-              }}
-            >
-              {liveReady ? (connected ? "Stop Live" : connecting ? "Connecting..." : "Connect & Go Live") : "Enable screen + mic/cam"}
-            </button>
-
-            <div className="mt-3 rounded-2xl border border-white/8 bg-black/25 p-3">
-              <p className="text-[10px] text-white/35 uppercase tracking-[0.2em]">Viewer link</p>
-              <p className="mt-1 text-xs text-zinc-300 break-all">/live/{encodeURIComponent(roomName.trim() || "gameforge-live")}</p>
-              <p className="mt-1 text-[11px] text-zinc-500">Share this with viewers. They can watch without opening another tab for the game.</p>
-              <div className="mt-2 flex gap-2">
-                <input
-                  value={roomName}
-                  onChange={(e) => setRoomName(e.target.value)}
-                  className="gf-input w-full rounded-xl px-3 py-2 text-sm"
-                  placeholder="room name"
-                />
-                <button
-                  className="gf-btn rounded-xl px-3 py-2 text-sm"
-                  onClick={async () => {
-                    try {
-                      const link = `${window.location.origin}/live/${encodeURIComponent(roomName.trim() || "gameforge-live")}`;
-                      await navigator.clipboard.writeText(link);
-                      beep(980);
-                      addToast("Copied", "Viewer link copied");
-                    } catch {
-                      addToast("Copy failed");
-                    }
-                  }}
-                >
-                  Copy
-                </button>
+            <div className="p-5 space-y-4">
+              {/* Status toggle pills */}
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  { label: "Screen", on: screenOn, color: "emerald" },
+                  { label: "Camera", on: camOn, color: "cyan" },
+                  { label: "Mic", on: micOn, color: "cyan" },
+                ].map((s) => (
+                  <div
+                    key={s.label}
+                    className={`rounded-2xl border p-3 text-center transition-all ${
+                      s.on
+                        ? s.color === "emerald" ? "bg-emerald-500/10 border-emerald-500/25" :
+                          s.color === "cyan" ? "bg-cyan-500/10 border-cyan-500/25" :
+                          "bg-cyan-500/10 border-cyan-500/25"
+                        : "bg-black/20 border-white/[0.06]"
+                    }`}
+                  >
+                    <div className={`flex items-center justify-center mb-1 ${
+                      s.on
+                        ? s.color === "emerald" ? "text-emerald-400" :
+                          s.color === "cyan" ? "text-cyan-400" :
+                          "text-cyan-400"
+                        : "text-zinc-600"
+                    }`}>
+                      <motion.div
+                        animate={s.on ? { opacity: [1, 0.4, 1] } : { opacity: 1 }}
+                        transition={{ duration: 1.2, repeat: Infinity }}
+                        className={`h-1.5 w-1.5 rounded-full ${s.on ? (s.color === "emerald" ? "bg-emerald-500" : s.color === "cyan" ? "bg-cyan-500" : "bg-cyan-500") : "bg-zinc-700"}`}
+                      />
+                    </div>
+                    <div className="text-[9px] font-black uppercase tracking-[0.15em] text-zinc-400">{s.label}</div>
+                    <div className={`text-[11px] font-black mt-0.5 ${
+                      s.on
+                        ? s.color === "emerald" ? "text-emerald-400" :
+                          s.color === "cyan" ? "text-cyan-300" :
+                          "text-cyan-300"
+                        : "text-zinc-600"
+                    }`}>{s.on ? "ON" : "OFF"}</div>
+                  </div>
+                ))}
               </div>
-            </div>
 
-            <div className="mt-3 grid grid-cols-3 gap-2">
-              <div className="rounded-2xl border border-white/8 bg-black/25 p-3">
-                <p className="text-[10px] text-white/35 uppercase tracking-[0.2em]">Screen</p>
-                <p className={cx("mt-1 text-sm font-semibold", screenOn ? "text-emerald-300" : "text-white/60")}>
-                  {screenOn ? "ON" : "OFF"}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-white/8 bg-black/25 p-3">
-                <p className="text-[10px] text-white/35 uppercase tracking-[0.2em]">Cam</p>
-                <p className={cx("mt-1 text-sm font-semibold", camOn ? "text-fuchsia-300" : "text-white/60")}>
-                  {camOn ? "ON" : "OFF"}
-                </p>
-              </div>
-              <div className="rounded-2xl border border-white/8 bg-black/25 p-3">
-                <p className="text-[10px] text-white/35 uppercase tracking-[0.2em]">Mic</p>
-                <p className={cx("mt-1 text-sm font-semibold", micOn ? "text-cyan-300" : "text-white/60")}>
-                  {micOn ? "ON" : "OFF"}
-                </p>
+              {/* Main CTA */}
+              <button
+                className={cx(
+                  "w-full relative overflow-hidden rounded-2xl px-4 py-4 text-sm font-black uppercase tracking-[0.2em] transition-all",
+                  liveReady
+                    ? connected
+                      ? "bg-red-500/80 hover:bg-red-500 text-white shadow-lg shadow-red-500/20"
+                      : "bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white shadow-xl shadow-red-500/25 hover:scale-[1.02]"
+                    : "border border-white/10 bg-white/5 text-white/40 cursor-not-allowed",
+                )}
+                disabled={!liveReady}
+                onClick={() => { if (connected) { disconnectLivekit(); } else { connectAndGoLive(); } }}
+              >
+                {liveReady ? (
+                  <span className="relative z-10 flex items-center justify-center gap-2">
+                    {connected ? (
+                      <>End Broadcast</>
+                    ) : connecting ? (
+                      "Connecting..."
+                    ) : (
+                      <><Radio size={16} className="animate-pulse" /> Go Live Now</>
+                    )}
+                  </span>
+                ) : "Enable screen + cam/mic first"}
+                {liveReady && !connected && (
+                  <motion.div
+                    animate={{ x: ["-100%", "200%"] }}
+                    transition={{ duration: 3, repeat: Infinity, ease: "linear" }}
+                    className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent skew-x-12"
+                  />
+                )}
+              </button>
+
+              {/* Viewer link */}
+              <div className="rounded-2xl border border-white/[0.06] bg-black/20 p-4">
+                <p className="text-[9px] text-zinc-600 uppercase tracking-[0.25em] mb-2">Viewer Link</p>
+                <p className="text-xs text-zinc-300 break-all font-mono">/live/{encodeURIComponent(roomName.trim() || "gameforge-live")}</p>
+                <div className="mt-3 flex gap-2">
+                  <input
+                    value={roomName}
+                    onChange={(e) => setRoomName(e.target.value)}
+                    className="gf-input flex-1 rounded-xl px-3 py-2 text-xs"
+                    placeholder="room name"
+                  />
+                  <button
+                    className="gf-btn rounded-xl px-3 py-2 text-xs font-black uppercase tracking-wider"
+                    onClick={async () => {
+                      try {
+                        const link = `${window.location.origin}/live/${encodeURIComponent(roomName.trim() || "gameforge-live")}`;
+                        await navigator.clipboard.writeText(link);
+                        beep(980);
+                        addToast("Copied", "Viewer link copied");
+                      } catch {
+                        addToast("Copy failed");
+                      }
+                    }}
+                  >
+                    Copy
+                  </button>
+                </div>
               </div>
             </div>
           </div>

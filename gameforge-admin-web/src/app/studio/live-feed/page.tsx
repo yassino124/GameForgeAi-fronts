@@ -54,10 +54,10 @@ export default function LiveFeedPage() {
   return (
     <UserShell title="Live Now" subtitle="Join creators who are currently streaming">
       <div className="space-y-5">
-        <div className="relative rounded-[32px] p-8 overflow-hidden bg-[#0A0A0A] border border-white/5 shadow-2xl">
+        <div className="relative rounded-[32px] p-8 overflow-hidden bg-[var(--gf-panel-bg-strong)] border border-white/5 shadow-2xl">
           {/* Animated Blob Background */}
           <div className="absolute top-0 right-0 w-[400px] h-[400px] bg-emerald-500/20 blur-[100px] rounded-full mix-blend-screen translate-x-1/2 -translate-y-1/2 animate-pulse" />
-          <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-indigo-500/10 blur-[100px] rounded-full mix-blend-screen -translate-x-1/3 translate-y-1/3" />
+          <div className="absolute bottom-0 left-0 w-[400px] h-[400px] bg-blue-500/10 blur-[100px] rounded-full mix-blend-screen -translate-x-1/3 translate-y-1/3" />
 
           <div className="relative z-10 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -65,7 +65,7 @@ export default function LiveFeedPage() {
                 <Radio size={14} className="animate-pulse" />
                 Live Directory
               </div>
-              <h1 className="mt-4 text-4xl sm:text-5xl font-black tracking-tight text-transparent bg-clip-text bg-gradient-to-r from-white via-zinc-200 to-zinc-500 drop-shadow-sm">
+              <h1 className="mt-4 text-4xl sm:text-5xl font-black tracking-tight text-[var(--foreground)] drop-shadow-sm">
                 {loading ? "Scanning…" : `${total} Creators Live`}
               </h1>
               <p className="mt-2 text-sm sm:text-base font-medium text-zinc-400 max-w-xl leading-relaxed">
@@ -74,7 +74,7 @@ export default function LiveFeedPage() {
             </div>
 
             <div className="flex items-center gap-2 rounded-2xl border border-white/5 bg-white/[0.03] backdrop-blur-md px-4 py-3 text-sm font-semibold text-zinc-300 shadow-xl">
-              <Sparkles size={16} className="text-fuchsia-400 drop-shadow-[0_0_8px_rgba(232,121,249,0.5)] animate-pulse" />
+              <Sparkles size={16} className="text-cyan-400 drop-shadow-[0_0_8px_rgba(232,121,249,0.5)] animate-pulse" />
               Updates automatically
             </div>
           </div>
@@ -88,7 +88,7 @@ export default function LiveFeedPage() {
           </div>
         ) : items.length === 0 ? (
           <div className="gf-panel-strong rounded-[28px] p-12 text-center border border-dashed border-white/10">
-            <div className="text-2xl font-black italic uppercase text-white">Nobody is live yet</div>
+            <div className="text-2xl font-black italic uppercase text-[var(--foreground)]">Nobody is live yet</div>
             <div className="mt-2 text-sm text-zinc-500">Start a stream from Studio → Live</div>
           </div>
         ) : (
@@ -104,7 +104,7 @@ export default function LiveFeedPage() {
                 {/* Spinning Gradient Border */}
                 <div className="absolute inset-x-[-50%] inset-y-[-50%] w-[200%] h-[200%] bg-[conic-gradient(from_0deg,transparent_0_310deg,#34d399_330deg,#8b5cf6_360deg)] animate-[spin_4s_linear_infinite] opacity-30 group-hover:opacity-100 transition-opacity duration-500" />
 
-                <Link href={`/live/${encodeURIComponent(s.roomName)}`} className="relative block w-full h-full rounded-[30px] overflow-hidden bg-[#0A0A0A]">
+                <Link href={`/live/${encodeURIComponent(s.roomName)}`} className="relative block w-full h-full rounded-[30px] overflow-hidden bg-[var(--gf-shell-bg)]">
                   {/* Thumbnail Image */}
                   <div
                     className="absolute inset-0 transition-all duration-700 ease-out group-hover:scale-110 opacity-70 group-hover:opacity-90"
@@ -149,7 +149,7 @@ export default function LiveFeedPage() {
                   <div className="absolute left-5 right-5 bottom-5 z-20 flex items-end gap-3 transition-transform duration-500 group-hover:translate-y-[-4px]">
                     {/* Glowing Avatar Frame */}
                     <div className="relative">
-                      <div className="absolute -inset-1 rounded-full bg-gradient-to-r from-emerald-500 to-indigo-500 opacity-0 group-hover:opacity-75 blur-md transition-opacity duration-500" />
+                      <div className="absolute -inset-1 rounded-full bg-gradient-to-r from-emerald-500 to-blue-500 opacity-0 group-hover:opacity-75 blur-md transition-opacity duration-500" />
                       <div className="relative h-[56px] w-[56px] shrink-0 rounded-full border-[3px] border-[#0A0A0A] bg-zinc-900 overflow-hidden shadow-2xl">
                         {s.creatorAvatarUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
@@ -168,7 +168,7 @@ export default function LiveFeedPage() {
                       </div>
                       <div className="mt-1 text-[13px] font-bold tracking-wide text-emerald-400 truncate drop-shadow-sm flex items-center gap-1.5 opacity-80 group-hover:opacity-100 transition-opacity duration-500">
                         {s.creatorName}
-                        <Sparkles size={12} className="text-fuchsia-400" />
+                        <Sparkles size={12} className="text-cyan-400" />
                       </div>
                     </div>
                   </div>

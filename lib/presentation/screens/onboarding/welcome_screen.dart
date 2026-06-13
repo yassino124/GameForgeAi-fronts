@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:ui' as ui;
+import 'dart:math' as math;
 import '../../../core/constants/app_constants.dart';
 import '../../../core/themes/app_theme.dart';
 
@@ -19,7 +20,8 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   late AnimationController _buttonController;
   late AnimationController _backgroundController;
   late AnimationController _floatingController;
-  
+  late AnimationController _entryController;
+
   late Animation<double> _titleOpacity;
   late Animation<double> _titleSlide;
   late Animation<double> _titleScale;
@@ -31,16 +33,21 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   late Animation<double> _buttonScale;
   late Animation<double> _backgroundGradient;
   late Animation<double> _floatingAnimation;
+  late Animation<double> _entryFade;
 
   @override
   void initState() {
     super.initState();
     _initializeAnimations();
     _startAnimations();
-    _autoNavigate();
   }
 
   void _initializeAnimations() {
+    _entryController = AnimationController(
+      duration: const Duration(milliseconds: 1000),
+      vsync: this,
+    );
+
     _titleController = AnimationController(
       duration: const Duration(milliseconds: 1500),
       vsync: this,
@@ -71,7 +78,10 @@ class _WelcomeScreenState extends State<WelcomeScreen>
       vsync: this,
     );
 
-    // Title animations
+    _entryFade = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _entryController, curve: Curves.easeIn),
+    );
+
     _titleOpacity = Tween<double>(
       begin: 0.0,
       end: 1.0,
@@ -81,22 +91,21 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     ));
 
     _titleSlide = Tween<double>(
-      begin: -80.0,
+      begin: -40.0,
       end: 0.0,
+    ).animate(CurvedAnimation(
+      parent: _titleController,
+      curve: Curves.easeOutCubic,
+    ));
+
+    _titleScale = Tween<double>(
+      begin: 0.9,
+      end: 1.0,
     ).animate(CurvedAnimation(
       parent: _titleController,
       curve: Curves.easeOutBack,
     ));
 
-    _titleScale = Tween<double>(
-      begin: 0.8,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _titleController,
-      curve: Curves.elasticOut,
-    ));
-
-    // Subtitle animations
     _subtitleOpacity = Tween<double>(
       begin: 0.0,
       end: 1.0,
@@ -106,14 +115,13 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     ));
 
     _subtitleSlide = Tween<double>(
-      begin: 60.0,
+      begin: 20.0,
       end: 0.0,
     ).animate(CurvedAnimation(
       parent: _subtitleController,
-      curve: Curves.easeOutBack,
+      curve: Curves.easeOutCubic,
     ));
 
-    // Card animations
     _cardOpacity = Tween<double>(
       begin: 0.0,
       end: 1.0,
@@ -123,14 +131,13 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     ));
 
     _cardSlide = Tween<double>(
-      begin: 120.0,
+      begin: 40.0,
       end: 0.0,
     ).animate(CurvedAnimation(
       parent: _cardController,
-      curve: Curves.easeOutBack,
+      curve: Curves.easeOutCubic,
     ));
 
-    // Button animations
     _buttonOpacity = Tween<double>(
       begin: 0.0,
       end: 1.0,
@@ -140,14 +147,13 @@ class _WelcomeScreenState extends State<WelcomeScreen>
     ));
 
     _buttonScale = Tween<double>(
-      begin: 0.7,
+      begin: 0.9,
       end: 1.0,
     ).animate(CurvedAnimation(
       parent: _buttonController,
-      curve: Curves.elasticOut,
+      curve: Curves.easeOutBack,
     ));
 
-    // Background animations
     _backgroundGradient = Tween<double>(
       begin: 0.0,
       end: 1.0,
@@ -166,25 +172,23 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   }
 
   void _startAnimations() async {
+    _entryController.forward();
     _backgroundController.forward();
     _floatingController.repeat(reverse: true);
+
+    await Future.delayed(const Duration(milliseconds: 200));
     _titleController.forward();
-    await Future.delayed(const Duration(milliseconds: 300));
+    await Future.delayed(const Duration(milliseconds: 200));
     _subtitleController.forward();
     await Future.delayed(const Duration(milliseconds: 400));
     _cardController.forward();
     await Future.delayed(const Duration(milliseconds: 300));
     _buttonController.forward();
-    
-    // No auto-navigation - user controls when to proceed
-  }
-
-  void _autoNavigate() async {
-    // Auto-navigation removed
   }
 
   @override
   void dispose() {
+    _entryController.dispose();
     _titleController.dispose();
     _subtitleController.dispose();
     _cardController.dispose();
@@ -197,61 +201,52 @@ class _WelcomeScreenState extends State<WelcomeScreen>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      backgroundColor: const Color(0xFF07090E),
       body: AnimatedBuilder(
-        animation: _backgroundController,
+        animation: Listenable.merge([_backgroundController, _entryController]),
         builder: (context, child) {
-          return Container(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-                colors: [
-                  AppColors.background,
-                  AppColors.backgroundLight,
-                  AppColors.primary.withOpacity(0.1 * _backgroundGradient.value),
-                  AppColors.secondary.withOpacity(0.05 * _backgroundGradient.value),
-                ],
+          return Opacity(
+            opacity: _entryFade.value,
+            child: Container(
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [
+                    const Color(0xFF07090E),
+                    const Color(0xFF0F172A),
+                    AppColors.primary.withOpacity(0.05 * _backgroundGradient.value),
+                  ],
+                ),
               ),
-            ),
-            child: Stack(
-              children: [
-                // Advanced background decoration
-                _buildAdvancedBackground(),
-                
-                // Main content
-                SafeArea(
-                  child: SingleChildScrollView(
-                    child: Padding(
-                      padding: AppSpacing.paddingHorizontalLarge,
-                      child: Column(
-                        children: [
-                          const SizedBox(height: AppSpacing.xxxl),
-                          
-                          // Animated title
-                          _buildAnimatedTitle(),
-                          
-                          const SizedBox(height: AppSpacing.lg),
-                          
-                          // Animated subtitle
-                          _buildAnimatedSubtitle(),
-                          
-                          const SizedBox(height: AppSpacing.xxxl),
-                          
-                          // Animated feature cards
-                          _buildAnimatedFeatureCards(),
-                          
-                          const SizedBox(height: AppSpacing.xxxl),
-                          
-                          // Animated buttons
-                          _buildAnimatedButtons(),
-                          
-                          const SizedBox(height: AppSpacing.lg),
-                        ],
+              child: Stack(
+                children: [
+                  _buildAdvancedBackground(),
+                  SafeArea(
+                    child: SingleChildScrollView(
+                      physics: const BouncingScrollPhysics(),
+                      child: Padding(
+                        padding: AppSpacing.paddingHorizontalLarge,
+                        child: Column(
+                          children: [
+                            const SizedBox(height: AppSpacing.xxxl),
+                            _buildAnimatedTitle(),
+                            const SizedBox(height: AppSpacing.md),
+                            _buildAnimatedSubtitle(),
+                            const SizedBox(height: AppSpacing.xxxl),
+                            _buildCenterAnimation(),
+                            const SizedBox(height: AppSpacing.xxxl),
+                            _buildAnimatedFeatureCards(),
+                            const SizedBox(height: AppSpacing.xxxl),
+                            _buildAnimatedButtons(),
+                            const SizedBox(height: AppSpacing.xl),
+                          ],
+                        ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           );
         },
@@ -338,6 +333,157 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           }),
         ],
       ),
+    );
+  }
+
+  Widget _buildCenterAnimation() {
+    return AnimatedBuilder(
+      animation: _floatingController,
+      builder: (context, child) {
+        return Container(
+          height: 300,
+          width: 300,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Rotating outer ring
+              RotationTransition(
+                turns: _floatingController,
+                child: Container(
+                  width: 260,
+                  height: 260,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: AppColors.primary.withOpacity(0.2),
+                      width: 2,
+                    ),
+                  ),
+                  child: Stack(
+                    children: List.generate(4, (i) {
+                      return Positioned(
+                        top: i % 2 == 0 ? 0 : null,
+                        bottom: i % 2 != 0 ? 0 : null,
+                        left: i < 2 ? 120 : null,
+                        right: i >= 2 ? 120 : null,
+                        child: Container(
+                          width: 12,
+                          height: 12,
+                          decoration: BoxDecoration(
+                            color: AppColors.primary,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: AppColors.primary,
+                                blurRadius: 10,
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }),
+                  ),
+                ),
+              ),
+              // Main Glass Image
+              Transform.translate(
+                offset: Offset(0, -20 * _floatingAnimation.value),
+                child: Container(
+                  width: 200,
+                  height: 200,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.05),
+                    borderRadius: BorderRadius.circular(55),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.2),
+                      width: 1.5,
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary.withOpacity(0.4),
+                        blurRadius: 40,
+                        offset: const Offset(0, 15),
+                      ),
+                    ],
+                  ),
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(55),
+                    child: BackdropFilter(
+                      filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                      child: Center(
+                        child: Icon(
+                          Icons.rocket_launch_rounded,
+                          size: 110,
+                          color: Colors.white,
+                          shadows: [
+                            Shadow(
+                              color: AppColors.primary.withOpacity(0.8),
+                              blurRadius: 30,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildAdvancedButtons() {
+    return Column(
+      children: [
+        Container(
+          width: double.infinity,
+          height: 64,
+          decoration: BoxDecoration(
+            gradient: AppColors.primaryGradient,
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: [
+              BoxShadow(
+                color: AppColors.primary.withOpacity(0.5),
+                blurRadius: 25,
+                offset: const Offset(0, 10),
+              ),
+            ],
+          ),
+          child: Material(
+            color: Colors.transparent,
+            child: InkWell(
+              borderRadius: BorderRadius.circular(24),
+              onTap: () => context.go('/features'),
+              child: Center(
+                child: Text(
+                  'BEGIN JOURNEY',
+                  style: AppTypography.labelLarge.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w900,
+                    fontSize: 18,
+                    letterSpacing: 2.0,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        TextButton(
+          onPressed: () => context.go('/signin'),
+          child: Text(
+            'I HAVE AN ACCOUNT',
+            style: AppTypography.labelLarge.copyWith(
+              color: const Color(0xFF64748B),
+              fontWeight: FontWeight.w900,
+              fontSize: 12,
+              letterSpacing: 1.5,
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -465,50 +611,37 @@ class _WelcomeScreenState extends State<WelcomeScreen>
         final animationValue = (_cardController.value - delay).clamp(0.0, 1.0);
         
         return Transform.translate(
-          offset: Offset(0, (1.0 - animationValue) * 50),
+          offset: Offset(0, (1.0 - animationValue) * 30),
           child: Opacity(
             opacity: animationValue,
             child: Container(
-              padding: const EdgeInsets.all(AppSpacing.lg),
+              margin: const EdgeInsets.only(bottom: 16),
+              padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topLeft,
-                  end: Alignment.bottomRight,
-                  colors: [
-                    AppColors.surface,
-                    AppColors.surfaceLight,
-                    color.withOpacity(0.1),
-                  ],
-                ),
-                borderRadius: BorderRadius.circular(AppBorderRadius.large),
+                color: Colors.white.withOpacity(0.03),
+                borderRadius: BorderRadius.circular(24),
                 border: Border.all(
-                  color: color.withOpacity(0.3 * animationValue),
-                  width: 1.5,
+                  color: Colors.white.withOpacity(0.08),
+                  width: 1.2,
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: color.withOpacity(0.2 * animationValue),
-                    blurRadius: 15,
-                    offset: const Offset(0, 6),
+                    color: color.withOpacity(0.05),
+                    blurRadius: 20,
+                    offset: const Offset(0, 10),
                   ),
                 ],
               ),
               child: Row(
                 children: [
                   Container(
-                    width: 60,
-                    height: 60,
+                    padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      gradient: LinearGradient(
-                        colors: [
-                          color,
-                          color.withOpacity(0.7),
-                        ],
-                      ),
-                      borderRadius: BorderRadius.circular(AppBorderRadius.medium),
+                      color: color.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(16),
                       boxShadow: [
                         BoxShadow(
-                          color: color.withOpacity(0.4 * animationValue),
+                          color: color.withOpacity(0.2),
                           blurRadius: 10,
                           offset: const Offset(0, 4),
                         ),
@@ -516,31 +649,29 @@ class _WelcomeScreenState extends State<WelcomeScreen>
                     ),
                     child: Icon(
                       icon,
-                      color: Colors.white,
+                      color: color,
                       size: 28,
                     ),
                   ),
-                  
-                  const SizedBox(width: AppSpacing.lg),
-                  
+                  const SizedBox(width: 20),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
                           title,
-                          style: AppTypography.subtitle2.copyWith(
-                            color: AppColors.textPrimary,
-                            fontWeight: FontWeight.w700,
+                          style: AppTypography.titleMedium.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.5,
                           ),
                         ),
-                        
-                        const SizedBox(height: AppSpacing.xs),
-                        
+                        const SizedBox(height: 4),
                         Text(
                           description,
-                          style: AppTypography.body2.copyWith(
-                            color: AppColors.textSecondary,
+                          style: AppTypography.bodyMedium.copyWith(
+                            color: const Color(0xFF64748B),
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                       ],
@@ -563,92 +694,7 @@ class _WelcomeScreenState extends State<WelcomeScreen>
           scale: _buttonScale.value,
           child: Opacity(
             opacity: _buttonOpacity.value,
-            child: Column(
-              children: [
-                // Get Started button with advanced effects
-                Container(
-                  width: double.infinity,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    gradient: AppColors.primaryGradient,
-                    borderRadius: BorderRadius.circular(AppBorderRadius.large),
-                    boxShadow: [
-                      BoxShadow(
-                        color: AppColors.primary.withOpacity(0.4),
-                        blurRadius: 25,
-                        offset: const Offset(0, 10),
-                      ),
-                      BoxShadow(
-                        color: AppColors.primary.withOpacity(0.2),
-                        blurRadius: 50,
-                        offset: const Offset(0, 20),
-                      ),
-                    ],
-                  ),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(AppBorderRadius.large),
-                      onTap: () {
-                        context.go('/features');
-                      },
-                      child: Center(
-                        child: Text(
-                          'Get Started',
-                          style: AppTypography.button.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 20,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-                
-                const SizedBox(height: AppSpacing.lg),
-                
-                // Sign In button with glassmorphism
-                Container(
-                  width: double.infinity,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    color: Colors.transparent,
-                    borderRadius: BorderRadius.circular(AppBorderRadius.large),
-                    border: Border.all(
-                      color: AppColors.border.withOpacity(0.6),
-                      width: 2,
-                    ),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 15,
-                        offset: const Offset(0, 5),
-                      ),
-                    ],
-                  ),
-                  child: Material(
-                    color: Colors.transparent,
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(AppBorderRadius.large),
-                      onTap: () {
-                        context.go('/signin');
-                      },
-                      child: Center(
-                        child: Text(
-                          'I already have an account',
-                          style: AppTypography.button.copyWith(
-                            color: AppColors.textPrimary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
+            child: _buildAdvancedButtons(),
           ),
         );
       },

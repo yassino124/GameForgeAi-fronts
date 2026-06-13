@@ -65,7 +65,7 @@ export default function LoginPage() {
   return (
     <div className="min-h-screen bg-zinc-950">
       <div className="absolute inset-0 overflow-hidden">
-        <div className="pointer-events-none absolute -top-24 left-1/2 h-[500px] w-[900px] -translate-x-1/2 rounded-full bg-gradient-to-r from-indigo-600/35 via-fuchsia-600/25 to-cyan-500/25 blur-3xl" />
+        <div className="pointer-events-none absolute -top-24 left-1/2 h-[500px] w-[900px] -translate-x-1/2 rounded-full bg-gradient-to-r from-blue-600/35 via-cyan-600/25 to-cyan-500/25 blur-3xl" />
       </div>
 
       <div className="relative mx-auto flex min-h-screen max-w-7xl items-center justify-center px-6 py-16">
@@ -98,7 +98,7 @@ export default function LoginPage() {
                 <input
                   value={emailOrUsername}
                   onChange={(e) => setEmailOrUsername(e.target.value)}
-                  className="h-11 w-full rounded-xl border border-white/10 bg-zinc-950/40 px-3 text-sm text-white outline-none ring-0 placeholder:text-zinc-500 focus:border-indigo-400/40 focus:bg-zinc-950/55"
+                  className="h-11 w-full rounded-xl border border-white/10 bg-zinc-950/40 px-3 text-sm text-white outline-none ring-0 placeholder:text-zinc-500 focus:border-blue-400/40 focus:bg-zinc-950/55"
                   placeholder="admin@example.com"
                   autoComplete="username"
                 />
@@ -112,7 +112,7 @@ export default function LoginPage() {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   type="password"
-                  className="h-11 w-full rounded-xl border border-white/10 bg-zinc-950/40 px-3 text-sm text-white outline-none ring-0 placeholder:text-zinc-500 focus:border-indigo-400/40 focus:bg-zinc-950/55"
+                  className="h-11 w-full rounded-xl border border-white/10 bg-zinc-950/40 px-3 text-sm text-white outline-none ring-0 placeholder:text-zinc-500 focus:border-blue-400/40 focus:bg-zinc-950/55"
                   placeholder="••••••••"
                   autoComplete="current-password"
                 />
@@ -131,7 +131,7 @@ export default function LoginPage() {
               <button
                 type="submit"
                 disabled={!canSubmit}
-                className="h-11 w-full rounded-xl bg-gradient-to-r from-indigo-500 via-fuchsia-500 to-cyan-400 px-4 text-sm font-semibold text-white shadow-lg shadow-indigo-500/10 transition-opacity disabled:opacity-50"
+                className="h-11 w-full rounded-xl bg-gradient-to-r from-blue-500 via-cyan-500 to-cyan-400 px-4 text-sm font-semibold text-white shadow-lg shadow-blue-500/10 transition-opacity disabled:opacity-50"
               >
                 {loading ? "Signing in..." : "Sign in"}
               </button>

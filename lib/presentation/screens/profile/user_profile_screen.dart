@@ -25,6 +25,7 @@ import 'package:video_player/video_player.dart';
 import 'package:flutter/services.dart';
 import 'dart:math' as math;
 import '../../widgets/reward_confetti_overlay.dart';
+import '../project/project_insights_screen.dart';
 
 class UserProfileScreen extends StatefulWidget {
   final bool showAppBar;
@@ -563,6 +564,127 @@ class _UserProfileScreenState extends State<UserProfileScreen>
     super.dispose();
   }
 
+  Widget _buildGrandRewardsRoadmap(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    Widget _rewardRow(String score, String reward, Color color, IconData icon) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 14),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                color: color.withOpacity(0.12),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: color.withOpacity(0.25)),
+              ),
+              child: Icon(icon, size: 18, color: color),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    score,
+                    style: AppTypography.labelSmall.copyWith(
+                      color: isDark ? Colors.white38 : cs.onSurfaceVariant,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  Text(
+                    reward,
+                    style: AppTypography.body2.copyWith(
+                      color: isDark ? Colors.white : cs.onSurface,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(22),
+      decoration: BoxDecoration(
+        color: (isDark ? Colors.white : cs.onSurface).withOpacity(
+          isDark ? 0.03 : 0.04,
+        ),
+        borderRadius: BorderRadius.circular(28),
+        border: Border.all(
+          color: (isDark ? Colors.white : cs.onSurface).withOpacity(0.08),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.stars_rounded, color: Colors.amber, size: 22),
+              const SizedBox(width: 10),
+              Text(
+                'GRAND REWARDS',
+                style: AppTypography.labelLarge.copyWith(
+                  color: isDark ? Colors.white : cs.onSurface,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 1.2,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          _rewardRow(
+            'SCORE 10,000+',
+            'FREE PRO PLAN + 50% OFF',
+            Colors.amber,
+            Icons.workspace_premium_rounded,
+          ),
+          _rewardRow(
+            'SCORE 5,000+',
+            '25% OFF EVERYTHING',
+            Colors.deepPurpleAccent,
+            Icons.local_offer_rounded,
+          ),
+          _rewardRow(
+            'SCORE 2,000+',
+            '10% OFF EVERYTHING',
+            Colors.blueAccent,
+            Icons.bolt_rounded,
+          ),
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: cs.primary.withOpacity(0.08),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.info_outline_rounded, size: 16, color: cs.primary),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    'Mint your Legendary Card to unlock these perks forever!',
+                    style: AppTypography.caption.copyWith(
+                      color: cs.primary,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Consumer<AuthProvider>(
@@ -628,11 +750,15 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                             const SizedBox(height: 24),
                             _buildDailyHubWow(context),
                             const SizedBox(height: 18),
+                            _buildGrandRewardsRoadmap(context),
+                            const SizedBox(height: 18),
                             _buildUserStats(context),
                             const SizedBox(height: 18),
                             _buildAchievements(context),
                             const SizedBox(height: 18),
                             _buildRecentActivity(context),
+                            const SizedBox(height: 18),
+                            _buildMyGames(context, user),
                             const SizedBox(height: 18),
                             _buildMyVideos(context, user),
                             const SizedBox(height: 18),
@@ -715,6 +841,173 @@ class _UserProfileScreenState extends State<UserProfileScreen>
     );
   }
 
+  Widget _buildMyGames(BuildContext context, Map<String, dynamic>? user) {
+    final cs = Theme.of(context).colorScheme;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final token = context.read<AuthProvider>().token;
+    final meId = _meId(user).trim();
+
+    if (token == null || token.trim().isEmpty || meId.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(AppBorderRadius.large),
+        border: Border.all(color: cs.outlineVariant.withOpacity(0.6)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Text('My Games', style: AppTypography.subtitle2),
+              const Spacer(),
+              Icon(
+                Icons.sports_esports_rounded,
+                size: 18,
+                color: isDark ? Colors.white54 : cs.onSurfaceVariant,
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          FutureBuilder<Map<String, dynamic>>(
+            future: GameFeedService.listCreator(
+              token: token,
+              creatorId: meId,
+              limit: 30,
+            ),
+            builder: (context, snap) {
+              if (snap.connectionState == ConnectionState.waiting) {
+                return const SizedBox(
+                  height: 160,
+                  child: Center(child: CircularProgressIndicator()),
+                );
+              }
+
+              final res = snap.data;
+              final data = (res != null && res['success'] == true) ? res['data'] : null;
+              final raw = (data is List) ? data : const [];
+              final posts = raw.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+              final games = posts.where((p) => !_isVideoPost(p)).toList(growable: false);
+
+              if (games.isEmpty) {
+                return Text(
+                  'No games yet',
+                  style: AppTypography.caption.copyWith(color: cs.onSurfaceVariant, fontWeight: FontWeight.w700),
+                );
+              }
+
+              return SizedBox(
+                height: 170,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: games.take(12).length,
+                  itemBuilder: (context, i) {
+                    final p = games[i];
+                    final title = (p['title'] ?? p['name'] ?? 'Game').toString();
+                    final thumb = _resolvePostThumb(p);
+                    
+                    return Padding(
+                      padding: EdgeInsets.only(right: i == 11 ? 0 : 12),
+                      child: Container(
+                        width: 220,
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(22),
+                          border: Border.all(color: cs.outlineVariant.withOpacity(0.6)),
+                          color: (isDark ? Colors.white : cs.onSurface).withOpacity(isDark ? 0.03 : 0.05),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(22),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              thumb.trim().isEmpty
+                                  ? Container(
+                                      color: isDark ? Colors.white.withOpacity(0.04) : cs.surfaceContainerHighest.withOpacity(0.55),
+                                    )
+                                  : Image.network(
+                                      thumb,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, __, ___) => Container(
+                                        color: isDark ? Colors.white.withOpacity(0.04) : cs.surfaceContainerHighest.withOpacity(0.55),
+                                      ),
+                                    ),
+                              Positioned.fill(
+                                child: DecoratedBox(
+                                  decoration: BoxDecoration(
+                                    gradient: LinearGradient(
+                                      begin: Alignment.topCenter,
+                                      end: Alignment.bottomCenter,
+                                      colors: [Colors.transparent, Colors.black.withOpacity(0.72)],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              Positioned(
+                                left: 12,
+                                right: 12,
+                                bottom: 12,
+                                child: Text(
+                                  title,
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTypography.subtitle2.copyWith(color: Colors.white, fontWeight: FontWeight.w900),
+                                ),
+                              ),
+                              Positioned(
+                                top: 8,
+                                right: 8,
+                                child: GestureDetector(
+                                  onTap: () {
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (_) => ProjectInsightsScreen(
+                                          gameId: p['_id'] ?? p['id'] ?? '',
+                                          gameName: title,
+                                        ),
+                                      ),
+                                    );
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                    decoration: BoxDecoration(
+                                      gradient: const LinearGradient(colors: [AppColors.primary, AppColors.secondary]),
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(color: Colors.white.withOpacity(0.4)),
+                                      boxShadow: [
+                                        BoxShadow(color: AppColors.primary.withOpacity(0.6), blurRadius: 15, spreadRadius: 3),
+                                      ],
+                                    ),
+                                    child: const Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.auto_awesome, color: Colors.white, size: 14),
+                                        SizedBox(width: 4),
+                                        Text('AI REVIEWS', style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1)),
+                                      ],
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildMyVideos(BuildContext context, Map<String, dynamic>? user) {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -737,10 +1030,10 @@ class _UserProfileScreenState extends State<UserProfileScreen>
         children: [
           Row(
             children: [
-              Text('My Videos', style: AppTypography.subtitle2),
+              Text('My Reels', style: AppTypography.subtitle2),
               const Spacer(),
               Icon(
-                Icons.video_library_rounded,
+                Icons.auto_awesome_motion_rounded,
                 size: 18,
                 color: isDark ? Colors.white54 : cs.onSurfaceVariant,
               ),
@@ -748,10 +1041,8 @@ class _UserProfileScreenState extends State<UserProfileScreen>
           ),
           const SizedBox(height: AppSpacing.lg),
           FutureBuilder<Map<String, dynamic>>(
-            future: GameFeedService.listCreator(
+            future: ProjectsService.listProjects(
               token: token,
-              creatorId: meId,
-              limit: 30,
             ),
             builder: (context, snap) {
               if (snap.connectionState == ConnectionState.waiting) {
@@ -770,11 +1061,11 @@ class _UserProfileScreenState extends State<UserProfileScreen>
                   .whereType<Map>()
                   .map((e) => Map<String, dynamic>.from(e))
                   .toList();
-              final vids = posts.where(_isVideoPost).toList(growable: false);
+              final vids = posts.where((p) => _isVideoPost(p)).toList(growable: false);
 
               if (vids.isEmpty) {
                 return Text(
-                  'No videos yet',
+                  'No reels yet',
                   style: AppTypography.caption.copyWith(
                     color: cs.onSurfaceVariant,
                     fontWeight: FontWeight.w700,
@@ -3044,6 +3335,12 @@ class _UserProfileScreenState extends State<UserProfileScreen>
           'Edit Profile',
           Icons.edit_rounded,
           () => context.push('/edit-profile'),
+        ),
+        _buildActionTile(
+          context,
+          'Idea Vault 💡',
+          Icons.lightbulb_outline_rounded,
+          () => context.push('/idea-vault'),
         ),
         _buildActionTile(
           context,

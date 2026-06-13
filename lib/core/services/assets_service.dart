@@ -23,6 +23,32 @@ class AssetsService {
     return ApiService.get(uri.toString(), token: token);
   }
 
+  static Future<Map<String, dynamic>> generateAsset({
+    required String token,
+    required String assetType,
+    required String style,
+    required String description,
+    String? gameContext,
+    String? model,
+  }) async {
+    final res = await ApiService.post(
+      '/ai/assets/generate',
+      token: token,
+      data: {
+        'assetType': assetType,
+        'style': style,
+        'description': description,
+        if (gameContext != null) 'gameContext': gameContext,
+        if (model != null) 'model': model,
+      },
+    );
+
+    if (res['success'] == true && res['data'] is Map) {
+      return Map<String, dynamic>.from(res['data'] as Map);
+    }
+    return res;
+  }
+
   static Future<Map<String, dynamic>> uploadAssetByUrl({
     required String token,
     required String url,

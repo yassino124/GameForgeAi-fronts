@@ -10,7 +10,7 @@ import {
   PhoneCall, PhoneOff,
 } from "lucide-react";
 import { useMultiplayerSocket } from "@/lib/multiplayer";
-import { getUserToken } from "@/lib/userAuth";
+import { readAuthToken } from "@/lib/stores/authStore";
 import { apiFetch } from "@/lib/api";
 import UserShell from "@/app/_components/UserShell";
 import { useToast } from "@/app/_components/ToastProvider";
@@ -26,7 +26,7 @@ export default function StudioMultiplayerRoom() {
   const initialName = searchParams.get("name");
   const toast = useToast();
 
-  const token = getUserToken();
+  const token = readAuthToken();
   const { socket, connected, error } = useMultiplayerSocket(token);
 
   // ─── Room state ───────────────────────────────────────────────────────────
@@ -39,7 +39,9 @@ export default function StudioMultiplayerRoom() {
 
   // ─── Game session state ───────────────────────────────────────────────────
   const [gameUrl, setGameUrl] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const [sessionStarted, setSessionStarted] = useState(false);
+  const [sessionViewMode, setSessionViewMode] = useState<"split" | "shared">("split");
   const [showStartPicker, setShowStartPicker] = useState(false);
   const [startingSession, setStartingSession] = useState(false);
   const [loadingArcade, setLoadingArcade] = useState(false);
@@ -49,12 +51,21 @@ export default function StudioMultiplayerRoom() {
   const [voiceJoined, setVoiceJoined] = useState(false);
   const [voiceMuted, setVoiceMuted] = useState(false);
   const [voiceMembers, setVoiceMembers] = useState<string[]>([]); // userIds in voice
+  const [sharingGameView, setSharingGameView] = useState(false);
+  const [remoteGameStream, setRemoteGameStream] = useState<MediaStream | null>(null);
+  const [localBridgeActive, setLocalBridgeActive] = useState(false);
+  const [remoteGameplayActive, setRemoteGameplayActive] = useState(false);
   const localStreamRef = useRef<MediaStream | null>(null);
+  const localGameStreamRef = useRef<MediaStream | null>(null);
+  const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
+  const gameFrameRef = useRef<HTMLIFrameElement | null>(null);
+  const autoShareAttemptedRef = useRef(false);
   const peerConnsRef = useRef<Map<string, RTCPeerConnection>>(new Map()); // key = peer socketId
   const remoteAudiosRef = useRef<Map<string, HTMLAudioElement>>(new Map()); // key = peer socketId
   const peerUserBySocketRef = useRef<Map<string, string>>(new Map());
 
   const members = (room?.members ?? []) as any[];
+  const teammate = members.find((m: any) => String(m?.userId || "") !== String(myUserId || ""));
   const allReady = members.length > 0 && members.every((m: any) => readyUserIds.includes(String(m?.userId || "")));
   const isHost = Boolean(myUserId && room?.hostUserId && String(room.hostUserId) === String(myUserId));
   const iAmReady = Boolean(myUserId && readyUserIds.includes(String(myUserId)));
@@ -80,8 +91,11 @@ export default function StudioMultiplayerRoom() {
       peerUserBySocketRef.current.set(peerSocketId, String(peerUserId));
     }
 
-    // Add local tracks
+  // Add local voice tracks
     localStreamRef.current?.getTracks().forEach(t => pc.addTrack(t, localStreamRef.current!));
+
+  // Add local game stream tracks (if sharing enabled)
+  localGameStreamRef.current?.getVideoTracks().forEach(t => pc.addTrack(t, localGameStreamRef.current!));
 
     // ICE candidates → send via socket
     pc.onicecandidate = (e) => {
@@ -101,6 +115,13 @@ export default function StudioMultiplayerRoom() {
 
     // Remote audio track
     pc.ontrack = (e) => {
+      if (e.track.kind === "video") {
+        const stream = e.streams?.[0] || null;
+        if (stream) {
+          setRemoteGameStream(stream);
+        }
+        return;
+      }
       const audio = new Audio();
       audio.srcObject = e.streams[0];
       audio.autoplay = true;
@@ -120,7 +141,22 @@ export default function StudioMultiplayerRoom() {
       remoteAudiosRef.current.delete(peerSocketId);
     }
     peerUserBySocketRef.current.delete(peerSocketId);
+    if (peerConnsRef.current.size === 0) {
+      setRemoteGameStream(null);
+    }
   };
+
+  const renegotiatePeer = useCallback(async (peerSocketId: string, pc: RTCPeerConnection) => {
+    if (!socket) return;
+    const offer = await pc.createOffer();
+    await pc.setLocalDescription(offer);
+    socket.emit("voice:offer", {
+      token,
+      roomId: room?.roomId,
+      to: peerSocketId,
+      data: { type: offer.type, sdp: offer.sdp },
+    });
+  }, [socket, token, room?.roomId]);
 
   const recomputeVoiceMembers = useCallback(() => {
     const ids = Array.from(peerUserBySocketRef.current.values()).filter(Boolean);
@@ -138,6 +174,33 @@ export default function StudioMultiplayerRoom() {
       "";
     const s = String(raw || "").trim();
     return s;
+  }, []);
+
+  const buildSharedGameUrl = useCallback((baseUrl: string, sid?: string | null) => {
+    const b = String(baseUrl || '').trim();
+    if (!b) return '';
+    try {
+      const u = new URL(b);
+      if (room?.roomId) u.searchParams.set('mpRoomId', String(room.roomId));
+      if (sid) u.searchParams.set('mpSessionId', String(sid));
+      if (myUserId) u.searchParams.set('mpUserId', String(myUserId));
+      return u.toString();
+    } catch {
+      return b;
+    }
+  }, [room?.roomId, myUserId]);
+
+  const withMpUserId = useCallback((url: string, uid?: string | null) => {
+    const u = String(url || '').trim();
+    const id = String(uid || '').trim();
+    if (!u || !id) return u;
+    try {
+      const next = new URL(u);
+      next.searchParams.set('mpUserId', id);
+      return next.toString();
+    } catch {
+      return u;
+    }
   }, []);
 
   const loadArcadeForStart = useCallback(async () => {
@@ -177,7 +240,6 @@ export default function StudioMultiplayerRoom() {
       setStartingSession(false);
     }
   }, [socket, room, token, toast, extractPlayUrl]);
-  };
 
   const leaveVoice = useCallback(() => {
     localStreamRef.current?.getTracks().forEach(t => t.stop());
@@ -188,6 +250,100 @@ export default function StudioMultiplayerRoom() {
     setVoiceMembers([]);
     if (socket && room) socket.emit("voice:leave", { token, roomId: room.roomId });
   }, [socket, token, room]);
+
+  const stopGameShare = useCallback(async () => {
+    const gs = localGameStreamRef.current;
+    if (gs) {
+      gs.getTracks().forEach((t) => t.stop());
+      localGameStreamRef.current = null;
+    }
+    setSharingGameView(false);
+
+    for (const [peerSocketId, pc] of peerConnsRef.current.entries()) {
+      const sender = pc.getSenders().find((s) => s.track?.kind === "video");
+      if (sender) {
+        await sender.replaceTrack(null);
+        const shouldOffer = String(socket?.id || "").localeCompare(peerSocketId) < 0;
+        if (shouldOffer) {
+          await renegotiatePeer(peerSocketId, pc);
+        }
+      }
+    }
+  }, [socket?.id, renegotiatePeer]);
+
+  const startGameShare = useCallback(async (opts?: { silent?: boolean }) => {
+    const silent = Boolean(opts?.silent);
+    if (localGameStreamRef.current) {
+      setSharingGameView(true);
+      return;
+    }
+
+    try {
+      const display = await navigator.mediaDevices.getDisplayMedia({
+        video: true,
+        audio: false,
+      });
+      localGameStreamRef.current = display;
+      setSharingGameView(true);
+
+      const track = display.getVideoTracks()[0];
+      if (track) {
+        track.onended = () => {
+          stopGameShare();
+        };
+      }
+
+      for (const [peerSocketId, pc] of peerConnsRef.current.entries()) {
+        if (!track) continue;
+        const existingSender = pc
+          .getSenders()
+          .find((s) => s.track?.kind === "video");
+        if (existingSender) {
+          await existingSender.replaceTrack(track);
+        } else {
+          pc.addTrack(track, display);
+        }
+
+        const shouldOffer = String(socket?.id || "").localeCompare(peerSocketId) < 0;
+        if (shouldOffer) {
+          await renegotiatePeer(peerSocketId, pc);
+        }
+      }
+    } catch {
+      if (!silent) {
+        toast.error("Share cancelled", "Enable screen/tab share to stream your gameplay live");
+      }
+    }
+  }, [stopGameShare, toast, socket?.id, renegotiatePeer]);
+
+  useEffect(() => {
+    if (!sessionStarted || sessionViewMode !== "split" || sharingGameView) return;
+    if (autoShareAttemptedRef.current) return;
+
+    const triggerAutoShare = () => {
+      if (autoShareAttemptedRef.current) return;
+      if (!sessionStarted || sessionViewMode !== "split" || sharingGameView) return;
+      autoShareAttemptedRef.current = true;
+      void startGameShare({ silent: true });
+    };
+
+    window.addEventListener("pointerdown", triggerAutoShare, { once: true, capture: true });
+
+    return () => {
+      window.removeEventListener("pointerdown", triggerAutoShare, true);
+    };
+  }, [sessionStarted, sessionViewMode, sharingGameView, startGameShare]);
+
+  useEffect(() => {
+    const el = remoteVideoRef.current;
+    if (!el) return;
+    if (!remoteGameStream) {
+      el.srcObject = null;
+      return;
+    }
+    el.srcObject = remoteGameStream;
+    void el.play().catch(() => {});
+  }, [remoteGameStream]);
 
   // ─── Main socket effect ───────────────────────────────────────────────────
   useEffect(() => {
@@ -270,9 +426,40 @@ export default function StudioMultiplayerRoom() {
         payload?.url ??
         null;
       const sessionId = payload?.data?.sessionId ?? payload?.sessionId;
-      setGameUrl(url);
+      setLocalBridgeActive(false);
+      setRemoteGameplayActive(false);
+    autoShareAttemptedRef.current = false;
+    setSessionViewMode("split");
+      setSessionId(sessionId ? String(sessionId) : null);
+      setGameUrl(buildSharedGameUrl(url, sessionId ? String(sessionId) : null));
       setSessionStarted(true);
       toast.success("Session started!", sessionId ? `ID: ${sessionId}` : "All players launching...");
+    };
+
+    const handleGameInput = (payload: any) => {
+      const data = payload?.data ?? payload;
+      if (!data) return;
+      if (String(data?.userId || '') === String(myUserId || '')) return;
+      setRemoteGameplayActive(true);
+      const frameWin = gameFrameRef.current?.contentWindow;
+      if (!frameWin) return;
+      frameWin.postMessage({
+        type: 'gf:mp:remote-input',
+        data,
+      }, '*');
+    };
+
+    const handleGameState = (payload: any) => {
+      const data = payload?.data ?? payload;
+      if (!data) return;
+      if (String(data?.userId || '') === String(myUserId || '')) return;
+      setRemoteGameplayActive(true);
+      const frameWin = gameFrameRef.current?.contentWindow;
+      if (!frameWin) return;
+      frameWin.postMessage({
+        type: 'gf:mp:state',
+        data,
+      }, '*');
     };
 
     // My identity
@@ -296,12 +483,7 @@ export default function StudioMultiplayerRoom() {
           if (shouldOffer) {
             const offer = await pc.createOffer();
             await pc.setLocalDescription(offer);
-            socket.emit("voice:offer", {
-              token,
-              roomId: room?.roomId,
-              to: peerSocketId,
-              data: { type: offer.type, sdp: offer.sdp },
-            });
+            await renegotiatePeer(peerSocketId, pc);
           }
         } else if (peerUserId) {
           peerUserBySocketRef.current.set(peerSocketId, peerUserId);
@@ -325,14 +507,7 @@ export default function StudioMultiplayerRoom() {
         recomputeVoiceMembers();
         return;
       }
-      const offer = await pc.createOffer();
-      await pc.setLocalDescription(offer);
-      socket.emit("voice:offer", {
-        token,
-        roomId: room?.roomId,
-        to: peerSocketId,
-        data: { type: offer.type, sdp: offer.sdp },
-      });
+      await renegotiatePeer(peerSocketId, pc);
       recomputeVoiceMembers();
     };
 
@@ -398,6 +573,8 @@ export default function StudioMultiplayerRoom() {
     socket.on("chat:history", handleChatHistory);
     socket.on("chat:message", handleChatMessage);
     socket.on("game:start", handleGameStart);
+  socket.on("game:input", handleGameInput);
+  socket.on("game:state", handleGameState);
   socket.on("mp:auth:ok", handleAuthOk);
   socket.on("voice:joined", handleVoiceJoined);
   socket.on("voice:peer:joined", handleVoicePeerJoined);
@@ -416,6 +593,8 @@ export default function StudioMultiplayerRoom() {
       socket.off("chat:history", handleChatHistory);
       socket.off("chat:message", handleChatMessage);
       socket.off("game:start", handleGameStart);
+  socket.off("game:input", handleGameInput);
+  socket.off("game:state", handleGameState);
       socket.off("mp:auth:ok", handleAuthOk);
       socket.off("voice:joined", handleVoiceJoined);
       socket.off("voice:peer:joined", handleVoicePeerJoined);
@@ -425,7 +604,42 @@ export default function StudioMultiplayerRoom() {
       socket.off("voice:peer:left", handleVoicePeerLeft);
       socket.off("mp:error", handleMpError);
     };
-  }, [socket, connected, roomId, mode, initialName, toast, router, createPeerConn, room?.roomId, token, recomputeVoiceMembers]);
+  }, [socket, connected, roomId, mode, initialName, toast, router, createPeerConn, room?.roomId, token, recomputeVoiceMembers, renegotiatePeer, buildSharedGameUrl, myUserId]);
+
+  useEffect(() => {
+    const onMessage = (event: MessageEvent) => {
+      if (!sessionStarted) return;
+      const d: any = event?.data;
+      if (!d || typeof d !== 'object') return;
+      if (!socket || !room?.roomId || !sessionId) return;
+
+      if (d.type === 'gf:mp:input' || d.type === 'gf:mp:local-input') {
+        setLocalBridgeActive(true);
+        socket.emit('game:input', {
+          token,
+          roomId: room.roomId,
+          sessionId,
+          type: String(d.inputType || d.kind || 'input'),
+          payload: d.payload ?? d.data ?? {},
+          ts: typeof d.ts === 'number' ? d.ts : Date.now(),
+        });
+      }
+
+      if (d.type === 'gf:mp:state' || d.type === 'gf:mp:local-state') {
+        setLocalBridgeActive(true);
+        socket.emit('game:state', {
+          token,
+          roomId: room.roomId,
+          sessionId,
+          state: d.state ?? d.payload ?? d.data ?? {},
+          ts: typeof d.ts === 'number' ? d.ts : Date.now(),
+        });
+      }
+    };
+
+    window.addEventListener('message', onMessage);
+    return () => window.removeEventListener('message', onMessage);
+  }, [sessionStarted, socket, room?.roomId, sessionId, token]);
 
   // Auto-scroll chat
   useEffect(() => {
@@ -433,7 +647,10 @@ export default function StudioMultiplayerRoom() {
   }, [messages]);
 
   // Cleanup on unmount
-  useEffect(() => () => { leaveVoice(); }, []);
+  useEffect(() => () => {
+    void stopGameShare();
+    leaveVoice();
+  }, [stopGameShare, leaveVoice]);
 
   // ─── Actions ─────────────────────────────────────────────────────────────
   const handleSendChat = () => {
@@ -495,12 +712,12 @@ export default function StudioMultiplayerRoom() {
         <div className="h-[60vh] flex items-center justify-center">
           <div className="flex flex-col items-center gap-6">
             <div className="relative">
-              <div className="w-20 h-20 border border-indigo-500/30 rounded-full flex items-center justify-center bg-indigo-500/5">
-                <Gamepad2 className="w-8 h-8 text-indigo-400" />
+              <div className="w-20 h-20 border border-blue-500/30 rounded-full flex items-center justify-center bg-blue-500/5">
+                <Gamepad2 className="w-8 h-8 text-blue-400" />
               </div>
-              <div className="absolute inset-0 border-2 border-indigo-500 rounded-full animate-ping opacity-15" />
+              <div className="absolute inset-0 border-2 border-blue-500 rounded-full animate-ping opacity-15" />
             </div>
-            <p className="font-black tracking-[0.3em] text-indigo-400 uppercase text-sm">Initializing Instance...</p>
+            <p className="font-black tracking-[0.3em] text-blue-400 uppercase text-sm">Initializing Instance...</p>
           </div>
         </div>
       </UserShell>
@@ -511,7 +728,7 @@ export default function StudioMultiplayerRoom() {
     <UserShell title={room?.name || "Lobby"} subtitle={`Room: ${room?.roomId || "..."}`}>
       {/* Ambient glow */}
       <div className="absolute inset-0 pointer-events-none overflow-hidden">
-        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] bg-indigo-600/8 blur-[160px] rounded-full" />
+        <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[700px] h-[700px] bg-blue-600/8 blur-[160px] rounded-full" />
       </div>
 
       {/* ─── Game Session Overlay ─── */}
@@ -532,6 +749,27 @@ export default function StudioMultiplayerRoom() {
                 <span className="text-xs font-bold text-zinc-400">{room?.name}</span>
               </div>
               <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setSessionViewMode((m) => (m === "split" ? "shared" : "split"))}
+                  className="px-3 py-1.5 rounded-xl border border-white/10 bg-white/5 text-zinc-300 hover:bg-white/10 transition-all text-xs font-bold"
+                >
+                  {sessionViewMode === "split" ? "Split Live" : "Shared Sync"}
+                </button>
+                {sessionViewMode === "split" && (
+                  <button
+                    onClick={() => {
+                      autoShareAttemptedRef.current = true;
+                      if (sharingGameView) {
+                        void stopGameShare();
+                      } else {
+                        void startGameShare();
+                      }
+                    }}
+                    className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${sharingGameView ? "bg-blue-500/20 border-blue-500/40 text-blue-300" : "bg-white/5 border-white/10 text-zinc-300 hover:bg-white/10"}`}
+                  >
+                    {sharingGameView ? "Stop Share" : "Share Game"}
+                  </button>
+                )}
                 {/* Mini voice controls in session */}
                 {voiceJoined && (
                   <button onClick={toggleMute} className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all ${voiceMuted ? "bg-red-500/10 border-red-500/20 text-red-400" : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"}`}>
@@ -540,7 +778,10 @@ export default function StudioMultiplayerRoom() {
                   </button>
                 )}
                 <button
-                  onClick={() => setSessionStarted(false)}
+                  onClick={() => {
+                    autoShareAttemptedRef.current = false;
+                    setSessionStarted(false);
+                  }}
                   className="flex items-center gap-2 px-3 py-1.5 rounded-xl border border-white/10 bg-white/5 text-zinc-400 hover:text-white hover:bg-white/10 transition-all text-xs font-bold"
                 >
                   <X className="w-3.5 h-3.5" /> Exit Game
@@ -548,35 +789,163 @@ export default function StudioMultiplayerRoom() {
               </div>
             </div>
 
-            {/* Game iframe or placeholder */}
-            {gameUrl ? (
-              <iframe
-                src={gameUrl}
-                className="flex-1 w-full border-0"
-                allow="fullscreen; autoplay; gamepad; clipboard-write"
-                sandbox="allow-scripts allow-same-origin allow-pointer-lock allow-forms allow-popups"
-              />
-            ) : (
-              <div className="flex-1 flex flex-col items-center justify-center gap-8 text-center p-12">
-                <motion.div
-                  animate={{ scale: [1, 1.05, 1] }}
-                  transition={{ duration: 2, repeat: Infinity }}
-                  className="w-24 h-24 rounded-[32px] bg-gradient-to-br from-indigo-500 to-fuchsia-600 flex items-center justify-center shadow-2xl shadow-indigo-500/30"
-                >
-                  <Gamepad2 className="w-12 h-12 text-white" />
-                </motion.div>
-                <div>
-                  <h2 className="text-4xl font-black text-white tracking-tighter uppercase mb-3">Session Active</h2>
-                  <p className="text-zinc-400 text-lg max-w-md">
-                    The session has started! Share a game link with your squad to play together.
-                  </p>
+            <div className="flex-1 min-h-0 flex bg-[#05060a]">
+              <div className="flex-1 min-h-0 p-3 md:p-4 flex flex-col gap-3">
+                {sessionViewMode === "split" ? (
+                  <>
+                    <div className="flex-1 min-h-0 rounded-2xl border border-blue-500/30 overflow-hidden bg-black relative">
+                      <div className="absolute left-3 top-3 z-10 px-2.5 py-1 rounded-lg bg-black/70 border border-white/15 text-[10px] font-black tracking-widest text-blue-300 uppercase">
+                        You · Top Screen
+                      </div>
+                      {gameUrl ? (
+                        <iframe
+                          ref={gameFrameRef}
+                          src={gameUrl}
+                          className="h-full w-full border-0"
+                          allow="fullscreen; autoplay; gamepad; clipboard-write"
+                          sandbox="allow-scripts allow-same-origin allow-pointer-lock allow-forms allow-popups"
+                        />
+                      ) : (
+                        <div className="h-full w-full flex flex-col items-center justify-center gap-4 text-zinc-400 text-center p-8">
+                          <Gamepad2 className="w-10 h-10 text-blue-400" />
+                          <p className="text-xs uppercase tracking-widest font-black">Loading your game view…</p>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex-1 min-h-0 rounded-2xl border border-cyan-500/30 overflow-hidden bg-black relative">
+                      <div className="absolute left-3 top-3 z-10 px-2.5 py-1 rounded-lg bg-black/70 border border-white/15 text-[10px] font-black tracking-widest text-cyan-300 uppercase">
+                        {teammate?.username || "Teammate"} · Bottom Screen
+                      </div>
+                      {remoteGameStream ? (
+                        <video
+                          ref={remoteVideoRef}
+                          className="h-full w-full object-cover"
+                          autoPlay
+                          playsInline
+                          muted
+                        />
+                      ) : gameUrl && teammate?.userId ? (
+                        <iframe
+                          src={withMpUserId(gameUrl, String(teammate.userId))}
+                          className="h-full w-full border-0"
+                          allow="fullscreen; autoplay; gamepad; clipboard-write"
+                          sandbox="allow-scripts allow-same-origin allow-pointer-lock allow-forms allow-popups"
+                        />
+                      ) : (
+                        <div className="h-full w-full flex flex-col items-center justify-center gap-4 text-zinc-500 text-center p-8">
+                          <Users className="w-9 h-9 text-cyan-400" />
+                          <p className="text-xs uppercase tracking-widest font-black">Waiting teammate live stream… (or click Share Game if browser blocked auto-share)</p>
+                        </div>
+                      )}
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex-1 min-h-0 rounded-2xl border border-blue-500/30 overflow-hidden bg-black relative">
+                      <div className="absolute left-3 top-3 z-10 px-2.5 py-1 rounded-lg bg-black/70 border border-white/15 text-[10px] font-black tracking-widest text-blue-300 uppercase">
+                        Shared Multiplayer Game
+                      </div>
+                      {gameUrl ? (
+                        <iframe
+                          ref={gameFrameRef}
+                          src={gameUrl}
+                          className="h-full w-full border-0"
+                          allow="fullscreen; autoplay; gamepad; clipboard-write"
+                          sandbox="allow-scripts allow-same-origin allow-pointer-lock allow-forms allow-popups"
+                        />
+                      ) : (
+                        <div className="h-full w-full flex flex-col items-center justify-center gap-4 text-zinc-400 text-center p-8">
+                          <Gamepad2 className="w-10 h-10 text-blue-400" />
+                          <p className="text-xs uppercase tracking-widest font-black">Loading your game view…</p>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="rounded-2xl border border-cyan-500/20 bg-[#0a0d16] px-4 py-3 text-xs text-zinc-400 flex items-center justify-between">
+                      <span>
+                        {localBridgeActive
+                          ? 'Game bridge connected.'
+                          : 'Game bridge not detected yet (runtime must emit gf:mp events).'}
+                      </span>
+                      <span className={`font-black uppercase tracking-widest ${remoteGameplayActive ? 'text-emerald-300' : 'text-cyan-300'}`}>
+                        {remoteGameplayActive
+                          ? `${teammate?.username || 'Teammate'} gameplay syncing`
+                          : `waiting ${teammate?.username || 'teammate'} gameplay events`}
+                      </span>
+                    </div>
+                  </>
+                )}
+              </div>
+
+              <div className="w-[320px] max-w-[40vw] border-l border-white/10 bg-[#090b12] flex flex-col">
+                <div className="px-4 py-3 border-b border-white/10">
+                  <div className="text-sm font-black text-white">Live Chat + Voice</div>
+                  <div className="text-[10px] uppercase tracking-widest text-zinc-500 mt-1">In-session communication</div>
                 </div>
-                <div className="flex items-center gap-3 px-5 py-2.5 rounded-2xl bg-emerald-500/10 border border-emerald-500/20">
-                  <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                  <span className="text-emerald-400 font-bold text-sm">{members.length} players connected</span>
+
+                <div className="p-3 border-b border-white/10 flex items-center gap-2">
+                  {voiceJoined ? (
+                    <>
+                      <button
+                        onClick={toggleMute}
+                        className={`flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-xl border text-xs font-bold ${voiceMuted ? "bg-red-500/10 border-red-500/20 text-red-400" : "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"}`}
+                      >
+                        {voiceMuted ? <MicOff className="w-3.5 h-3.5" /> : <Mic className="w-3.5 h-3.5" />}
+                        {voiceMuted ? "Unmute" : "Mute"}
+                      </button>
+                      <button
+                        onClick={leaveVoice}
+                        className="px-3 py-2 rounded-xl border border-red-500/30 bg-red-500/10 text-red-400"
+                        title="Leave voice"
+                      >
+                        <PhoneOff className="w-3.5 h-3.5" />
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={handleJoinVoice}
+                      className="w-full flex items-center justify-center gap-2 px-3 py-2 rounded-xl border border-emerald-500/25 bg-emerald-500/10 text-emerald-300 text-xs font-bold"
+                    >
+                      <PhoneCall className="w-3.5 h-3.5" /> Join Voice
+                    </button>
+                  )}
+                </div>
+
+                <div className="flex-1 overflow-y-auto p-3 space-y-2">
+                  {messages.length === 0 ? (
+                    <div className="h-full flex items-center justify-center text-zinc-500 text-xs uppercase tracking-widest font-black">No chat yet</div>
+                  ) : (
+                    messages.slice(-80).map((msg, i) => (
+                      <ChatBubble
+                        key={`${msg?.id || i}`}
+                        msg={msg}
+                        isMe={myUserId && String(msg.userId) === String(myUserId)}
+                      />
+                    ))
+                  )}
+                </div>
+
+                <div className="p-3 border-t border-white/10">
+                  <div className="relative">
+                    <input
+                      type="text"
+                      placeholder="Type message..."
+                      value={chatInput}
+                      onChange={(e) => setChatInput(e.target.value)}
+                      onKeyDown={(e) => e.key === "Enter" && handleSendChat()}
+                      className="w-full bg-white/5 border border-white/10 rounded-xl pl-3 pr-10 py-2.5 text-sm text-white placeholder:text-zinc-600"
+                    />
+                    <button
+                      onClick={handleSendChat}
+                      className="absolute right-1.5 top-1/2 -translate-y-1/2 p-1.5 rounded-lg bg-blue-500 text-white"
+                    >
+                      <Send className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
-            )}
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -585,7 +954,7 @@ export default function StudioMultiplayerRoom() {
       <div className="relative z-10 flex h-[calc(100vh-220px)] min-h-[560px] gap-5 overflow-hidden rounded-3xl">
 
         {/* LEFT: Room Info + Members */}
-        <div className="w-[320px] shrink-0 flex flex-col rounded-[28px] border border-white/[0.07] bg-[#0f1018] overflow-hidden">
+        <div className="w-[320px] shrink-0 flex flex-col rounded-[28px] border border-white/[0.07] bg-[var(--gf-panel-bg-strong)] overflow-hidden">
           {/* Header */}
           <div className="p-5 border-b border-white/[0.06]">
             <div className="flex items-center justify-between mb-5">
@@ -601,12 +970,12 @@ export default function StudioMultiplayerRoom() {
               </div>
             </div>
 
-            <h2 className="text-xl font-black tracking-tighter text-white mb-1">{room?.name || "Initializing..."}</h2>
+            <h2 className="text-xl font-black tracking-tighter text-[var(--foreground)] mb-1">{room?.name || "Initializing..."}</h2>
             <div className="flex items-center gap-2 mb-4">
-              <span className="text-[10px] font-bold tracking-widest uppercase text-zinc-600 truncate max-w-[180px]">{room?.roomId || "..."}</span>
+              <span className="text-[10px] font-bold tracking-widest text-zinc-600 truncate max-w-[180px]">{room?.roomId || "..."}</span>
               <button
                 onClick={() => { navigator.clipboard.writeText(room?.roomId || ""); toast.success("Copied!"); }}
-                className="text-zinc-600 hover:text-indigo-400 transition-colors"
+                className="text-zinc-600 hover:text-blue-400 transition-colors"
               >
                 <Copy className="w-3 h-3" />
               </button>
@@ -614,11 +983,11 @@ export default function StudioMultiplayerRoom() {
 
             <div className="flex gap-2 flex-wrap">
               <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] font-black text-zinc-400">
-                <Users className="w-3 h-3 text-indigo-400" />
+                <Users className="w-3 h-3 text-blue-400" />
                 {room?.members?.length || 0}/{room?.maxPlayers || 4}
               </div>
               <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-white/5 border border-white/10 text-[10px] font-black text-zinc-400">
-                <Shield className="w-3 h-3 text-fuchsia-400" />
+                <Shield className="w-3 h-3 text-cyan-400" />
                 HOST: {room?.hostUserId ? "SET" : "..."}
               </div>
             </div>
@@ -688,22 +1057,22 @@ export default function StudioMultiplayerRoom() {
         </div>
 
         {/* CENTER: Waiting Room */}
-        <div className="flex-1 flex flex-col rounded-[28px] border border-white/[0.07] bg-[#0c0d14] overflow-hidden relative">
+        <div className="flex-1 flex flex-col rounded-[28px] border border-white/[0.07] bg-[var(--gf-panel-bg-strong)] overflow-hidden relative">
           <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-            <div className="w-[400px] h-[400px] bg-indigo-500/8 blur-[100px] rounded-full animate-pulse" />
+            <div className="w-[400px] h-[400px] bg-blue-500/8 blur-[100px] rounded-full animate-pulse" />
           </div>
 
           {mode === "matchmaking" && !room ? (
             <div className="flex-1 flex flex-col items-center justify-center p-12 relative z-10 text-center gap-8">
               <div className="relative">
-                <div className="w-28 h-28 border border-indigo-500/30 rounded-full flex items-center justify-center bg-indigo-500/5">
-                  <Users className="w-10 h-10 text-indigo-400" />
+                <div className="w-28 h-28 border border-blue-500/30 rounded-full flex items-center justify-center bg-blue-500/5">
+                  <Users className="w-10 h-10 text-blue-400" />
                 </div>
-                <div className="absolute inset-0 border-2 border-indigo-500 rounded-full animate-ping opacity-15" />
-                <div className="absolute inset-[-14px] border border-indigo-500/15 rounded-full animate-spin" style={{ animationDuration: "5s" }} />
+                <div className="absolute inset-0 border-2 border-blue-500 rounded-full animate-ping opacity-15" />
+                <div className="absolute inset-[-14px] border border-blue-500/15 rounded-full animate-spin" style={{ animationDuration: "5s" }} />
               </div>
               <div>
-                <h3 className="text-4xl font-black tracking-tighter text-white uppercase mb-2">Finding Players</h3>
+                <h3 className="text-4xl font-black tracking-tighter text-[var(--foreground)] uppercase mb-2">Finding Players</h3>
                 <p className="text-zinc-500 italic text-sm">Assembling your elite squad...</p>
               </div>
               <button onClick={handleLeave} className="px-8 py-3 rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 font-bold text-xs uppercase tracking-widest text-zinc-400 hover:text-white transition-all">
@@ -720,7 +1089,7 @@ export default function StudioMultiplayerRoom() {
               </div>
 
               <div className="relative z-10 text-center mb-8">
-                <p className="text-zinc-500 text-sm max-w-xs mx-auto leading-relaxed">
+                <p className="text-[var(--gf-text-muted)] text-base leading-relaxed max-w-xs mx-auto">
                   Synchronize readiness with your squad to initialize the session.
                 </p>
               </div>
@@ -755,7 +1124,7 @@ export default function StudioMultiplayerRoom() {
                   whileTap={{ scale: 0.97 }}
                   onClick={handleOpenStartSession}
                   disabled={!room || !isHost || !allReady || startingSession}
-                  className="flex-1 group relative p-6 rounded-[28px] bg-gradient-to-br from-indigo-500 via-indigo-600 to-fuchsia-600 text-white shadow-2xl shadow-indigo-500/25 hover:shadow-indigo-500/40 transition-all disabled:opacity-25 disabled:pointer-events-none overflow-hidden"
+                  className="flex-1 group relative p-6 rounded-[28px] bg-gradient-to-br from-blue-500 via-blue-600 to-cyan-600 text-white shadow-2xl shadow-blue-500/25 hover:shadow-blue-500/40 transition-all disabled:opacity-25 disabled:pointer-events-none overflow-hidden"
                 >
                   <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/10 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
                   <div className="relative z-10 flex flex-col items-center gap-3">
@@ -782,14 +1151,14 @@ export default function StudioMultiplayerRoom() {
         </div>
 
         {/* RIGHT: Chat */}
-        <div className="w-[300px] shrink-0 flex flex-col rounded-[28px] border border-white/[0.07] bg-[#0f1018] overflow-hidden">
+        <div className="w-[300px] shrink-0 flex flex-col rounded-[28px] border border-white/[0.07] bg-[var(--gf-panel-bg-strong)] overflow-hidden">
           <div className="p-5 border-b border-white/[0.06] flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-9 h-9 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center">
-                <MessageSquare className="w-4 h-4 text-indigo-400" />
+              <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center">
+                <MessageSquare className="w-4 h-4 text-blue-400" />
               </div>
               <div>
-                <div className="text-sm font-black text-white">Lobby Chat</div>
+                <div className="text-sm font-bold text-[var(--foreground)]">Lobby Chat</div>
                 <div className="text-[9px] font-black tracking-widest text-zinc-600 uppercase">Real-time Comms</div>
               </div>
             </div>
@@ -823,11 +1192,11 @@ export default function StudioMultiplayerRoom() {
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleSendChat()}
-                className="w-full bg-white/5 border border-white/10 rounded-2xl pl-4 pr-12 py-3 focus:outline-none focus:border-indigo-500/40 transition-all font-medium text-sm placeholder:text-zinc-700 text-white"
+                className="w-full bg-white/5 border border-white/10 rounded-2xl pl-4 pr-12 py-3 focus:outline-none focus:border-blue-500/40 transition-all font-medium text-sm placeholder:text-zinc-700 text-[var(--foreground)]"
               />
               <button
                 onClick={handleSendChat}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-2 bg-indigo-500 hover:bg-indigo-400 active:scale-95 rounded-xl transition-all shadow-lg"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-2 bg-blue-500 hover:bg-blue-400 active:scale-95 rounded-xl transition-all shadow-lg"
               >
                 <Send className="w-3.5 h-3.5 text-white" />
               </button>
@@ -853,7 +1222,7 @@ export default function StudioMultiplayerRoom() {
               initial={{ opacity: 0, y: 20, scale: 0.96 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 20, scale: 0.96 }}
-              className="absolute left-1/2 top-1/2 w-[min(860px,92vw)] -translate-x-1/2 -translate-y-1/2 rounded-3xl border border-white/10 bg-[#0c0d14] shadow-2xl overflow-hidden"
+              className="absolute left-1/2 top-1/2 w-[min(860px,92vw)] -translate-x-1/2 -translate-y-1/2 rounded-3xl border border-white/10 bg-[var(--gf-panel-bg-strong)] shadow-2xl overflow-hidden"
             >
               <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between">
                 <div>
@@ -881,10 +1250,10 @@ export default function StudioMultiplayerRoom() {
                     const playable = playUrl.trim().length > 0;
                     return (
                       <button
-                        key={String(it?.id || it?._id || idx)}
+                        key={`${String(it?.id || it?._id || 'arcade')}-${idx}`}
                         disabled={!playable || startingSession}
                         onClick={() => startSessionWithArcade(it)}
-                        className="w-full text-left p-4 rounded-2xl border border-white/10 bg-white/[0.03] hover:bg-indigo-500/10 hover:border-indigo-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                        className="w-full text-left p-4 rounded-2xl border border-white/10 bg-white/[0.03] hover:bg-blue-500/10 hover:border-blue-500/30 disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                       >
                         <div className="flex items-center justify-between gap-3">
                           <div>
@@ -918,7 +1287,7 @@ function MemberTile({ member, isHost, isReady, inVoice }: any) {
     >
       <div className="flex items-center gap-3">
         <div className="relative">
-          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-600 to-fuchsia-600 flex items-center justify-center font-black text-xs text-white shadow-md">
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-blue-600 to-cyan-600 flex items-center justify-center font-black text-xs text-white shadow-md">
             {member.username?.substring(0, 2).toUpperCase() || "??"}
           </div>
           {member.isOnline && (
@@ -928,7 +1297,7 @@ function MemberTile({ member, isHost, isReady, inVoice }: any) {
         <div>
           <div className="flex items-center gap-1.5">
             <span className="font-bold text-sm text-white">{member.username}</span>
-            {isHost && <Shield className="w-3 h-3 text-fuchsia-400" />}
+            {isHost && <Shield className="w-3 h-3 text-cyan-400" />}
             {inVoice && <Volume2 className="w-3 h-3 text-emerald-400" />}
           </div>
           <div className={`text-[9px] font-black tracking-widest uppercase mt-0.5 ${isReady ? "text-emerald-400" : "text-zinc-600"}`}>
@@ -952,7 +1321,7 @@ function ChatBubble({ msg, isMe }: any) {
         {time && <span className="text-[8px] text-zinc-700">{time}</span>}
       </div>
       <div className={`px-3.5 py-2 rounded-2xl max-w-[90%] text-sm font-medium leading-snug ${isMe
-          ? "bg-gradient-to-br from-indigo-600 to-indigo-500 text-white rounded-tr-sm shadow-md"
+          ? "bg-gradient-to-br from-blue-600 to-blue-500 text-white rounded-tr-sm shadow-md"
           : "bg-white/[0.07] text-zinc-200 rounded-tl-sm border border-white/[0.06]"
         }`}>
         {msg.text}

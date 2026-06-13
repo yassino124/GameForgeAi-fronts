@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:math';
 import 'dart:ui';
 import 'package:go_router/go_router.dart';
 import 'dart:async';
@@ -8,6 +9,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/services/api_service.dart';
+import '../../../core/services/gameplay_progression_service.dart';
 import '../../../core/services/templates_service.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../widgets/widgets.dart';
@@ -461,6 +463,8 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen>
   final List<GameTemplate> _compareSelection = [];
   final List<String> _savedTemplateIds = [];
 
+  int _nftTemplateDiscountPct = 0;
+
   final List<String> _categories = [
     'All',
     'Action',
@@ -597,11 +601,35 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen>
         token = null;
       }
 
+      final rewardsFuture = (token != null && token.trim().isNotEmpty)
+          ? GameplayProgressionService.rewards(token: token.trim())
+          : null;
+
       final res = await TemplatesService.listPublicTemplates(
         q: _searchController.text,
         category: _selectedCategory == 'All' ? null : _selectedCategory,
         token: token,
       );
+
+      if (rewardsFuture != null) {
+        try {
+          final rewardsRes = await rewardsFuture;
+          if (mounted && rewardsRes['success'] == true && rewardsRes['data'] is Map) {
+            final data = Map<String, dynamic>.from(rewardsRes['data'] as Map);
+            final v = data['templateDiscountPct'];
+            final pct = (v is num)
+                ? v.toInt()
+                : int.tryParse(v?.toString() ?? '') ?? 0;
+            if (mounted) {
+              setState(() {
+                _nftTemplateDiscountPct = pct < 0 ? 0 : pct;
+              });
+            }
+          }
+        } catch (_) {
+          // ignore rewards fetch errors and keep marketplace usable
+        }
+      }
 
       if (!mounted) return;
 
@@ -1739,6 +1767,16 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen>
   Widget _buildMetaRow(GameTemplate t) {
     final cs = Theme.of(context).colorScheme;
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final baseOriginal = (t.originalPrice > 0) ? t.originalPrice : t.price;
+    final baseDiscount = (t.isDiscounted && t.discountPercent > 0) ? t.discountPercent : 0;
+    final nftDiscount = _nftTemplateDiscountPct;
+    final effectiveDiscount = max(baseDiscount, nftDiscount);
+    final effectivePrice = (effectiveDiscount > 0 && baseOriginal > 0)
+        ? (baseOriginal * (1 - (effectiveDiscount / 100.0)))
+        : t.price;
+    final showDiscount = effectiveDiscount > 0 && baseOriginal > effectivePrice;
+
     return Wrap(
       spacing: 8,
       runSpacing: 8,
@@ -1755,54 +1793,57 @@ class _TemplateMarketplaceScreenState extends State<TemplateMarketplaceScreen>
                   : cs.outlineVariant.withOpacity(0.85),
             ),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (t.isDiscounted && t.originalPrice > t.price) ...[
-                Text(
-                  _formatPrice(t.originalPrice),
-                  style: AppTypography.caption.copyWith(
-                    color: isDark
-                        ? Colors.white.withOpacity(0.55)
-                        : cs.onSurfaceVariant,
-                    fontWeight: FontWeight.w800,
-                    decoration: TextDecoration.lineThrough,
-                  ),
-                ),
-                const SizedBox(width: 6),
-              ],
-              Text(
-                _formatPrice(t.price),
-                style: AppTypography.caption.copyWith(
-                  color: isDark ? Colors.white : cs.onSurface,
-                  fontWeight: FontWeight.w900,
-                  letterSpacing: 0.2,
-                ),
-              ),
-              if (t.isDiscounted && t.discountPercent > 0) ...[
-                const SizedBox(width: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 7,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: AppColors.success.withOpacity(0.22),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(
-                      color: AppColors.success.withOpacity(0.38),
-                    ),
-                  ),
-                  child: Text(
-                    _formatDiscountPercent(t.discountPercent),
+          child: FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (showDiscount) ...[
+                  Text(
+                    _formatPrice(baseOriginal),
                     style: AppTypography.caption.copyWith(
-                      color: AppColors.success,
-                      fontWeight: FontWeight.w900,
+                      color: isDark
+                          ? Colors.white.withOpacity(0.55)
+                          : cs.onSurfaceVariant,
+                      fontWeight: FontWeight.w800,
+                      decoration: TextDecoration.lineThrough,
                     ),
                   ),
+                  const SizedBox(width: 6),
+                ],
+                Text(
+                  _formatPrice(effectivePrice),
+                  style: AppTypography.caption.copyWith(
+                    color: isDark ? Colors.white : cs.onSurface,
+                    fontWeight: FontWeight.w900,
+                    letterSpacing: 0.2,
+                  ),
                 ),
+                if (showDiscount) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 2,
+                    ),
+                    decoration: BoxDecoration(
+                      color: AppColors.success.withOpacity(0.22),
+                      borderRadius: BorderRadius.circular(999),
+                      border: Border.all(
+                        color: AppColors.success.withOpacity(0.38),
+                      ),
+                    ),
+                    child: Text(
+                      _formatDiscountPercent(effectiveDiscount),
+                      style: AppTypography.caption.copyWith(
+                        color: AppColors.success,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ),
+                ],
               ],
-            ],
+            ),
           ),
         ),
         Container(

@@ -4,14 +4,14 @@ import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import UserShell from "@/app/_components/UserShell";
 import { useMultiplayerSocket } from "@/lib/multiplayer";
-import { getUserToken } from "@/lib/userAuth";
+import { readAuthToken } from "@/lib/stores/authStore";
 import { useToast } from "@/app/_components/ToastProvider";
 
 function CreateRoomHandler() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const name = searchParams.get("name");
-  const token = getUserToken();
+  const token = readAuthToken();
   const { socket, connected, error } = useMultiplayerSocket(token);
   const toast = useToast();
 
@@ -65,9 +65,9 @@ function CreateRoomHandler() {
 
   return (
     <div className="flex flex-col items-center gap-6">
-      <div className="w-16 h-16 border-4 border-indigo-500/20 border-t-indigo-500 rounded-full animate-spin" />
+      <div className="w-16 h-16 border-4 border-blue-500/20 border-t-blue-500 rounded-full animate-spin" />
       <div className="text-center">
-        <p className="font-black tracking-widest text-indigo-400 uppercase italic text-xl">Architecting Reality</p>
+        <p className="font-black tracking-widest text-blue-400 uppercase italic text-xl">Architecting Reality</p>
         <p className="text-zinc-500 text-sm mt-2 uppercase tracking-widest font-bold">Initializing Multiplayer Instance...</p>
       </div>
     </div>

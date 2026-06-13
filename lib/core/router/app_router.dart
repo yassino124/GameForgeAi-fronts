@@ -5,6 +5,13 @@ import '../guards/auth_guard.dart';
 import '../../presentation/screens/onboarding/onboarding.dart';
 import '../../presentation/screens/auth/auth.dart';
 import '../../presentation/screens/dashboard/dashboard.dart';
+import '../../presentation/screens/dashboard/goals_screen.dart';
+import '../../presentation/screens/ideas/idea_vault_screen.dart';
+import '../../presentation/screens/ideas/idea_details_screen.dart';
+import '../../presentation/screens/tournaments/tournaments_list_screen.dart';
+import '../../presentation/screens/tournaments/tournament_create_screen.dart';
+import '../../presentation/screens/tournaments/tournament_details_screen.dart';
+import '../../presentation/screens/tournaments/tournament_play_screen.dart';
 import '../../presentation/screens/project/project.dart';
 import '../../presentation/screens/build/build.dart';
 import '../../presentation/screens/marketplace/marketplace.dart';
@@ -21,6 +28,13 @@ import '../../presentation/screens/live/live_watch_screen.dart';
 import '../../presentation/screens/project/play_webgl_screen.dart'
     as play_webgl;
 import '../../presentation/screens/discovery/discovery.dart';
+import '../../presentation/screens/discovery/global_events_screen.dart';
+import '../../presentation/screens/worlds_screen.dart';
+import '../../presentation/screens/project/ai_game_gen_screen.dart';
+import '../../presentation/screens/project/ai_scratch_game_screen.dart';
+import '../../presentation/screens/sound_forge_screen.dart';
+import '../../presentation/screens/asset_forge_screen.dart';
+import '../../presentation/screens/ai_studio/ai_game_studio_screen.dart';
 
 class AppRouter {
   static Page<T> _fadeSlidePage<T>({
@@ -722,7 +736,147 @@ class AppRouter {
         },
       ),
 
-      // TODO: Add more routes as we implement them
+      GoRoute(
+        path: '/tournaments',
+        pageBuilder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return _fadeSlidePage(child: const SignInScreen(), state: state);
+          }
+          return _fadeSlidePage(child: const TournamentsListScreen(), state: state);
+        },
+      ),
+      GoRoute(
+        path: '/tournaments/create',
+        pageBuilder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return _fadeSlidePage(child: const SignInScreen(), state: state);
+          }
+          return _fadeSlidePage(child: const TournamentCreateScreen(), state: state);
+        },
+      ),
+      GoRoute(
+        path: '/tournaments/:id',
+        pageBuilder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return _fadeSlidePage(child: const SignInScreen(), state: state);
+          }
+          final id = state.pathParameters['id'] ?? '';
+          return _fadeSlidePage(child: TournamentDetailsScreen(tournamentId: id), state: state);
+        },
+      ),
+      GoRoute(
+        path: '/tournaments/:id/play',
+        pageBuilder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return _fadeSlidePage(child: const SignInScreen(), state: state);
+          }
+          final id = state.pathParameters['id'] ?? '';
+          return _fadeSlidePage(child: TournamentPlayScreen(tournamentId: id), state: state);
+        },
+      ),
+      GoRoute(
+        path: '/idea-vault',
+        pageBuilder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return _fadeSlidePage(child: const SignInScreen(), state: state);
+          }
+          return _fadeSlidePage(child: const IdeaVaultScreen(), state: state);
+        },
+      ),
+      GoRoute(
+        path: '/idea-vault/:id',
+        pageBuilder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return _fadeSlidePage(child: const SignInScreen(), state: state);
+          }
+          final id = state.pathParameters['id'] ?? '';
+          return _fadeSlidePage(child: IdeaDetailsScreen(ideaId: id), state: state);
+        },
+      ),
+      GoRoute(
+        path: '/ideas',
+        redirect: (context, state) => '/idea-vault',
+      ),
+      GoRoute(
+        path: '/ideas/:id',
+        redirect: (context, state) {
+          final id = state.pathParameters['id'] ?? '';
+          return '/idea-vault/$id';
+        },
+      ),
+      GoRoute(
+        path: '/goals',
+        pageBuilder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return _fadeSlidePage(child: const SignInScreen(), state: state);
+          }
+          return _fadeSlidePage(child: const GoalsScreen(), state: state);
+        },
+      ),
+      GoRoute(
+        path: '/global-events',
+        pageBuilder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return _fadeSlidePage(child: const SignInScreen(), state: state);
+          }
+          return _fadeSlidePage(child: const GlobalEventsScreen(), state: state);
+        },
+      ),
+      GoRoute(
+        path: '/worlds',
+        pageBuilder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return _fadeSlidePage(child: const SignInScreen(), state: state);
+          }
+          return _fadeSlidePage(child: const WorldsScreen(), state: state);
+        },
+      ),
+      GoRoute(
+        path: '/ai-game-gen',
+        pageBuilder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return _fadeSlidePage(child: const SignInScreen(), state: state);
+          }
+          return _fadeSlidePage(child: const AiGameGenScreen(), state: state);
+        },
+      ),
+      GoRoute(
+        path: '/ai-scratch-game',
+        pageBuilder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return _fadeSlidePage(child: const SignInScreen(), state: state);
+          }
+          return _fadeSlidePage(child: const AiScratchGameScreen(), state: state);
+        },
+      ),
+      GoRoute(
+        path: '/sound-forge',
+        pageBuilder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return _fadeSlidePage(child: const SignInScreen(), state: state);
+          }
+          return _fadeSlidePage(child: const SoundForgeScreen(), state: state);
+        },
+      ),
+      GoRoute(
+        path: '/asset-forge',
+        pageBuilder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return _fadeSlidePage(child: const SignInScreen(), state: state);
+          }
+          return _fadeSlidePage(child: const AssetForgeScreen(), state: state);
+        },
+      ),
+
+      GoRoute(
+        path: '/ai-game-studio',
+        pageBuilder: (context, state) {
+          if (!AuthGuard.canActivate(context)) {
+            return _fadeSlidePage(child: const SignInScreen(), state: state);
+          }
+          return _fadeSlidePage(child: const AiGameStudioScreen(), state: state);
+        },
+      ),
     ],
     errorBuilder: (context, state) => Scaffold(
       body: Center(

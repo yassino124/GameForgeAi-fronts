@@ -3,11 +3,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import UserShell from "@/app/_components/UserShell";
-import { getUserToken } from "@/lib/userAuth";
+import { useAuthToken } from "@/lib/stores/authStore";
 
 export default function StripeSuccessPage() {
   const router = useRouter();
-  const token = useMemo(() => getUserToken(), []);
+  const { token } = useAuthToken();
   const [status, setStatus] = useState<string>("Syncing your subscription…");
 
   useEffect(() => {

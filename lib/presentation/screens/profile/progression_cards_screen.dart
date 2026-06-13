@@ -12,12 +12,13 @@ class ProgressionCardsScreen extends StatefulWidget {
   State<ProgressionCardsScreen> createState() => _ProgressionCardsScreenState();
 }
 
-class _ProgressionCardsScreenState extends State<ProgressionCardsScreen> with SingleTickerProviderStateMixin {
+class _ProgressionCardsScreenState extends State<ProgressionCardsScreen> with TickerProviderStateMixin {
   bool _loading = false;
   bool _minting = false;
   bool _settingWallet = false;
   Map<String, dynamic>? _me;
   List<Map<String, dynamic>> _cards = const [];
+  Map<String, dynamic>? _rewards;
   bool _autoSynced = false;
   late final AnimationController _fx;
 
@@ -41,12 +42,16 @@ class _ProgressionCardsScreenState extends State<ProgressionCardsScreen> with Si
     try {
       final meRes = await GameplayProgressionService.me(token: token);
       final cardsRes = await GameplayProgressionService.cards(token: token);
+      final rewardsRes = await GameplayProgressionService.rewards(token: token);
       if (!mounted) return;
       final data = cardsRes['data'];
       final arr = data is List ? data : (data is Map && data['cards'] is List ? data['cards'] as List : const []);
       setState(() {
         _me = (meRes['data'] is Map) ? Map<String, dynamic>.from(meRes['data'] as Map) : null;
         _cards = arr.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList();
+        _rewards = (rewardsRes['data'] is Map)
+            ? Map<String, dynamic>.from(rewardsRes['data'] as Map)
+            : null;
       });
     } catch (e) {
       if (mounted) AppNotifier.showError('Load failed: $e');
@@ -214,7 +219,12 @@ class _ProgressionCardsScreenState extends State<ProgressionCardsScreen> with Si
                       padding: const EdgeInsets.symmetric(horizontal: 16),
                       child: Column(
                         children: [
-                          _HeaderStats(me: _me, onSetWallet: _setWalletDialog, settingWallet: _settingWallet),
+                          _ConnectTop(
+                            me: _me,
+                            rewards: _rewards,
+                            onSetWallet: _setWalletDialog,
+                            settingWallet: _settingWallet,
+                          ),
                           const SizedBox(height: 28),
                           _CollectionHeader(onTest: _testRun, loading: _loading),
                           const SizedBox(height: 16),
@@ -249,6 +259,246 @@ class _ProgressionCardsScreenState extends State<ProgressionCardsScreen> with Si
                     ),
                 ],
               ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ConnectTop extends StatelessWidget {
+  final Map<String, dynamic>? me;
+  final Map<String, dynamic>? rewards;
+  final VoidCallback onSetWallet;
+  final bool settingWallet;
+  const _ConnectTop({
+    required this.me,
+    required this.rewards,
+    required this.onSetWallet,
+    required this.settingWallet,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final wallet = (me?['walletAddress'] ?? '').toString().trim();
+    final hasWallet = wallet.isNotEmpty;
+    final shortWallet = wallet.length > 10
+        ? '${wallet.substring(0, 6)}...${wallet.substring(wallet.length - 4)}'
+        : wallet;
+
+    final derivedFrom = (rewards?['derivedFrom'] ?? 'none').toString();
+    final templateDiscountPct = (rewards?['templateDiscountPct'] ?? 0) as num? ?? 0;
+    final subscriptionDiscountPct =
+        (rewards?['subscriptionDiscountPct'] ?? 0) as num? ?? 0;
+    final freePlan = rewards?['freePlan'];
+    final freePlanStr = freePlan is Map
+        ? '${(freePlan['plan'] ?? '').toString()} ${(freePlan['days'] ?? '').toString()}d'
+        : '';
+
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(32),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+        child: Container(
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                const Color(0xFF06B6D4).withOpacity(0.18),
+                const Color(0xFF8B5CF6).withOpacity(0.12),
+                Colors.white.withOpacity(0.04),
+              ],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.circular(32),
+            border: Border.all(color: Colors.white.withOpacity(0.12)),
+            boxShadow: [
+              BoxShadow(
+                color: const Color(0xFF06B6D4).withOpacity(0.14),
+                blurRadius: 30,
+                offset: const Offset(0, 12),
+              ),
+            ],
+          ),
+          child: Column(
+            children: [
+              Row(
+                children: [
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: Colors.black.withOpacity(0.18),
+                      border: Border.all(
+                        color: hasWallet
+                            ? Colors.greenAccent.withOpacity(0.4)
+                            : Colors.cyanAccent.withOpacity(0.3),
+                      ),
+                    ),
+                    child: Icon(
+                      Icons.account_balance_wallet_rounded,
+                      color: hasWallet ? Colors.greenAccent : Colors.cyanAccent,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          hasWallet ? 'WALLET CONNECTED' : 'CONNECT YOUR WALLET',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 1,
+                            fontSize: 12,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          hasWallet ? shortWallet : 'Polygon-ready perks & minting',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: Colors.white.withOpacity(0.65),
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  FilledButton(
+                    onPressed: settingWallet ? null : onSetWallet,
+                    style: FilledButton.styleFrom(
+                      backgroundColor:
+                          hasWallet ? Colors.white.withOpacity(0.10) : Colors.cyanAccent,
+                      foregroundColor: hasWallet ? Colors.white : Colors.black,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 14,
+                        vertical: 10,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(16),
+                      ),
+                    ),
+                    child: settingWallet
+                        ? const SizedBox(
+                            width: 16,
+                            height: 16,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : Text(
+                            hasWallet ? 'CHANGE' : 'CONNECT',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w900,
+                              letterSpacing: 1,
+                            ),
+                          ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 14),
+              Row(
+                children: [
+                  Expanded(
+                    child: _PerkPill(
+                      label: 'TEMPLATES',
+                      value: templateDiscountPct > 0
+                          ? '-${templateDiscountPct.toInt()}%'
+                          : '—',
+                      color: Colors.cyanAccent,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _PerkPill(
+                      label: 'SUBSCRIPTION',
+                      value: subscriptionDiscountPct > 0
+                          ? '-${subscriptionDiscountPct.toInt()}%'
+                          : '—',
+                      color: Colors.purpleAccent,
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: _PerkPill(
+                      label: 'FREE PLAN',
+                      value: freePlanStr.isNotEmpty ? freePlanStr.toUpperCase() : '—',
+                      color: Colors.amberAccent,
+                    ),
+                  ),
+                ],
+              ),
+              if (derivedFrom != 'none') ...[
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: Text(
+                    'ACTIVE PERKS FROM: ${derivedFrom.toUpperCase()}',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.45),
+                      fontWeight: FontWeight.w800,
+                      fontSize: 10,
+                      letterSpacing: 1,
+                    ),
+                  ),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _PerkPill extends StatelessWidget {
+  final String label;
+  final String value;
+  final Color color;
+  const _PerkPill({required this.label, required this.value, required this.color});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: Colors.black.withOpacity(0.16),
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: color.withOpacity(0.22)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: Colors.white.withOpacity(0.38),
+              fontSize: 10,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: color,
+              fontSize: 14,
+              fontWeight: FontWeight.w900,
+              letterSpacing: 1,
             ),
           ),
         ],

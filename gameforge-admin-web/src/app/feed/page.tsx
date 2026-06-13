@@ -191,7 +191,7 @@ export default function FeedAdminPage() {
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search by title, creator, id..."
-            className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/10 focus:outline-none focus:ring-2 focus:ring-indigo-500/40"
+            className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/10 focus:outline-none focus:ring-2 focus:ring-blue-500/40"
           />
         </div>
 
@@ -232,7 +232,7 @@ export default function FeedAdminPage() {
                     <div className="col-span-2 text-right">
                       <button
                         onClick={() => openDetails(p)}
-                        className="px-3 py-1.5 rounded-lg bg-indigo-500/15 border border-indigo-500/30 hover:bg-indigo-500/25 text-indigo-200 text-xs"
+                        className="px-3 py-1.5 rounded-lg bg-blue-500/15 border border-blue-500/30 hover:bg-blue-500/25 text-blue-200 text-xs"
                       >
                         Details
                       </button>
@@ -273,7 +273,7 @@ export default function FeedAdminPage() {
                       <input
                         value={editTitle}
                         onChange={(e) => setEditTitle(e.target.value)}
-                        className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/10 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 text-sm"
+                        className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/10 focus:outline-none focus:ring-2 focus:ring-blue-500/40 text-sm"
                       />
                     </div>
                     <div className="space-y-2">
@@ -281,7 +281,7 @@ export default function FeedAdminPage() {
                       <input
                         value={editTags}
                         onChange={(e) => setEditTags(e.target.value)}
-                        className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/10 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 text-sm"
+                        className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/10 focus:outline-none focus:ring-2 focus:ring-blue-500/40 text-sm"
                       />
                     </div>
                     <div className="md:col-span-2 space-y-2">
@@ -290,7 +290,7 @@ export default function FeedAdminPage() {
                         value={editDescription}
                         onChange={(e) => setEditDescription(e.target.value)}
                         rows={4}
-                        className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/10 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 text-sm"
+                        className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/10 focus:outline-none focus:ring-2 focus:ring-blue-500/40 text-sm"
                       />
                     </div>
                   </div>
@@ -339,7 +339,7 @@ export default function FeedAdminPage() {
                         "px-4 py-2 rounded-lg border text-sm",
                         saving
                           ? "bg-white/5 border-white/10 text-zinc-500"
-                          : "bg-indigo-500/15 border-indigo-500/30 hover:bg-indigo-500/25 text-indigo-200",
+                          : "bg-blue-500/15 border-blue-500/30 hover:bg-blue-500/25 text-blue-200",
                       )}
                     >
                       Save

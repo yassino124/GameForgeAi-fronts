@@ -70,10 +70,10 @@ function ResetPasswordContent() {
     <div className="gf-panel-strong w-full rounded-3xl p-6 sm:p-8 relative z-10 border border-white/5 backdrop-blur-3xl bg-zinc-900/20 shadow-2xl">
       <div className="flex items-center justify-between mb-10">
         <div>
-          <p className="text-[10px] text-indigo-400 font-bold tracking-[0.2em] uppercase mb-1">Security</p>
+          <p className="text-[10px] text-blue-400 font-bold tracking-[0.2em] uppercase mb-1">Security</p>
           <h1 className="text-3xl font-bold tracking-tight text-white">Reset Password</h1>
         </div>
-        <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-indigo-500/20 via-fuchsia-500/10 to-transparent flex items-center justify-center text-3xl shadow-inner border border-white/10">
+        <div className="h-14 w-14 rounded-2xl bg-gradient-to-br from-blue-500/20 via-cyan-500/10 to-transparent flex items-center justify-center text-3xl shadow-inner border border-white/10">
           🛡️
         </div>
       </div>
@@ -88,7 +88,7 @@ function ResetPasswordContent() {
             <div className="space-y-2">
               <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider ml-1">New Password</label>
               <input
-                className="gf-input w-full rounded-2xl px-5 py-4 text-sm bg-black/40 border-white/5 focus:border-indigo-500/50 focus:bg-black/60 transition-all duration-300 outline-none placeholder:text-zinc-700"
+                className="gf-input w-full rounded-2xl px-5 py-4 text-sm bg-black/40 border-white/5 focus:border-blue-500/50 focus:bg-black/60 transition-all duration-300 outline-none placeholder:text-zinc-700"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="••••••••"
@@ -101,7 +101,7 @@ function ResetPasswordContent() {
             <div className="space-y-2">
               <label className="block text-xs font-bold text-zinc-500 uppercase tracking-wider ml-1">Confirm Password</label>
               <input
-                className="gf-input w-full rounded-2xl px-5 py-4 text-sm bg-black/40 border-white/5 focus:border-indigo-500/50 focus:bg-black/60 transition-all duration-300 outline-none placeholder:text-zinc-700"
+                className="gf-input w-full rounded-2xl px-5 py-4 text-sm bg-black/40 border-white/5 focus:border-blue-500/50 focus:bg-black/60 transition-all duration-300 outline-none placeholder:text-zinc-700"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
                 placeholder="••••••••"
@@ -133,7 +133,7 @@ function ResetPasswordContent() {
 
           <button
             disabled={!strongPasswordOk || password.length < 8 || password !== confirmPassword || loading || !token}
-            className="w-full rounded-2xl bg-gradient-to-r from-indigo-600 to-fuchsia-600 py-4.5 text-sm font-bold text-white transition-all duration-300 shadow-xl shadow-indigo-500/20 hover:shadow-indigo-500/40 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-30 disabled:hover:scale-100 disabled:shadow-none"
+            className="w-full rounded-2xl bg-gradient-to-r from-blue-600 to-cyan-600 py-4.5 text-sm font-bold text-white transition-all duration-300 shadow-xl shadow-blue-500/20 hover:shadow-blue-500/40 hover:scale-[1.01] active:scale-[0.99] disabled:opacity-30 disabled:hover:scale-100 disabled:shadow-none"
             type="submit"
           >
             {loading ? (
@@ -174,14 +174,14 @@ export default function ResetPasswordPage() {
       <div className="pointer-events-none absolute inset-0">
         <div className="gf-grid absolute inset-0 opacity-20" />
         <div className="gf-noise absolute inset-0 opacity-[0.03]" />
-        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-indigo-500/10 rounded-full blur-[120px] animate-pulse" />
-        <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] bg-fuchsia-500/10 rounded-full blur-[120px] animate-pulse" />
+        <div className="absolute top-[-20%] left-[-10%] w-[60%] h-[60%] bg-blue-500/10 rounded-full blur-[120px] animate-pulse" />
+        <div className="absolute bottom-[-20%] right-[-10%] w-[60%] h-[60%] bg-cyan-500/10 rounded-full blur-[120px] animate-pulse" />
       </div>
 
       <div className="relative mx-auto w-full max-w-lg px-6 py-12">
         <Suspense fallback={
           <div className="gf-panel-strong w-full rounded-3xl p-12 text-center">
-            <div className="h-8 w-8 border-2 border-indigo-500/30 border-t-indigo-500 rounded-full animate-spin mx-auto" />
+            <div className="h-8 w-8 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin mx-auto" />
           </div>
         }>
           <ResetPasswordContent />

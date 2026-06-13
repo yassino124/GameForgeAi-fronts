@@ -263,7 +263,7 @@ function SupportInboxPageInner() {
                 if (e.key === "Enter") loadTickets();
               }}
               placeholder="Search subject/category"
-              className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none focus:border-indigo-400/40"
+              className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm outline-none focus:border-blue-400/40"
             />
 
             <div className="grid grid-cols-2 gap-2">
@@ -292,7 +292,7 @@ function SupportInboxPageInner() {
 
             <div className="flex items-center justify-between">
               <div className="text-xs text-zinc-400">{ticketCount} tickets</div>
-              <button className="text-xs text-indigo-300 hover:text-white" onClick={loadTickets} type="button">
+              <button className="text-xs text-blue-300 hover:text-white" onClick={loadTickets} type="button">
                 Apply
               </button>
             </div>
@@ -321,7 +321,7 @@ function SupportInboxPageInner() {
                       className={cx(
                         "w-full rounded-xl border p-3 text-left transition",
                         isActive
-                          ? "border-indigo-400/40 bg-indigo-500/10"
+                          ? "border-blue-400/40 bg-blue-500/10"
                           : "border-white/10 bg-black/20 hover:border-white/20",
                       )}
                     >
@@ -410,11 +410,11 @@ function SupportInboxPageInner() {
                       <div
                         key={`${m._id || "m"}-${i}`}
                         className={cx("max-w-[86%] rounded-2xl border px-4 py-3", support
-                          ? "ml-auto border-indigo-400/30 bg-indigo-500/15"
+                          ? "ml-auto border-blue-400/30 bg-blue-500/15"
                           : "border-white/10 bg-white/5")}
                       >
                         <div className="mb-1 flex items-center justify-between gap-2 text-[11px]">
-                          <span className={support ? "text-indigo-200" : "text-zinc-300"}>{support ? "Support" : "User"}</span>
+                          <span className={support ? "text-blue-200" : "text-zinc-300"}>{support ? "Support" : "User"}</span>
                           <span className="text-zinc-500">{relTime(m.createdAt)}</span>
                         </div>
                         <div className="whitespace-pre-wrap text-sm text-zinc-100">{m.body}</div>
@@ -431,7 +431,7 @@ function SupportInboxPageInner() {
                     onChange={(e) => setReply(e.target.value)}
                     rows={3}
                     placeholder="Type your reply to user..."
-                    className="min-h-[86px] flex-1 resize-y rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-sm outline-none focus:border-indigo-400/40"
+                    className="min-h-[86px] flex-1 resize-y rounded-xl border border-white/15 bg-black/30 px-3 py-2 text-sm outline-none focus:border-blue-400/40"
                   />
                   <button
                     type="button"

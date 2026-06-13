@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../core/constants/app_constants.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../../core/services/billing_service.dart';
+import '../../../core/services/gameplay_progression_service.dart';
 import '../../../core/utils/app_refresh_bus.dart';
 import '../../widgets/widgets.dart';
 
@@ -26,6 +27,8 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
   bool _upgrading = false;
   String? _upgradingPriceId;
   String? _error;
+
+  Map<String, dynamic>? _rewards;
 
   bool _autoStartHandled = false;
 
@@ -72,6 +75,253 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _load();
     });
+  }
+
+  Widget _buildNftPerksBanner() {
+    final cs = Theme.of(context).colorScheme;
+    final r = _rewards;
+    if (r == null) return const SizedBox.shrink();
+
+    final freePlan = r['freePlan'];
+    final hasFreePlan = freePlan is Map && (freePlan['days'] is num || freePlan['days'] != null);
+    int freeDays = 0;
+    String freePlanName = '';
+    if (freePlan is Map) {
+      freePlanName = (freePlan['plan']?.toString() ?? '').trim();
+      final rawDays = freePlan['days'];
+      freeDays = (rawDays is num)
+          ? rawDays.toInt()
+          : int.tryParse(rawDays?.toString() ?? '') ?? 0;
+    }
+
+    final rawPct = r['subscriptionDiscountPct'];
+    final subPct = (rawPct is num)
+        ? rawPct.toInt()
+        : int.tryParse(rawPct?.toString() ?? '') ?? 0;
+    final hasSubDiscount = subPct > 0;
+
+    if (!hasFreePlan && !hasSubDiscount) return const SizedBox.shrink();
+
+    final title = hasFreePlan
+        ? 'NFT Reward Active'
+        : 'NFT Discount Active';
+
+    return Container(
+      padding: EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: cs.surface,
+        borderRadius: BorderRadius.circular(AppBorderRadius.large),
+        border: Border.all(color: cs.outlineVariant.withOpacity(0.65)),
+        boxShadow: AppShadows.boxShadowSmall,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 38,
+                height: 38,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  gradient: LinearGradient(
+                    colors: [
+                      cs.primary.withOpacity(0.85),
+                      cs.tertiary.withOpacity(0.85),
+                    ],
+                  ),
+                ),
+                child: Icon(
+                  Icons.auto_awesome_rounded,
+                  color: cs.onPrimary,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: AppSpacing.md),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: AppTypography.subtitle2.copyWith(
+                        color: cs.onSurface,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      hasFreePlan
+                          ? 'You can redeem a free plan without payment.'
+                          : 'Your discount will be applied at checkout.',
+                      style: AppTypography.caption.copyWith(
+                        color: cs.onSurfaceVariant,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          SizedBox(height: AppSpacing.md),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (hasFreePlan && freeDays > 0)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: cs.primary.withOpacity(0.10),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: cs.primary.withOpacity(0.18)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.verified_rounded, size: 16, color: cs.primary),
+                      const SizedBox(width: 8),
+                      Text(
+                        '${freePlanName.isEmpty ? 'Pro' : freePlanName} free for $freeDays days',
+                        style: AppTypography.caption.copyWith(
+                          color: cs.onSurface,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              if (hasSubDiscount)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: BoxDecoration(
+                    color: cs.tertiary.withOpacity(0.10),
+                    borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: cs.tertiary.withOpacity(0.18)),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.local_offer_rounded, size: 16, color: cs.tertiary),
+                      const SizedBox(width: 8),
+                      Text(
+                        '$subPct% off subscription',
+                        style: AppTypography.caption.copyWith(
+                          color: cs.onSurface,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _rewardStep(String score, String reward, IconData icon, Color color) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: AppSpacing.md),
+      child: Row(
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.12),
+              shape: BoxShape.circle,
+              border: Border.all(color: color.withOpacity(0.3)),
+            ),
+            child: Icon(icon, size: 16, color: color),
+          ),
+          const SizedBox(width: AppSpacing.md),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  score,
+                  style: AppTypography.caption.copyWith(
+                    color: cs.onSurfaceVariant,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                Text(
+                  reward,
+                  style: AppTypography.body2.copyWith(
+                    color: cs.onSurface,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRewardsGuide() {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      margin: const EdgeInsets.only(top: AppSpacing.lg),
+      padding: const EdgeInsets.all(AppSpacing.lg),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerLowest.withOpacity(0.4),
+        borderRadius: BorderRadius.circular(AppBorderRadius.large),
+        border: Border.all(color: cs.outlineVariant.withOpacity(0.5)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.emoji_events_rounded, color: Colors.amber, size: 20),
+              const SizedBox(width: AppSpacing.sm),
+              Text(
+                'How to win Perks?',
+                style: AppTypography.subtitle2.copyWith(
+                  color: cs.onSurface,
+                  fontWeight: FontWeight.w900,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: AppSpacing.lg),
+          _rewardStep(
+            'Score 10,000+',
+            'Free PRO Plan (30 Days) + 50% OFF',
+            Icons.stars_rounded,
+            Colors.amber,
+          ),
+          _rewardStep(
+            'Score 5,000+',
+            '25% OFF Everything',
+            Icons.auto_awesome_rounded,
+            Colors.deepPurpleAccent,
+          ),
+          _rewardStep(
+            'Score 2,000+',
+            '10% OFF Everything',
+            Icons.bolt_rounded,
+            Colors.blueAccent,
+          ),
+          const SizedBox(height: AppSpacing.sm),
+          Text(
+            'Mint your card after a match to unlock rewards!',
+            style: AppTypography.caption.copyWith(
+              color: cs.primary,
+              fontWeight: FontWeight.w800,
+              fontStyle: FontStyle.italic,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 
   Future<String?> _resolveToken() async {
@@ -242,6 +492,37 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
     final pk = Stripe.publishableKey;
     if (pk.isEmpty) {
       throw Exception('Missing Stripe publishable key');
+    }
+
+    // If the user has an NFT free plan perk, redeem it directly without card collection.
+    try {
+      final rewardsRes = await GameplayProgressionService.rewards(token: token);
+      if (rewardsRes['success'] == true && rewardsRes['data'] is Map) {
+        final data = Map<String, dynamic>.from(rewardsRes['data'] as Map);
+        final freePlan = data['freePlan'];
+        if (freePlan is Map) {
+          final days = (freePlan['days'] is num)
+              ? (freePlan['days'] as num).toInt()
+              : int.tryParse('${freePlan['days'] ?? ''}') ?? 0;
+          if (days > 0) {
+            final subRes = await BillingService.subscribeWithSetupIntent(
+              token: token,
+              priceId: priceId,
+              setupIntentId: null,
+            );
+            if (subRes['success'] != true) {
+              throw Exception(
+                subRes['message']?.toString() ?? 'Failed to activate subscription',
+              );
+            }
+
+            await _syncUntilConfirmed(token: token);
+            return;
+          }
+        }
+      }
+    } catch (_) {
+      // ignore and fallback to normal Stripe flow
     }
 
     final res = await BillingService.createPaymentSheet(
@@ -464,11 +745,22 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
         entitlements = null;
       }
 
+      Map<String, dynamic>? rewards;
+      try {
+        final rewardsRes = await GameplayProgressionService.rewards(token: token);
+        if (rewardsRes['success'] == true && rewardsRes['data'] is Map) {
+          rewards = Map<String, dynamic>.from(rewardsRes['data'] as Map);
+        }
+      } catch (_) {
+        rewards = null;
+      }
+
       if (!mounted) return;
       setState(() {
         _plans = plans;
         _subscription = subscription;
         _entitlements = entitlements;
+        _rewards = rewards;
         _loading = false;
       });
       _appearController.forward(from: 0);
@@ -885,6 +1177,11 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
                       child: _buildCurrentPlan(context),
                     ),
             ),
+            if (!_loading) ...[
+              const SizedBox(height: AppSpacing.lg),
+              _buildNftPerksBanner(),
+              _buildRewardsGuide(),
+            ],
             SizedBox(height: AppSpacing.xxxl),
             Row(
               children: [
@@ -1355,6 +1652,41 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
     final borderColor = isSelected ? accent : baseBorderColor;
     final borderWidth = isSelected ? 2.5 : (isCurrent ? 2.0 : 1.0);
 
+    final rewardFreePlan = _rewards != null ? _rewards!['freePlan'] : null;
+    final rewardHasFreePlan = rewardFreePlan is Map;
+    final int subDiscountPct = _rewards != null ? (_rewards!['subscriptionDiscountPct'] ?? 0) : 0;
+
+    int rewardFreeDays = 0;
+    if (rewardFreePlan is Map) {
+      final rawDays = rewardFreePlan['days'];
+      rewardFreeDays = (rawDays is num)
+          ? rawDays.toInt()
+          : int.tryParse(rawDays?.toString() ?? '') ?? 0;
+    }
+    final shouldRedeemFree = rewardHasFreePlan && rewardFreeDays > 0;
+
+    // Apply NFT rewards to the UI display
+    double displayPrice = price;
+    double displayOriginalPrice = originalPrice;
+    int displayDiscountPercent = discountPercent;
+
+    if (shouldRedeemFree && name.toLowerCase().contains('pro')) {
+      displayPrice = 0.0;
+      displayOriginalPrice = price > 0 ? price : originalPrice;
+      displayDiscountPercent = 100;
+    } else if (subDiscountPct > 0 && price > 0) {
+      displayPrice = price * (1 - (subDiscountPct / 100));
+      displayOriginalPrice = price;
+      displayDiscountPercent = subDiscountPct;
+    }
+
+    final bool isFreeDisplay = displayPrice <= 0;
+    final bool hasAnyDiscount = displayPrice < displayOriginalPrice;
+
+    final ctaText = isCurrent
+        ? 'Current Plan'
+        : (shouldRedeemFree ? 'Redeem Free Pro' : 'Upgrade to $name');
+
     return AnimatedScale(
       scale: isSelected ? 1.01 : 1.0,
       duration: const Duration(milliseconds: 180),
@@ -1446,11 +1778,11 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: AppSpacing.md),
-                    if (!hasDiscount)
+                    if (!hasAnyDiscount)
                       Text(
-                        price == 0.0
+                        isFreeDisplay
                             ? 'Free'
-                            : '\$${price.toStringAsFixed(2)}/month',
+                            : '\$${displayPrice.toStringAsFixed(2)}/month',
                         style: AppTypography.h3.copyWith(
                           color: isCurrent
                               ? colorScheme.primary
@@ -1462,7 +1794,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
                       Column(
                         children: [
                           Text(
-                            '\$${originalPrice.toStringAsFixed(2)}/month',
+                            '\$${displayOriginalPrice.toStringAsFixed(2)}/month',
                             style: AppTypography.caption.copyWith(
                               color: colorScheme.onSurfaceVariant,
                               fontWeight: FontWeight.w800,
@@ -1475,7 +1807,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                '\$${price.toStringAsFixed(2)}/month',
+                                displayPrice <= 0 ? 'FREE' : '\$${displayPrice.toStringAsFixed(2)}/month',
                                 style: AppTypography.h3.copyWith(
                                   color: isCurrent
                                       ? colorScheme.primary
@@ -1497,7 +1829,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
                                   ),
                                 ),
                                 child: Text(
-                                  '-$discountPercent%',
+                                  '-$displayDiscountPercent%',
                                   style: AppTypography.labelSmall.copyWith(
                                     color: AppColors.success,
                                     fontWeight: FontWeight.w900,
@@ -1548,7 +1880,7 @@ class _SubscriptionScreenState extends State<SubscriptionScreen>
                   child: SizedBox(
                     width: double.infinity,
                     child: CustomButton(
-                      text: isCurrent ? 'Current Plan' : 'Upgrade to $name',
+                      text: ctaText,
                       onPressed:
                           isDisabled ||
                               isCurrent ||

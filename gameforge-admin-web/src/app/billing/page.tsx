@@ -120,7 +120,7 @@ export default function BillingPage() {
         <div className="pointer-events-none absolute inset-0 opacity-20" style={{ backgroundImage: "repeating-linear-gradient(to bottom, rgba(255,255,255,0.10), rgba(255,255,255,0.10) 1px, transparent 1px, transparent 7px)" }} />
         <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <NeonChip tone="fuchsia">REVENUE HUD</NeonChip>
+            <NeonChip tone="cyan">REVENUE HUD</NeonChip>
             <div className="mt-2 text-sm text-zinc-400">Subscriptions, MRR, and plan distribution</div>
           </div>
           <NeonChip tone="zinc">
@@ -135,7 +135,7 @@ export default function BillingPage() {
           label="Subscriptions"
           value={loading ? "—" : String(totals?.subscriptions ?? 0)}
           hint="All subscription rows"
-          accent="bg-gradient-to-br from-indigo-500/35 to-indigo-300/10"
+          accent="bg-gradient-to-br from-blue-500/35 to-blue-300/10"
         />
         <StatCard
           label="Active"

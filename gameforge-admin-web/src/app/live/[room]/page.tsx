@@ -377,7 +377,7 @@ export default function LiveViewerPage() {
 
       <div className="relative mx-auto max-w-6xl px-5 py-7">
         <div className="gf-panel-strong gf-stroke-gradient rounded-[28px] p-5 overflow-hidden relative">
-          <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/10 via-transparent to-fuchsia-500/8 pointer-events-none" />
+          <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 via-transparent to-cyan-500/8 pointer-events-none" />
 
           <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
@@ -391,7 +391,7 @@ export default function LiveViewerPage() {
                   {viewerCount} watching
                 </div>
                 <div className="inline-flex items-center gap-2 rounded-full border border-white/10 bg-black/35 px-3 py-1.5 text-[11px] text-zinc-400">
-                  <Sparkles size={14} className="text-fuchsia-300" />
+                  <Sparkles size={14} className="text-cyan-300" />
                   {roomName}
                 </div>
               </div>
@@ -412,7 +412,7 @@ export default function LiveViewerPage() {
                 }}
               >
                 <span className="inline-flex items-center gap-2">
-                  <Copy size={16} className="text-indigo-300" />
+                  <Copy size={16} className="text-blue-300" />
                   Share
                 </span>
               </button>
@@ -567,7 +567,7 @@ export default function LiveViewerPage() {
             {/* PiP (show when both screen + cam exist) */}
             {hasCam && hasScreen ? (
               <div className="absolute bottom-3 right-3 w-[30%] max-w-[220px] overflow-hidden rounded-2xl border border-white/12 bg-black/45 shadow-2xl">
-                <div className="absolute inset-0 bg-gradient-to-br from-fuchsia-500/10 via-transparent to-cyan-500/8 pointer-events-none" />
+                <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/10 via-transparent to-cyan-500/8 pointer-events-none" />
                 <video ref={camPipRef} className="relative h-full w-full object-cover" />
                 <div
                   className={cx(
@@ -631,13 +631,13 @@ export default function LiveViewerPage() {
                     whileTap={{ scale: 0.95 }}
                     className={cx(
                       "gf-btn rounded-xl px-3 py-2 text-sm",
-                      showGiftPicker && "border-fuchsia-500/50 bg-fuchsia-500/10"
+                      showGiftPicker && "border-cyan-500/50 bg-cyan-500/10"
                     )}
                     onClick={() => setShowGiftPicker(!showGiftPicker)}
                     disabled={!connected}
                   >
                     <span className="inline-flex items-center gap-2">
-                      <Gift size={16} className="text-fuchsia-300" />
+                      <Gift size={16} className="text-cyan-300" />
                       Gifts
                     </span>
                   </motion.button>

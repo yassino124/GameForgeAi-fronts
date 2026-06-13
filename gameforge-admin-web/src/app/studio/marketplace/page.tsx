@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import UserShell from "@/app/_components/UserShell";
 import { apiFetch, ApiError } from "@/lib/api";
-import { getUserToken } from "@/lib/userAuth";
+import { useAuthToken } from "@/lib/stores/authStore";
 import { normalizeImageUrl } from "@/lib/media";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
@@ -48,8 +48,8 @@ const CATEGORY_COLORS: Record<string, string> = {
   "Shooter": "from-red-500/20 to-red-500/5 text-red-400 border-red-500/20",
   "Puzzle": "from-emerald-500/20 to-emerald-500/5 text-emerald-400 border-emerald-500/20",
   "Simulation": "from-cyan-500/20 to-cyan-500/5 text-cyan-400 border-cyan-500/20",
-  "Adventure": "from-indigo-500/20 to-indigo-500/5 text-indigo-400 border-indigo-500/20",
-  "Platformer": "from-fuchsia-500/20 to-fuchsia-500/5 text-fuchsia-400 border-fuchsia-500/20",
+  "Adventure": "from-blue-500/20 to-blue-500/5 text-blue-400 border-blue-500/20",
+  "Platformer": "from-cyan-500/20 to-cyan-500/5 text-blue-400 border-cyan-500/20",
 };
 
 const CATEGORY_ICONS: Record<string, any> = {
@@ -65,7 +65,7 @@ const CATEGORY_ICONS: Record<string, any> = {
 
 export default function StudioMarketplacePage() {
   const router = useRouter();
-  const token = useMemo(() => getUserToken(), []);
+  const { token } = useAuthToken();
   const [q, setQ] = useState("");
   const [category, setCategory] = useState("All");
   const [loading, setLoading] = useState(true);
@@ -146,8 +146,8 @@ export default function StudioMarketplacePage() {
     <UserShell title="Marketplace" subtitle="Templates, assets, and inspiration">
       {/* Immersive background decoration */}
       <div className="pointer-events-none absolute inset-0 overflow-hidden">
-        <div className="gf-blob gf-blob-slow absolute -right-24 top-20 h-96 w-96 bg-indigo-500/10 opacity-20" />
-        <div className="gf-blob gf-blob-fast absolute -left-20 top-1/2 h-80 w-80 bg-fuchsia-500/10 opacity-20" />
+        <div className="gf-blob gf-blob-slow absolute -right-24 top-20 h-96 w-96 bg-blue-500/10 opacity-20" />
+        <div className="gf-blob gf-blob-fast absolute -left-20 top-1/2 h-80 w-80 bg-blue-600/8 opacity-20" />
       </div>
 
       {error ? (
@@ -158,68 +158,74 @@ export default function StudioMarketplacePage() {
 
       {/* Featured Hero Area */}
       {!loading && items.length > 0 && !q && category === "All" && (
+
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="relative z-10 mb-8 overflow-hidden rounded-[40px] border border-white/10 bg-black/40 shadow-2xl"
+          className="relative z-10 mb-8 overflow-hidden rounded-[40px] border border-white/[0.08] bg-[var(--gf-panel-bg-strong)] shadow-2xl"
         >
           <div className="grid grid-cols-1 gap-0 lg:grid-cols-2">
-            <div className="relative h-[300px] lg:h-[420px]">
+            <div className="relative h-[280px] lg:h-[380px] overflow-hidden">
               <img
                 src={normalizeImageUrl(items[0].previewImageUrl || items[0].thumbnailUrl || items[0].imageUrl)}
                 alt=""
                 className="h-full w-full object-cover"
               />
-              <div className="absolute inset-0 bg-gradient-to-t from-black via-black/20 to-transparent lg:bg-gradient-to-r" />
-              
-              <div className="absolute left-6 top-6 flex flex-wrap gap-2">
-                <span className="flex items-center gap-1.5 rounded-full bg-indigo-500 px-3 py-1 text-[10px] font-black uppercase tracking-widest text-white shadow-[0_0_20px_rgba(99,102,241,0.5)]">
-                  <TrendingUp size={12} />
+              {/* Fix: only dark overlay from bottom + right side fade for the text panel */}
+              <div className="absolute inset-0 bg-gradient-to-t from-[var(--gf-bg)] via-transparent to-transparent" />
+              <div className="absolute inset-0 bg-gradient-to-r from-transparent via-transparent to-[var(--gf-bg)] hidden lg:block" style={{ opacity: 0.9 }} />
+
+              <div className="absolute left-5 top-5 flex flex-wrap gap-2">
+                <span className="flex items-center gap-1.5 rounded-full bg-blue-600 px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.25em] text-white shadow-[0_0_16px_rgba(99,102,241,0.5)]">
+                  <TrendingUp size={11} />
                   Trending
                 </span>
-                <span className="rounded-full bg-white/10 backdrop-blur-md px-3 py-1 text-[10px] font-black uppercase tracking-widest text-white border border-white/10">
+                <span className="rounded-full bg-black/50 backdrop-blur-md px-3 py-1.5 text-[9px] font-black uppercase tracking-[0.2em] text-white border border-white/15">
                   Top Choice
                 </span>
               </div>
             </div>
 
-            <div className="flex flex-col justify-center p-8 lg:p-12">
-              <div className="text-[10px] font-black uppercase tracking-[0.4em] text-indigo-400">Featured Template</div>
-              <h1 className="gf-chromatic mt-4 text-4xl font-black italic tracking-tighter text-white lg:text-5xl uppercase leading-[0.9]">
+            <div className="flex flex-col justify-center p-8 lg:p-10">
+              <div className="inline-flex items-center gap-2 mb-4">
+                <div className="h-px flex-1 bg-blue-500/30" />
+                <span className="text-[9px] font-black uppercase tracking-[0.4em] text-blue-400">Featured Template</span>
+              </div>
+              <h1 className="gf-chromatic mt-2 text-4xl font-black italic tracking-tighter text-[var(--foreground)] lg:text-5xl uppercase leading-[0.9]">
                 {items[0].name || items[0].title}
               </h1>
-              <p className="mt-6 text-sm font-medium leading-relaxed text-zinc-400 lg:text-base max-w-md">
+              <p className="mt-5 text-sm font-medium leading-relaxed text-[var(--gf-text-muted)] max-w-sm">
                 {items[0].description || "Step into the future of game design with this mastercrafted template. Ready to forge."}
               </p>
-              
-              <div className="mt-8 flex flex-wrap items-center gap-6">
+
+              <div className="mt-7 flex flex-wrap items-center gap-5">
                 <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full border border-white/10 bg-white/5 flex items-center justify-center text-zinc-300">
-                    <Rocket size={18} />
+                  <div className="h-9 w-9 rounded-xl border border-white/10 bg-white/5 flex items-center justify-center text-zinc-300">
+                    <Rocket size={16} />
                   </div>
                   <div>
-                    <div className="text-[8px] font-black uppercase tracking-widest text-zinc-500 leading-none">Downloads</div>
-                    <div className="mt-1 text-sm font-black text-white">{(items[0].downloads ?? 0).toLocaleString()}</div>
+                    <div className="text-[8px] font-black uppercase tracking-widest text-zinc-600 leading-none">Downloads</div>
+                    <div className="mt-1 text-sm font-black text-[var(--foreground)]">{(items[0].downloads ?? 0).toLocaleString()}</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-full border border-indigo-500/20 bg-indigo-500/10 flex items-center justify-center text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.2)]">
-                    <Zap size={18} />
+                  <div className="h-9 w-9 rounded-xl border border-blue-500/20 bg-blue-500/10 flex items-center justify-center text-blue-400">
+                    <Zap size={16} />
                   </div>
                   <div>
-                    <div className="text-[8px] font-black uppercase tracking-widest text-zinc-500 leading-none">Status</div>
-                    <div className="mt-1 text-sm font-black text-indigo-400">Pro Ready</div>
+                    <div className="text-[8px] font-black uppercase tracking-widest text-zinc-600 leading-none">Status</div>
+                    <div className="mt-1 text-sm font-black text-blue-400">Pro Ready</div>
                   </div>
                 </div>
               </div>
 
-              <div className="mt-10">
+              <div className="mt-8">
                 <button
                   onClick={() => router.push(`/studio/marketplace/${encodeURIComponent(items[0]._id || items[0].id || "")}`)}
-                  className="flex items-center gap-3 rounded-2xl bg-white px-8 py-4 text-sm font-black uppercase tracking-widest text-black transition-all hover:scale-105 hover:bg-zinc-200 active:scale-95"
+                  className="group inline-flex items-center gap-3 rounded-2xl bg-gradient-to-r from-blue-600 to-sky-600 px-7 py-3.5 text-sm font-black uppercase tracking-[0.2em] text-white transition-all hover:scale-[1.03] hover:shadow-xl hover:shadow-blue-500/25 active:scale-95"
                 >
-                  Forging Now
-                  <ArrowRight size={18} />
+                  Forge Now
+                  <ArrowRight size={16} className="transition-transform group-hover:translate-x-1" />
                 </button>
               </div>
             </div>
@@ -239,8 +245,8 @@ export default function StudioMarketplacePage() {
             {[0, 1, 2].map((idx) => {
               const t = items[idx];
               const rankColors = [
-                "from-yellow-400/20 via-orange-500/10 to-fuchsia-600/5 border-yellow-400/40 text-yellow-400 shadow-yellow-500/20",
-                "from-zinc-300/20 via-zinc-400/10 to-indigo-600/5 border-zinc-300/40 text-zinc-300 shadow-zinc-500/20",
+                "from-yellow-400/20 via-orange-500/10 to-sky-500/5 border-yellow-400/40 text-yellow-400 shadow-yellow-500/20",
+                "from-zinc-300/20 via-zinc-400/10 to-blue-600/5 border-zinc-300/40 text-zinc-300 shadow-zinc-500/20",
                 "from-orange-400/20 via-orange-500/10 to-cyan-500/5 border-orange-400/40 text-orange-400 shadow-orange-500/20"
               ];
               const rankIcons = [Trophy, Crown, Medal];
@@ -259,11 +265,11 @@ export default function StudioMarketplacePage() {
                     <div className="absolute top-4 left-4 flex h-10 w-10 items-center justify-center rounded-2xl bg-black/60 backdrop-blur-md border border-white/10 text-inherit">
                       <Icon size={20} />
                     </div>
-                    <div className="absolute top-4 right-4 text-[10px] font-black uppercase tracking-widest opacity-60">Top {idx + 1}</div>
+                    <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-blue-500/50 to-transparent" />
                   </div>
                   
                   <div className="p-5 text-left">
-                    <div className="truncate text-lg font-black tracking-tight text-white uppercase italic leading-none">{t.name || t.title}</div>
+                    <div className="truncate text-lg font-black tracking-tight text-[var(--foreground)] uppercase italic leading-none">{t.name || t.title}</div>
                     <div className="mt-2 text-[10px] font-black uppercase tracking-[0.2em] text-zinc-500">{t.category} Module</div>
                   </div>
                 </motion.button>
@@ -277,14 +283,14 @@ export default function StudioMarketplacePage() {
       <div className="relative z-10 flex flex-col gap-6 mb-8">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="relative flex-1 sm:max-w-md group">
-            <div className={`absolute inset-0 -m-[2px] rounded-[18px] bg-gradient-to-r from-indigo-500 via-fuchsia-500 to-cyan-500 opacity-0 blur-sm transition-opacity duration-500 group-focus-within:opacity-40`} />
+            <div className={`absolute inset-0 -m-[2px] rounded-[18px] bg-gradient-to-r from-blue-500 via-cyan-500 to-cyan-500 opacity-0 blur-sm transition-opacity duration-500 group-focus-within:opacity-40`} />
             <input
               className="gf-input relative w-full rounded-2xl pl-12 pr-12 py-3.5 text-sm border-white/10 focus:ring-0 transition-all font-medium placeholder:text-zinc-600"
               placeholder="Searching the Nebula hub…"
               value={q}
               onChange={(e) => setQ(e.target.value)}
             />
-            <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-indigo-400 transition-colors" />
+            <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-zinc-500 group-focus-within:text-blue-400 transition-colors" />
             
             <button
               onClick={startVoiceSearch}
@@ -317,7 +323,7 @@ export default function StudioMarketplacePage() {
           </div>
           
           <div className="flex items-center gap-2">
-            <div className="h-1 w-1 rounded-full bg-indigo-500 animate-pulse" />
+            <div className="h-1 w-1 rounded-full bg-blue-500 animate-pulse" />
             <div className="text-[10px] font-black uppercase tracking-[0.3em] text-zinc-600">
               {loading ? "Syncing..." : `${items.length} Modules Synced`}
             </div>
@@ -334,11 +340,11 @@ export default function StudioMarketplacePage() {
                 onClick={() => setCategory(c)}
                 className={`flex shrink-0 items-center gap-2.5 rounded-2xl border px-5 py-2.5 text-[10px] font-black uppercase tracking-[0.2em] transition-all
                   ${isActive 
-                    ? "border-indigo-500 bg-indigo-500/10 text-indigo-400 shadow-[0_0_20px_rgba(99,102,241,0.2)]" 
+                    ? "border-blue-500 bg-blue-500/10 text-blue-400 shadow-[0_0_20px_rgba(99,102,241,0.2)]" 
                     : "border-white/5 bg-white/[0.04] text-zinc-500 hover:border-white/10 hover:bg-white/[0.06] hover:text-zinc-300"
                   }`}
               >
-                <Icon size={14} className={isActive ? "text-indigo-400" : "text-zinc-600"} />
+                <Icon size={14} className={isActive ? "text-blue-400" : "text-zinc-600"} />
                 {c}
               </button>
             );
@@ -395,7 +401,7 @@ function MarketplaceGrid({ items, loading, router, category, q }: { items: Templ
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-white/5 text-zinc-600">
             <Search size={32} />
           </div>
-          <div className="mt-6 text-xl font-black text-white uppercase italic tracking-tighter">Nebula Hub Empty</div>
+          <div className="mt-6 text-xl font-black text-[var(--foreground)] uppercase italic tracking-tighter">Nebula Hub Empty</div>
           <div className="mt-2 text-xs text-zinc-500 font-medium tracking-widest uppercase">Try adjusting your spectral filters.</div>
         </div>
       ) : (
@@ -414,8 +420,8 @@ function MarketplaceGrid({ items, loading, router, category, q }: { items: Templ
           // Only show ranks in grid IF not displayed in Podium mode or if searching
           const isRankedInGrid = (q.trim() || category !== "All") && idx < 3;
           const rankColors = [
-            "from-yellow-400 via-orange-500 to-fuchsia-600 text-white shadow-yellow-500/50 border-yellow-400/50",
-            "from-zinc-300 via-zinc-400 to-indigo-600 text-white shadow-indigo-500/50 border-zinc-300/50",
+            "from-yellow-400 via-orange-500 to-cyan-600 text-white shadow-yellow-500/50 border-yellow-400/50",
+            "from-zinc-300 via-zinc-400 to-blue-600 text-white shadow-blue-500/50 border-zinc-300/50",
             "from-orange-400 via-orange-500 to-cyan-500 text-white shadow-cyan-500/50 border-orange-400/50"
           ];
           const rankNames = ["#1 Top Pick", "#2 Silver", "#3 Bronze"];
@@ -427,7 +433,7 @@ function MarketplaceGrid({ items, loading, router, category, q }: { items: Templ
               layout
               key={id || title}
               onClick={() => (id ? router.push(`/studio/marketplace/${encodeURIComponent(id)}`) : null)}
-              className="gf-glass-card group relative flex flex-col overflow-hidden rounded-[32px] border border-white/[0.08] text-left transition-all duration-500 hover:border-indigo-500/40 shadow-2xl"
+              className="gf-glass-card group relative flex flex-col overflow-hidden rounded-[32px] border border-white/[0.08] text-left transition-all duration-500 hover:border-blue-500/40 shadow-2xl"
             >
               <div className="relative h-60 w-full overflow-hidden">
                 {img ? (
@@ -437,7 +443,7 @@ function MarketplaceGrid({ items, loading, router, category, q }: { items: Templ
                     className="h-full w-full object-cover transition-transform duration-1000 group-hover:scale-110" 
                   />
                 ) : (
-                  <div className="h-full w-full bg-gradient-to-br from-indigo-500/30 via-fuchsia-500/15 to-cyan-500/10" />
+                  <div className="h-full w-full bg-gradient-to-br from-blue-600/30 via-sky-500/10 to-cyan-500/10" />
                 )}
                 
                 {/* Visual fine-tuning */}
@@ -489,8 +495,8 @@ function MarketplaceGrid({ items, loading, router, category, q }: { items: Templ
                     whileHover={{ scale: 1.1, rotate: 5 }}
                     className="h-10 w-10 rounded-2xl bg-black/40 backdrop-blur-xl border border-white/10 flex items-center justify-center text-white relative overflow-hidden group/pop"
                   >
-                    <Award size={18} className="text-zinc-400 group-hover/pop:text-indigo-400 transition-colors" />
-                    <div className="absolute inset-0 bg-indigo-500/10 opacity-0 group-hover/pop:opacity-100 transition-opacity" />
+                    <Award size={18} className="text-zinc-400 group-hover/pop:text-blue-400 transition-colors" />
+                    <div className="absolute inset-0 bg-blue-500/10 opacity-0 group-hover/pop:opacity-100 transition-opacity" />
                   </motion.div>
                 </div>
 
@@ -507,7 +513,7 @@ function MarketplaceGrid({ items, loading, router, category, q }: { items: Templ
                 </div>
 
                 {/* Neural Glow Overlay */}
-                <div className="pointer-events-none absolute inset-0 bg-gradient-radial from-indigo-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
+                <div className="pointer-events-none absolute inset-0 bg-gradient-radial from-blue-500/5 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
 
                 <div className="absolute bottom-6 left-6 right-6">
                   <div className="flex items-center justify-between">
@@ -536,7 +542,7 @@ function MarketplaceGrid({ items, loading, router, category, q }: { items: Templ
               <div className="relative flex-1 p-8">
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
-                    <div className="truncate text-2xl font-black text-white tracking-tighter uppercase italic leading-none">{title}</div>
+                    <div className="truncate text-2xl font-black text-[var(--foreground)] tracking-tighter uppercase italic leading-none">{title}</div>
                     <p className="mt-4 line-clamp-2 text-xs font-medium leading-relaxed text-zinc-500 group-hover:text-zinc-400 transition-colors">
                       {desc}
                     </p>
@@ -547,7 +553,7 @@ function MarketplaceGrid({ items, loading, router, category, q }: { items: Templ
                   <div className="flex flex-col gap-1">
                     <div className="text-[8px] font-black uppercase tracking-widest text-zinc-600 leading-none">Deployment Sync</div>
                     <div className="mt-1 flex items-center gap-2 text-[10px] font-black text-zinc-300 uppercase tracking-widest">
-                      <Rocket size={12} className="text-indigo-500/60" />
+                      <Rocket size={12} className="text-blue-500/60" />
                       {downloads.toLocaleString()}
                     </div>
                   </div>
@@ -563,11 +569,11 @@ function MarketplaceGrid({ items, loading, router, category, q }: { items: Templ
                 </div>
 
                 {/* Holographic scanning overlay on hover */}
-                <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-transparent via-indigo-500 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+                <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
               </div>
 
               {/* Hover highlight effect */}
-              <div className="absolute inset-0 bg-gradient-to-tr from-indigo-500/0 via-transparent to-white/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
+              <div className="absolute inset-0 bg-gradient-to-tr from-blue-500/0 via-transparent to-white/5 opacity-0 group-hover:opacity-100 transition-opacity duration-700 pointer-events-none" />
             </motion.button>
           );
         })

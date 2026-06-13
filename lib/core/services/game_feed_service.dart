@@ -15,6 +15,19 @@ class GameFeedService {
     return ApiService.get('/game-feed$suffix', token: token);
   }
 
+  static Future<Map<String, dynamic>> listToiletReels({
+    required String token,
+    int limit = 100,
+    String? cursor,
+  }) async {
+    final qp = <String, String>{
+      'limit': limit.toString(),
+      if (cursor != null && cursor.trim().isNotEmpty) 'cursor': cursor.trim(),
+    };
+    final suffix = qp.isEmpty ? '' : ('?' + Uri(queryParameters: qp).query);
+    return ApiService.get('/game-feed/toilet-reels$suffix', token: token);
+  }
+
   static Future<Map<String, dynamic>> listCreator({
     required String token,
     required String creatorId,

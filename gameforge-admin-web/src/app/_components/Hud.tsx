@@ -7,20 +7,18 @@ function cx(...parts: Array<string | false | null | undefined>) {
 }
 
 export function NeonChip(props: {
-  tone: "cyan" | "fuchsia" | "emerald" | "amber" | "zinc";
+  tone: "cyan" | "emerald" | "amber" | "zinc";
   children: ReactNode;
   className?: string;
 }) {
   const tone =
     props.tone === "cyan"
       ? "border-cyan-400/25 bg-cyan-500/10 text-cyan-200"
-      : props.tone === "fuchsia"
-        ? "border-fuchsia-400/25 bg-fuchsia-500/10 text-fuchsia-200"
-        : props.tone === "emerald"
-          ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-200"
-          : props.tone === "amber"
-            ? "border-amber-400/25 bg-amber-500/10 text-amber-200"
-            : "border-white/10 bg-white/5 text-zinc-200";
+      : props.tone === "emerald"
+        ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-200"
+        : props.tone === "amber"
+          ? "border-amber-400/25 bg-amber-500/10 text-amber-200"
+          : "border-white/10 bg-white/5 text-zinc-200";
 
   return (
     <span

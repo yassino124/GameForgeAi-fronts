@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'dart:ui';
@@ -32,6 +33,8 @@ import '../../../core/services/projects_service.dart';
 import '../../../core/services/creator_monetization_service.dart';
 import '../../../core/services/ads_service.dart';
 import '../../widgets/widgets.dart';
+import '../../widgets/game_rating_dialog.dart';
+import '../project/project_insights_screen.dart';
 
 class ArcadeFeedScreen extends StatefulWidget {
   final VoidCallback? onBack;
@@ -77,6 +80,8 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen>
   Timer? _playDebounce;
   late final AnimationController _neonCtrl;
 
+  String _feedMode = 'unity'; // 'unity' | 'toilet'
+
   // Live state
   List<Map<String, dynamic>> _liveSessions = const [];
   bool _loadingLive = false;
@@ -99,6 +104,96 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen>
     )..repeat();
     _loadFirst();
     _loadLiveSessions();
+  }
+
+  Future<void> _setFeedMode(String mode) async {
+    final next = mode.trim().toLowerCase();
+    if (next == _feedMode) return;
+    if (!mounted) return;
+
+    setState(() {
+      _feedMode = next;
+      _activeIndex = 0;
+      _activeWeb = null;
+      _activePostId = null;
+      _nextCursor = null;
+      _error = null;
+      _loading = false;
+      _paging = false;
+    });
+
+    await _stopReelVideo();
+    try {
+      await _adVideo?.pause();
+    } catch (_) {}
+
+    if (next == 'toilet') {
+      setState(() {
+        _posts = const [];
+        _nextCursor = null;
+        _loading = true;
+      });
+      await _loadFirst();
+      return;
+    }
+
+    setState(() {
+      _posts = const [];
+    });
+    await _loadFirst();
+  }
+
+  Widget _buildReelsModeSwitch() {
+    final isToilet = _feedMode == 'toilet';
+    return Container(
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: Colors.white.withOpacity(0.06),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: Colors.white.withOpacity(0.10)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          _modePill(
+            active: isToilet,
+            label: 'Toilet',
+            onTap: () => _setFeedMode('toilet'),
+          ),
+          _modePill(
+            active: !isToilet,
+            label: 'Unity',
+            onTap: () => _setFeedMode('unity'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _modePill({
+    required bool active,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 260),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          gradient: active ? AppColors.primaryGradient : null,
+          borderRadius: BorderRadius.circular(999),
+        ),
+        child: Text(
+          label.toUpperCase(),
+          style: AppTypography.caption.copyWith(
+            color: active ? Colors.white : Colors.white.withOpacity(0.65),
+            fontWeight: active ? FontWeight.w900 : FontWeight.w800,
+            letterSpacing: 1.4,
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _installDoubleTapHook(WebViewController ctrl) async {
@@ -172,6 +267,19 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen>
           },
         );
       },
+    );
+  }
+
+  Future<void> _openRatingDialog(Map<String, dynamic> p) async {
+    final postId = _postId(p).trim();
+    if (postId.isEmpty) return;
+
+    await showGeneralDialog(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: 'Dismiss',
+      transitionDuration: const Duration(milliseconds: 300),
+      pageBuilder: (context, anim1, anim2) => GameRatingDialog(gameId: postId),
     );
   }
 
@@ -476,12 +584,14 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen>
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final i = (_posts.isEmpty) ? 0 : (_activeIndex.clamp(0, _posts.length - 1));
     final total = _posts.length;
+    
     return SafeArea(
       bottom: false,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         child: Row(
           children: [
+            // Back Button
             Material(
               type: MaterialType.transparency,
               child: InkWell(
@@ -489,28 +599,39 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen>
                 onTap: _goBack,
                 child: _glass(
                   context,
+                  padding: const EdgeInsets.all(8),
                   child: Icon(
                     Icons.arrow_back_ios_new_rounded,
                     color: isDark ? Colors.white : cs.onSurface,
-                    size: 20,
+                    size: 16,
                   ),
                 ),
               ),
             ),
-            const SizedBox(width: 12),
+            const SizedBox(width: 6),
+            
+            // Title (Conditional visibility or shorter for more space)
             _glass(
               context,
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
               child: Text(
                 'ARCADE',
                 style: AppTypography.labelLarge.copyWith(
                   color: isDark ? Colors.white : cs.onSurface,
-                  letterSpacing: 2,
+                  letterSpacing: 1.2,
                   fontWeight: FontWeight.w900,
+                  fontSize: 11,
                 ),
               ),
             ),
+            const SizedBox(width: 6),
+            
+            // Mode Switch (Toilet/Unity)
+            _buildReelsModeSwitch(),
+            
             const Spacer(),
+            
+            // Search & Live Icons
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -521,15 +642,16 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen>
                     onTap: () => context.push('/discovery'),
                     child: _glass(
                       context,
+                      padding: const EdgeInsets.all(8),
                       child: Icon(
                         Icons.search_rounded,
                         color: isDark ? Colors.white : cs.onSurface,
-                        size: 22,
+                        size: 18,
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 4),
                 Material(
                   type: MaterialType.transparency,
                   child: InkWell(
@@ -537,66 +659,15 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen>
                     onTap: () => context.push('/live'),
                     child: _glass(
                       context,
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              Container(
-                                width: 10,
-                                height: 10,
-                                decoration: const BoxDecoration(
-                                  color: Color(0xFFFF0000),
-                                  shape: BoxShape.circle,
-                                ),
-                              ),
-                              AnimatedBuilder(
-                                animation: _neonCtrl,
-                                builder: (context, _) {
-                                  return Container(
-                                    width: 18,
-                                    height: 18,
-                                    decoration: BoxDecoration(
-                                      shape: BoxShape.circle,
-                                      border: Border.all(
-                                        color: const Color(0xFFFF0000)
-                                            .withOpacity(0.4 * (1 - _neonCtrl.value)),
-                                        width: 2 * _neonCtrl.value,
-                                      ),
-                                    ),
-                                  );
-                                },
-                              ),
-                            ],
-                          ),
-                          const SizedBox(width: 8),
-                          Icon(
-                            Icons.sensors_rounded,
-                            color: isDark ? Colors.white : cs.onSurface,
-                            size: 20,
-                          ),
-                        ],
+                      padding: const EdgeInsets.all(8),
+                      child: Icon(
+                        Icons.sensors_rounded,
+                        color: isDark ? Colors.white : cs.onSurface,
+                        size: 18,
                       ),
                     ),
                   ),
                 ),
-                const SizedBox(width: 8),
-                if (total > 0)
-                  _glass(
-                    context,
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 10,
-                      vertical: 8,
-                    ),
-                    child: Text(
-                      '${i + 1}/$total',
-                      style: AppTypography.caption.copyWith(
-                        color: isDark ? Colors.white70 : cs.onSurfaceVariant,
-                        fontWeight: FontWeight.w900,
-                      ),
-                    ),
-                  ),
               ],
             ),
           ],
@@ -710,6 +781,38 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen>
     final token = context.read<AuthProvider>().token;
     if (token == null || token.trim().isEmpty) return;
 
+    if (_feedMode == 'toilet') {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+
+      try {
+        final res = await GameFeedService.listToiletReels(
+          token: token,
+          limit: 120,
+        );
+        final data = res['data'];
+        final list = (data is List) ? data : const [];
+        if (!mounted) return;
+        setState(() {
+          _posts = list
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .toList(growable: false);
+          _nextCursor = res['nextCursor']?.toString();
+          _loading = false;
+        });
+        await _ensureActiveWebView();
+      } catch (e) {
+        if (!mounted) return;
+        setState(() {
+          _loading = false;
+          _error = e.toString();
+        });
+      }
+      return;
+    }
+
     setState(() {
       _loading = true;
       _error = null;
@@ -766,11 +869,17 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen>
           _nextCursor != null &&
           _nextCursor!.trim().isNotEmpty &&
           pages < 3) {
-        final res = await GameFeedService.list(
-          token: token,
-          limit: 50,
-          cursor: _nextCursor,
-        );
+        final res = _feedMode == 'toilet'
+            ? await GameFeedService.listToiletReels(
+                token: token,
+                limit: 120,
+                cursor: _nextCursor,
+              )
+            : await GameFeedService.list(
+                token: token,
+                limit: 50,
+                cursor: _nextCursor,
+              );
         final data = res['data'];
         final list = (data is List) ? data : const [];
         final next = list
@@ -1143,79 +1252,44 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen>
   Future<void> _ensureActiveWebView() async {
     final p = _postAt(_activeIndex);
     if (p == null) return;
-
-    if (_isAd(p)) {
-      if (_activeWeb != null || _activePostId != null) {
-        setState(() {
-          _activeWeb = null;
-          _activePostId = null;
-        });
-      }
-
-      final campaignId = _adCampaignId(p).trim();
-      final videoUrl = (p['videoUrl'] ?? '').toString().trim();
-      await _ensureAdVideo(campaignId: campaignId, url: videoUrl, play: true);
-      await _stopReelVideo();
-      await _stopReelMusic();
-      return;
-    }
-
-    // Pause ad video when viewing a normal post.
-    try {
-      await _adVideo?.pause();
-    } catch (_) {}
-
-    final reelUrl = _postReelUrl(p).trim();
+    
     final postId = _postId(p);
-    if (reelUrl.isNotEmpty && postId.isNotEmpty) {
-      if (_activeWeb != null || _activePostId != postId) {
-        setState(() {
-          _activeWeb = null;
-          _activePostId = postId;
-        });
-      }
-      await _ensureReelVideo(postId: postId, url: reelUrl, play: true);
-      await _syncReelMusicForPost(p, play: true);
-      _debouncedPlay(postId);
+    final webUrl = _postWebglUrl(p).trim();
+    
+    if (webUrl.isEmpty) {
+      await _stopReelVideo();
+      setState(() {
+        _activePostId = postId;
+        _activeWeb = null;
+      });
       return;
     }
+
+    // Force absolute URL for local games if needed
+    String finalUrl = webUrl;
+    if (finalUrl.startsWith('/uploads')) {
+      final origin = ApiService.baseUrl.replaceAll('/api', '');
+      finalUrl = '$origin$finalUrl';
+    }
+
+    if (_activePostId == postId && _activeWeb != null) return;
 
     await _stopReelVideo();
-    await _stopReelMusic();
 
-    if (postId.isEmpty) return;
-
-    final url = _postWebglUrl(p).trim();
-    if (url.isEmpty) return;
-
-    if (_activeWeb != null && _activePostId == postId) return;
-
-    final ctrl = WebViewController();
-    ctrl
+    final ctrl = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(Colors.transparent)
-      ..addJavaScriptChannel(
-        'GF',
-        onMessageReceived: (msg) {
-          final v = msg.message.trim().toLowerCase();
-          if (v == 'doubletap') {
-            final cur = _postAt(_activeIndex);
-            if (cur != null) _likeWithBurst(cur);
-          }
-        },
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onPageFinished: (url) {
+            _debouncedPlay(postId);
+            _installDoubleTapHook(_activeWeb!);
+          },
+        ),
       );
 
-    ctrl.setNavigationDelegate(
-      NavigationDelegate(
-        onPageFinished: (_) {
-          _debouncedPlay(postId);
-          _installDoubleTapHook(ctrl);
-        },
-      ),
-    );
-
     try {
-      await ctrl.loadRequest(Uri.parse(url));
+      await ctrl.loadRequest(Uri.parse(finalUrl));
     } catch (_) {}
 
     if (!mounted) return;
@@ -2587,6 +2661,7 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen>
     final reelMusicCue = _postReelMusicCue(p);
     final reelCaptionLines = _postReelCaptionLines(p);
     final reelCaptionStyle = _postReelCaptionStyle(p);
+    final isWebReel = kIsWeb && isReel;
 
     final isActive = index == _activeIndex;
     final web = (isActive && _activePostId == _postId(p)) ? _activeWeb : null;
@@ -3066,25 +3141,7 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen>
                         ),
                       ),
                     ],
-                    const SizedBox(width: 8),
-                    _glass(
-                      context,
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 10,
-                        vertical: 6,
-                      ),
-                      child: GestureDetector(
-                        onTap: _toggleReelMuted,
-                        child: Icon(
-                          _reelMuted
-                              ? Icons.volume_off_rounded
-                              : Icons.volume_up_rounded,
-                          size: 18,
-                          color: Colors.white.withOpacity(0.95),
-                        ),
-                      ),
-                    ),
-                    if (reelMusicCue.isNotEmpty) ...[
+                    if (!isWebReel) ...[
                       const SizedBox(width: 8),
                       _glass(
                         context,
@@ -3092,39 +3149,61 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen>
                           horizontal: 10,
                           vertical: 6,
                         ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.music_note_rounded,
-                              size: 16,
-                              color: Colors.white.withOpacity(0.95),
-                            ),
-                            const SizedBox(width: 6),
-                            ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 170),
-                              child: Text(
-                                reelMusicCue,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: AppTypography.caption.copyWith(
-                                  color: Colors.white.withOpacity(0.94),
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 11.5,
-                                ),
-                              ),
-                            ),
-                            if (!_reelMuted) ...[
-                              const SizedBox(width: 6),
-                              Icon(
-                                Icons.graphic_eq_rounded,
-                                size: 14,
-                                color: Colors.white.withOpacity(0.9),
-                              ),
-                            ],
-                          ],
+                        child: GestureDetector(
+                          onTap: _toggleReelMuted,
+                          child: Icon(
+                            _reelMuted
+                                ? Icons.volume_off_rounded
+                                : Icons.volume_up_rounded,
+                            size: 18,
+                            color: Colors.white.withOpacity(0.95),
+                          ),
                         ),
                       ),
+                      if (reelMusicCue.isNotEmpty) ...[
+                        const SizedBox(width: 8),
+                        _glass(
+                          context,
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 10,
+                            vertical: 6,
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(
+                                Icons.music_note_rounded,
+                                size: 16,
+                                color: Colors.white.withOpacity(0.95),
+                              ),
+                              const SizedBox(width: 6),
+                              ConstrainedBox(
+                                constraints: const BoxConstraints(
+                                  maxWidth: 170,
+                                ),
+                                child: Text(
+                                  reelMusicCue,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: AppTypography.caption.copyWith(
+                                    color: Colors.white.withOpacity(0.94),
+                                    fontWeight: FontWeight.w800,
+                                    fontSize: 11.5,
+                                  ),
+                                ),
+                              ),
+                              if (!_reelMuted) ...[
+                                const SizedBox(width: 6),
+                                Icon(
+                                  Icons.graphic_eq_rounded,
+                                  size: 14,
+                                  color: Colors.white.withOpacity(0.9),
+                                ),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ],
                     ],
                   ],
                 );
@@ -3163,6 +3242,30 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen>
             ),
           ),
         ),
+        if (isWebReel)
+          Positioned.fill(
+            child: IgnorePointer(
+              child: ClipRect(
+                child: BackdropFilter(
+                  filter: ImageFilter.blur(sigmaX: 9, sigmaY: 9),
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [
+                          Colors.black.withOpacity(0.20),
+                          Colors.black.withOpacity(0.06),
+                          Colors.black.withOpacity(0.30),
+                        ],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        stops: const [0.0, 0.48, 1.0],
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
         if (isReel && (reelPromoText.isNotEmpty || reelCaptionLines.isNotEmpty))
           Positioned(
             left: AppSpacing.lg,
@@ -3375,7 +3478,68 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen>
             ],
           ),
         ),
-        if (!isAd)
+        if (!isAd && isWebReel)
+          Positioned(
+            right: AppSpacing.lg,
+            top: MediaQuery.of(context).padding.top + 108,
+            bottom: MediaQuery.of(context).padding.bottom + 28,
+            child: Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  _ActionButton(
+                    icon: liked
+                        ? Icons.favorite_rounded
+                        : Icons.favorite_border_rounded,
+                    label: likeCount.toString(),
+                    active: liked,
+                    onTap: () => _toggleLike(p),
+                  ),
+                  const SizedBox(height: 14),
+                  _ActionButton(
+                    icon: Icons.volunteer_activism_outlined,
+                    label: 'Tip',
+                    onTap: () => _openSupportSheet(p),
+                  ),
+                  const SizedBox(height: 14),
+                  _ActionButton(
+                    icon: Icons.mode_comment_outlined,
+                    label: commentCount.toString(),
+                    onTap: () => _openCommentsSheet(p),
+                  ),
+                  const SizedBox(height: 14),
+                  _ActionButton(
+                    icon: Icons.star_border_rounded,
+                    label: 'Rate',
+                    onTap: () => _openRatingDialog(p),
+                  ),
+                  const SizedBox(height: 14),
+                  _ActionButton(
+                    icon: Icons.psychology_rounded,
+                    label: 'AI Insights',
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => ProjectInsightsScreen(
+                            gameId: p['_id'] ?? p['id'] ?? '',
+                            gameName: p['title'] ?? p['name'] ?? 'Game',
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+                  const SizedBox(height: 14),
+                  _ActionButton(
+                    icon: Icons.ios_share_rounded,
+                    label: 'Share',
+                    onTap: () => _share(p),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        if (!isAd && !isWebReel)
           Positioned(
             right: AppSpacing.lg,
             bottom: AppSpacing.xxl + 8,
@@ -3395,6 +3559,28 @@ class _ArcadeFeedScreenState extends State<ArcadeFeedScreen>
                   icon: Icons.mode_comment_outlined,
                   label: commentCount.toString(),
                   onTap: () => _openCommentsSheet(p),
+                ),
+                const SizedBox(height: 14),
+                _ActionButton(
+                  icon: Icons.star_border_rounded,
+                  label: 'Rate',
+                  onTap: () => _openRatingDialog(p),
+                ),
+                const SizedBox(height: 14),
+                _ActionButton(
+                  icon: Icons.psychology_rounded,
+                  label: 'AI Insights',
+                  onTap: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => ProjectInsightsScreen(
+                          gameId: p['_id'] ?? p['id'] ?? '',
+                          gameName: p['title'] ?? p['name'] ?? 'Game',
+                        ),
+                      ),
+                    );
+                  },
                 ),
                 const SizedBox(height: 14),
                 _ActionButton(

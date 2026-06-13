@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'dart:ui' as ui;
+import 'dart:math' as math;
 import '../../../core/constants/app_constants.dart';
 import '../../../core/themes/app_theme.dart';
 import '../../widgets/widgets.dart';
@@ -385,96 +386,104 @@ class _FeaturesScreenState extends State<FeaturesScreen>
             child: Padding(
               padding: AppSpacing.paddingHorizontalLarge,
               child: SingleChildScrollView(
+                physics: const BouncingScrollPhysics(),
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
-                  mainAxisAlignment: MainAxisAlignment.center,
                   children: [
+                    const SizedBox(height: 20),
                     // Feature emoji/icon with advanced effects
                     _buildAdvancedFeatureIcon(feature),
                     
-                    const SizedBox(height: AppSpacing.xxl),
+                    const SizedBox(height: 40),
                     
-                    // Feature title
-                    Text(
-                      feature.title,
-                      style: AppTypography.h2.copyWith(
-                        color: AppColors.textPrimary,
-                        fontWeight: FontWeight.w900,
+                    // Feature title with Neon Glow
+                    ShaderMask(
+                      shaderCallback: (bounds) => AppColors.primaryGradient.createShader(bounds),
+                      child: Text(
+                        feature.title.toUpperCase(),
+                        style: AppTypography.h1.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w900,
+                          fontSize: 34,
+                          letterSpacing: -0.5,
+                        ),
+                        textAlign: TextAlign.center,
                       ),
-                      textAlign: TextAlign.center,
                     ),
                     
-                    const SizedBox(height: AppSpacing.md),
+                    const SizedBox(height: 16),
                     
-                    // Feature description
-                    Text(
-                      feature.description,
-                      style: AppTypography.body1.copyWith(
-                        color: AppColors.textSecondary,
-                        fontWeight: FontWeight.w300,
+                    // Feature description with glass panel
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.03),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: Colors.white.withOpacity(0.05)),
                       ),
-                      textAlign: TextAlign.center,
+                      child: Text(
+                        feature.description,
+                        style: AppTypography.bodyLarge.copyWith(
+                          color: const Color(0xFF94A3B8),
+                          fontWeight: FontWeight.w500,
+                          height: 1.5,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
                     ),
                     
-                    const SizedBox(height: AppSpacing.xl),
+                    const SizedBox(height: 32),
                     
-                    // Feature highlights with staggered animation
-                    ...feature.highlights.asMap().entries.map((entry) {
-                      final highlightIndex = entry.key;
-                      final highlight = entry.value;
-                      final delay = highlightIndex * 0.1;
-                      final animationValue = (_cardController.value - delay).clamp(0.0, 1.0);
-                      
-                      return AnimatedBuilder(
-                        animation: _cardController,
-                        builder: (context, child) {
-                          return Transform.translate(
-                            offset: Offset(0, (1.0 - animationValue) * 30),
-                            child: Opacity(
-                              opacity: animationValue,
-                              child: Padding(
-                                padding: const EdgeInsets.only(bottom: AppSpacing.md),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: 24,
-                                      height: 24,
-                                      decoration: BoxDecoration(
-                                        gradient: AppColors.primaryGradient,
-                                        borderRadius: BorderRadius.circular(12),
-                                        boxShadow: [
-                                          BoxShadow(
-                                            color: AppColors.primary.withOpacity(0.3 * animationValue),
-                                            blurRadius: 8,
-                                            offset: const Offset(0, 2),
-                                          ),
-                                        ],
-                                      ),
-                                      child: const Icon(
-                                        Icons.check_circle,
-                                        color: Colors.white,
-                                        size: 16,
-                                      ),
-                                    ),
-                                    
-                                    const SizedBox(width: AppSpacing.sm),
-                                    
-                                    Expanded(
-                                      child: Text(
-                                        highlight,
-                                        style: AppTypography.body2.copyWith(
-                                          color: AppColors.textSecondary,
-                                        ),
-                                      ),
-                                    ),
-                                  ],
+                    // Feature highlights with premium tiles
+                    Wrap(
+                      spacing: 12,
+                      runSpacing: 12,
+                      alignment: WrapAlignment.center,
+                      children: feature.highlights.asMap().entries.map((entry) {
+                        final highlightIndex = entry.key;
+                        final highlight = entry.value;
+                        final delay = highlightIndex * 0.1;
+                        final animationValue = (_cardController.value - delay).clamp(0.0, 1.0);
+                        
+                        return Transform.scale(
+                          scale: animationValue,
+                          child: Opacity(
+                            opacity: animationValue,
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(
+                                  color: AppColors.primary.withOpacity(0.2),
+                                  width: 1,
                                 ),
                               ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(
+                                    Icons.auto_awesome_rounded,
+                                    color: AppColors.primary,
+                                    size: 14,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    highlight,
+                                    style: AppTypography.labelLarge.copyWith(
+                                      color: Colors.white.withOpacity(0.9),
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                ],
+                              ),
                             ),
-                          );
-                        },
-                      );
-                    }).toList(),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 30),
                   ],
                 ),
               ),
@@ -486,81 +495,99 @@ class _FeaturesScreenState extends State<FeaturesScreen>
   }
 
   Widget _buildAdvancedFeatureIcon(Feature feature) {
-    return Container(
-      width: 220,
-      height: 220,
-      decoration: BoxDecoration(
-        gradient: AppColors.primaryGradient,
-        borderRadius: BorderRadius.circular(50),
-        boxShadow: [
-          BoxShadow(
-            color: AppColors.primary.withOpacity(0.4),
-            blurRadius: 40,
-            spreadRadius: 10,
-          ),
-          BoxShadow(
-            color: AppColors.primary.withOpacity(0.2),
-            blurRadius: 80,
-            spreadRadius: 20,
-          ),
-        ],
-      ),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          // Inner glow effect
-          Container(
-            width: 200,
-            height: 200,
-            decoration: BoxDecoration(
-              gradient: RadialGradient(
-                colors: [
-                  AppColors.primaryLight.withOpacity(0.4),
-                  Colors.transparent,
-                ],
-              ),
-              borderRadius: BorderRadius.circular(45),
-            ),
-          ),
-          
-          // Feature emoji
-          Container(
-            width: 180,
-            height: 180,
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(40),
-            ),
-            child: Center(
-              child: Text(
-                feature.emoji,
-                style: const TextStyle(fontSize: 100),
-              ),
-            ),
-          ),
-          
-          // Pulse ring effect
-          AnimatedBuilder(
-            animation: _indicatorController,
-            builder: (context, child) {
-              return Transform.scale(
-                scale: 1.0 + (_indicatorPulse.value * 0.05),
+    return AnimatedBuilder(
+      animation: _floatingController,
+      builder: (context, child) {
+        return Container(
+          width: 240,
+          height: 240,
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              // Rotating Background Glow
+              RotationTransition(
+                turns: _floatingController,
                 child: Container(
                   width: 220,
                   height: 220,
                   decoration: BoxDecoration(
-                    border: Border.all(
-                      color: AppColors.primaryLight.withOpacity(0.6 * _indicatorPulse.value),
-                      width: 3,
-                    ),
-                    borderRadius: BorderRadius.circular(50),
+                    gradient: AppColors.primaryGradient,
+                    borderRadius: BorderRadius.circular(60),
+                    boxShadow: [
+                      BoxShadow(
+                        color: AppColors.primary.withOpacity(0.3),
+                        blurRadius: 40,
+                        spreadRadius: 5,
+                      ),
+                    ],
                   ),
                 ),
-              );
-            },
+              ),
+              // Glassmorphism Container
+              Container(
+                width: 200,
+                height: 200,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(50),
+                  border: Border.all(
+                    color: Colors.white.withOpacity(0.2),
+                    width: 1.5,
+                  ),
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(50),
+                  child: BackdropFilter(
+                    filter: ui.ImageFilter.blur(sigmaX: 10, sigmaY: 10),
+                    child: Center(
+                      child: Text(
+                        feature.emoji,
+                        style: TextStyle(
+                          fontSize: 110,
+                          shadows: [
+                            Shadow(
+                              color: Colors.black.withOpacity(0.3),
+                              blurRadius: 20,
+                              offset: const Offset(0, 10),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              // Floating Orbiting Dots
+              ...List.generate(3, (i) {
+                return RotationTransition(
+                  turns: _floatingController,
+                  child: Transform.translate(
+                    offset: Offset(
+                      110 * (i == 0 ? 1 : i == 1 ? -0.5 : -0.5),
+                      110 * (i == 0 ? 0 : i == 1 ? 0.86 : -0.86),
+                    ),
+                    child: Container(
+                      width: 15,
+                      height: 15,
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: AppColors.primary,
+                            blurRadius: 15,
+                            spreadRadius: 2,
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                );
+              }),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
@@ -575,24 +602,32 @@ class _FeaturesScreenState extends State<FeaturesScreen>
             animation: _indicatorController,
             builder: (context, child) {
               final isActive = _currentPage == index;
-              return Container(
-                margin: const EdgeInsets.symmetric(horizontal: AppSpacing.xs),
-                width: isActive ? 24 : 8,
-                height: 8,
+              return AnimatedContainer(
+                duration: const Duration(milliseconds: 400),
+                margin: const EdgeInsets.symmetric(horizontal: 6),
+                width: isActive ? 32 : 10,
+                height: 10,
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(4),
+                  borderRadius: BorderRadius.circular(5),
                   gradient: isActive 
                       ? AppColors.primaryGradient
                       : LinearGradient(
-                          colors: [AppColors.surfaceVariant, AppColors.surfaceVariant],
+                          colors: [
+                            Colors.white.withOpacity(0.1),
+                            Colors.white.withOpacity(0.05),
+                          ],
                         ),
                   boxShadow: isActive ? [
                     BoxShadow(
-                      color: AppColors.primary.withOpacity(0.4),
-                      blurRadius: 10,
-                      offset: const Offset(0, 2),
+                      color: AppColors.primary.withOpacity(0.6),
+                      blurRadius: 12,
+                      spreadRadius: 2,
                     ),
-                  ] : null,
+                  ] : [],
+                  border: Border.all(
+                    color: isActive ? Colors.white.withOpacity(0.3) : Colors.white.withOpacity(0.05),
+                    width: 1,
+                  ),
                 ),
               );
             },
@@ -609,55 +644,53 @@ class _FeaturesScreenState extends State<FeaturesScreen>
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           // Previous button with WOW design
-          Container(
-            decoration: BoxDecoration(
-              color: AppColors.surface.withOpacity(0.9),
-              borderRadius: BorderRadius.circular(AppBorderRadius.large),
-              border: Border.all(
-                color: AppColors.border.withOpacity(0.5),
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.2),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
+          AnimatedOpacity(
+            duration: const Duration(milliseconds: 300),
+            opacity: _currentPage > 0 ? 1.0 : 0.0,
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.05),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.1),
                 ),
-              ],
-            ),
-            child: Material(
-              color: Colors.transparent,
-              child: InkWell(
-                borderRadius: BorderRadius.circular(AppBorderRadius.large),
-                onTap: () {
-                  if (_currentPage > 0) {
-                    _pageController.previousPage(
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeInOut,
-                    );
-                  }
-                },
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.lg,
-                    vertical: AppSpacing.sm,
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Icon(
-                        Icons.arrow_back,
-                        color: _currentPage > 0 ? AppColors.textPrimary : AppColors.textSecondary,
-                        size: 20,
-                      ),
-                      const SizedBox(width: AppSpacing.xs),
-                      Text(
-                        'Previous',
-                        style: AppTypography.button.copyWith(
-                          color: _currentPage > 0 ? AppColors.textPrimary : AppColors.textSecondary,
-                          fontWeight: FontWeight.w600,
+              ),
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(20),
+                  onTap: () {
+                    if (_currentPage > 0) {
+                      _pageController.previousPage(
+                        duration: const Duration(milliseconds: 400),
+                        curve: Curves.easeInOutCubic,
+                      );
+                    }
+                  },
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 14,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(
+                          Icons.arrow_back_ios_new_rounded,
+                          color: Colors.white,
+                          size: 18,
                         ),
-                      ),
-                    ],
+                        const SizedBox(width: 8),
+                        Text(
+                          'Back',
+                          style: AppTypography.button.copyWith(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.1,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
               ),
@@ -668,48 +701,50 @@ class _FeaturesScreenState extends State<FeaturesScreen>
           Container(
             decoration: BoxDecoration(
               gradient: AppColors.primaryGradient,
-              borderRadius: BorderRadius.circular(AppBorderRadius.large),
+              borderRadius: BorderRadius.circular(25),
               boxShadow: [
                 BoxShadow(
-                  color: AppColors.primary.withOpacity(0.3),
-                  blurRadius: 15,
-                  offset: const Offset(0, 6),
+                  color: AppColors.primary.withOpacity(0.5),
+                  blurRadius: 20,
+                  offset: const Offset(0, 8),
                 ),
               ],
             ),
             child: Material(
               color: Colors.transparent,
               child: InkWell(
-                borderRadius: BorderRadius.circular(AppBorderRadius.large),
+                borderRadius: BorderRadius.circular(25),
                 onTap: () {
                   if (_currentPage < _features.length - 1) {
                     _pageController.nextPage(
-                      duration: const Duration(milliseconds: 300),
-                      curve: Curves.easeInOut,
+                      duration: const Duration(milliseconds: 400),
+                      curve: Curves.easeInOutCubic,
                     );
                   } else {
-                    // Last page - navigate to signin
                     context.go('/signin');
                   }
                 },
                 child: Padding(
                   padding: const EdgeInsets.symmetric(
-                    horizontal: AppSpacing.lg,
-                    vertical: AppSpacing.sm,
+                    horizontal: 32,
+                    vertical: 16,
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       Text(
-                        _currentPage < _features.length - 1 ? 'Next' : 'Get Started',
+                        _currentPage < _features.length - 1 ? 'NEXT' : 'LAUNCH',
                         style: AppTypography.button.copyWith(
                           color: Colors.white,
-                          fontWeight: FontWeight.w600,
+                          fontWeight: FontWeight.w900,
+                          letterSpacing: 1.5,
                         ),
                       ),
-                      const SizedBox(width: AppSpacing.xs),
+                      const SizedBox(width: 10),
                       Icon(
-                        _currentPage < _features.length - 1 ? Icons.arrow_forward : Icons.check,
+                        _currentPage < _features.length - 1 
+                            ? Icons.arrow_forward_ios_rounded 
+                            : Icons.auto_awesome_rounded,
                         color: Colors.white,
                         size: 20,
                       ),
@@ -726,63 +761,63 @@ class _FeaturesScreenState extends State<FeaturesScreen>
 
   final List<Feature> _features = [
     Feature(
-      icon: Icons.auto_awesome,
-      title: 'AI-Powered Creation',
-      description: 'Advanced AI algorithms generate unique game mechanics and assets automatically',
-      emoji: '🤖',
+      icon: Icons.psychology_rounded,
+      title: 'AI ENGINE CORE',
+      description: 'The world\'s most advanced Neural Engine. Describe any game in natural language and watch GameForge AI write the code, generate assets, and build mechanics instantly.',
+      emoji: '🧠',
       highlights: [
-        'Intelligent level design',
-        'Asset generation',
-        'Balanced gameplay',
-        'Adaptive difficulty',
+        'Natural Language Dev',
+        'Auto-Logic Generation',
+        'Smart Physics AI',
+        'Real-time Synthesis',
       ],
     ),
     Feature(
-      icon: Icons.speed,
-      title: 'Lightning Fast',
-      description: 'Create and deploy games in minutes, not hours with our optimized workflow',
-      emoji: '⚡',
+      icon: Icons.auto_fix_high_rounded,
+      title: 'ZERO CODE FORGE',
+      description: 'Absolute freedom from coding. Our visual orchestration layer transforms your creative vision into high-performance games without writing a single line of syntax.',
+      emoji: '🛠️',
       highlights: [
-        'Rapid prototyping',
-        'Instant deployment',
-        'Real-time preview',
-        'Optimized performance',
+        'Visual Orchestration',
+        'No-Code Workflow',
+        'Drag & Drop Power',
+        'Auto-Refactor AI',
       ],
     ),
     Feature(
-      icon: Icons.palette,
-      title: 'Beautiful Design',
-      description: 'Professional templates and stunning visuals with modern design principles',
-      emoji: '🎨',
+      icon: Icons.rocket_launch_rounded,
+      title: 'QUANTUM DEPLOY',
+      description: 'The fastest path from idea to player. One-tap global deployment with high-fidelity WebGL optimization for instant play on any device, anywhere.',
+      emoji: '🚀',
       highlights: [
-        'Modern UI/UX',
-        'Responsive layouts',
-        'Custom themes',
-        'Professional assets',
+        'Single-Tap Launch',
+        'High-Fidelity WebGL',
+        'Global Distribution',
+        'Instant Playback',
       ],
     ),
     Feature(
-      icon: Icons.cloud_done,
-      title: 'Cloud Storage',
-      description: 'Save your projects securely in the cloud and access them anywhere',
-      emoji: '☁️',
+      icon: Icons.token_rounded,
+      title: 'INFINITE ASSET AI',
+      description: 'Endless creativity at your fingertips. Generate professional-grade 3D models, textures, characters, and environments using deep generative models.',
+      emoji: '💎',
       highlights: [
-        'Auto-save',
-        'Version control',
-        'Collaborative editing',
-        'Cross-platform access',
+        'Generative 3D AI',
+        'HD Texture Synth',
+        'Dynamic NPC Gen',
+        'Atmospheric VFX',
       ],
     ),
     Feature(
-      icon: Icons.people,
-      title: 'Collaborative',
-      description: 'Work together with your team in real-time on shared projects',
-      emoji: '👥',
+      icon: Icons.groups_rounded,
+      title: 'CREATOR HUB',
+      description: 'Enter the future of social game development. Collaborate in real-time with teams across the globe and showcase your masterpieces to millions.',
+      emoji: '🌐',
       highlights: [
-        'Real-time sync',
-        'Team chat',
-        'Shared workspaces',
-        'Role management',
+        'Real-time Co-Dev',
+        'Marketplace Access',
+        'Team Synergy AI',
+        'Viral Discovery',
       ],
     ),
   ];

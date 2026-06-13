@@ -162,7 +162,7 @@ function ProjectsPageInner() {
       title="Projects"
       right={
         <div className="flex items-center gap-2">
-          <NeonChip tone="fuchsia">
+          <NeonChip tone="cyan">
             <PulseDot tone="cyan" />
             <span className="font-mono">FORGE</span>
             <span className="text-white">PROJECTS</span>
@@ -207,7 +207,7 @@ function ProjectsPageInner() {
         <div className="pointer-events-none absolute inset-0 opacity-20" style={{ backgroundImage: "repeating-linear-gradient(to bottom, rgba(255,255,255,0.10), rgba(255,255,255,0.10) 1px, transparent 1px, transparent 7px)" }} />
         <div className="relative flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <NeonChip tone="fuchsia">
+            <NeonChip tone="cyan">
               <PulseDot tone="cyan" />
               PROJECT FORGE
             </NeonChip>

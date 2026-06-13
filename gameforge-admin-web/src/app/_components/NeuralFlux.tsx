@@ -2,127 +2,126 @@
 
 import React, { useEffect, useRef } from "react";
 
+const THEME_COLORS: Record<string, { particle: string; line: string; mouse: string }> = {
+  dark:  { particle: "rgba(37,99,235,0.35)", line: "rgba(37,99,235,",  mouse: "rgba(34,211,238," },
+  light: { particle: "rgba(37,99,235,0.18)", line: "rgba(37,99,235,",  mouse: "rgba(37,99,235," },
+  neon:  { particle: "rgba(14,165,233,0.45)",  line: "rgba(34,211,238,",  mouse: "rgba(0,229,255,"  },
+};
+
 export default function NeuralFlux() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    let width = (canvas.width = window.innerWidth);
+    let width  = (canvas.width  = window.innerWidth);
     let height = (canvas.height = window.innerHeight);
+    let animId = 0;
 
-    const particles: Particle[] = [];
-    const particleCount = 60;
-    const connectionDistance = 150;
-    const mouse = { x: -1000, y: -1000 };
+    const getTheme = () => document.documentElement.getAttribute("data-theme") || "dark";
 
-    class Particle {
-      x: number;
-      y: number;
-      vx: number;
-      vy: number;
+    const PARTICLE_COUNT   = 55;
+    const CONNECTION_DIST  = 145;
+    const MOUSE_DIST       = 200;
+
+    const mouse = { x: -2000, y: -2000 };
+
+    interface Particle {
+      x: number; y: number;
+      vx: number; vy: number;
       size: number;
+    }
 
-      constructor() {
-        this.x = Math.random() * width;
-        this.y = Math.random() * height;
-        this.vx = (Math.random() - 0.5) * 0.5;
-        this.vy = (Math.random() - 0.5) * 0.5;
-        this.size = Math.random() * 2 + 1;
-      }
+    const particles: Particle[] = Array.from({ length: PARTICLE_COUNT }, () => ({
+      x: Math.random() * width,
+      y: Math.random() * height,
+      vx: (Math.random() - 0.5) * 0.45,
+      vy: (Math.random() - 0.5) * 0.45,
+      size: Math.random() * 1.8 + 0.8,
+    }));
 
-      update() {
-        this.x += this.vx;
-        this.y += this.vy;
+    const animate = () => {
+      ctx.clearRect(0, 0, width, height);
 
-        if (this.x < 0 || this.x > width) this.vx *= -1;
-        if (this.y < 0 || this.y > height) this.vy *= -1;
-      }
+      const theme  = getTheme();
+      const colors = THEME_COLORS[theme] || THEME_COLORS.dark;
 
-      draw() {
-        if (!ctx) return;
+      for (const p of particles) {
+        p.x += p.vx;
+        p.y += p.vy;
+        if (p.x < 0 || p.x > width)  p.vx *= -1;
+        if (p.y < 0 || p.y > height) p.vy *= -1;
+
+        // Draw particle
         ctx.beginPath();
-        ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
-        ctx.fillStyle = "rgba(99, 102, 241, 0.3)";
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fillStyle = colors.particle;
         ctx.fill();
       }
-    }
 
-    for (let i = 0; i < particleCount; i++) {
-      particles.push(new Particle());
-    }
-
-    const drawLines = () => {
+      // Draw connections
       for (let i = 0; i < particles.length; i++) {
+        const a = particles[i];
         for (let j = i + 1; j < particles.length; j++) {
-          const dx = particles[i].x - particles[j].x;
-          const dy = particles[i].y - particles[j].y;
-          const distance = Math.sqrt(dx * dx + dy * dy);
-
-          if (distance < connectionDistance) {
+          const b   = particles[j];
+          const dx  = a.x - b.x;
+          const dy  = a.y - b.y;
+          const d   = Math.sqrt(dx * dx + dy * dy);
+          if (d < CONNECTION_DIST) {
+            const alpha = 0.12 * (1 - d / CONNECTION_DIST);
             ctx.beginPath();
-            ctx.moveTo(particles[i].x, particles[i].y);
-            ctx.lineTo(particles[j].x, particles[j].y);
-            ctx.strokeStyle = `rgba(99, 102, 241, ${0.1 * (1 - distance / connectionDistance)})`;
-            ctx.lineWidth = 1;
+            ctx.moveTo(a.x, a.y);
+            ctx.lineTo(b.x, b.y);
+            ctx.strokeStyle = `${colors.line}${alpha})`;
+            ctx.lineWidth   = 1;
             ctx.stroke();
           }
         }
 
-        // Mouse connection
-        const mdx = particles[i].x - mouse.x;
-        const mdy = particles[i].y - mouse.y;
-        const mdist = Math.sqrt(mdx * mdx + mdy * mdy);
-        if (mdist < connectionDistance * 1.5) {
+        // Mouse connections
+        const mdx = a.x - mouse.x;
+        const mdy = a.y - mouse.y;
+        const md  = Math.sqrt(mdx * mdx + mdy * mdy);
+        if (md < MOUSE_DIST) {
+          const alpha = 0.25 * (1 - md / MOUSE_DIST);
           ctx.beginPath();
-          ctx.moveTo(particles[i].x, particles[i].y);
+          ctx.moveTo(a.x, a.y);
           ctx.lineTo(mouse.x, mouse.y);
-          ctx.strokeStyle = `rgba(139, 92, 246, ${0.2 * (1 - mdist / (connectionDistance * 1.5))})`;
-          ctx.lineWidth = 1.5;
+          ctx.strokeStyle = `${colors.mouse}${alpha})`;
+          ctx.lineWidth   = 1.8;
           ctx.stroke();
         }
       }
-    };
 
-    const animate = () => {
-      ctx.clearRect(0, 0, width, height);
-      particles.forEach((p) => {
-        p.update();
-        p.draw();
-      });
-      drawLines();
-      requestAnimationFrame(animate);
+      animId = requestAnimationFrame(animate);
     };
 
     animate();
 
-    const handleMouseMove = (e: MouseEvent) => {
-      mouse.x = e.clientX;
-      mouse.y = e.clientY;
-    };
-
-    const handleResize = () => {
-      width = canvas.width = window.innerWidth;
+    const onMouseMove = (e: MouseEvent) => { mouse.x = e.clientX; mouse.y = e.clientY; };
+    const onResize    = () => {
+      width  = canvas.width  = window.innerWidth;
       height = canvas.height = window.innerHeight;
     };
 
-    window.addEventListener("mousemove", handleMouseMove);
-    window.addEventListener("resize", handleResize);
+    window.addEventListener("mousemove", onMouseMove);
+    window.addEventListener("resize",    onResize);
 
     return () => {
-      window.removeEventListener("mousemove", handleMouseMove);
-      window.removeEventListener("resize", handleResize);
+      cancelAnimationFrame(animId);
+      window.removeEventListener("mousemove", onMouseMove);
+      window.removeEventListener("resize",    onResize);
     };
   }, []);
 
   return (
     <canvas
       ref={canvasRef}
-      className="fixed inset-0 pointer-events-none z-0 opacity-40"
+      className="fixed inset-0 pointer-events-none z-0 opacity-35"
+      aria-hidden
     />
   );
 }

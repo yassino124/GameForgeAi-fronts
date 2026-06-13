@@ -14,7 +14,7 @@ export default function StripeCancelPage() {
           >
             Back to plans
           </button>
-          <button className="rounded-xl bg-indigo-500 px-4 py-2 text-sm font-black text-white" onClick={() => router.push("/studio/subscription")}
+          <button className="rounded-xl bg-blue-500 px-4 py-2 text-sm font-black text-white" onClick={() => router.push("/studio/subscription")}
           >
             Try again
           </button>

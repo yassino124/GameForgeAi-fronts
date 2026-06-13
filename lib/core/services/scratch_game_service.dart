@@ -12,7 +12,7 @@ class ScratchGameService {
       '/ai/generate-gdd-preview',
       token: token,
       data: {'prompt': prompt.trim()},
-      timeout: const Duration(seconds: 60),
+      timeout: const Duration(seconds: 400),
     );
   }
 
@@ -30,7 +30,7 @@ class ScratchGameService {
         'prompt': prompt.trim(),
         'buildTarget': buildTarget,
       },
-      timeout: const Duration(seconds: 180),
+      timeout: const Duration(seconds: 900),
     );
   }
 }

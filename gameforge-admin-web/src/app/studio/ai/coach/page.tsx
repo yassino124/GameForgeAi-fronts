@@ -12,7 +12,7 @@ import {
 import { io, Socket } from "socket.io-client";
 import UserShell from "@/app/_components/UserShell";
 import { API_BASE_URL } from "@/lib/api";
-import { getUserToken } from "@/lib/userAuth";
+import { useAuthToken } from "@/lib/stores/authStore";
 
 type ChatMsg = {
   role: "user" | "assistant" | "system";
@@ -20,7 +20,7 @@ type ChatMsg = {
 };
 
 // --- CSS Effects ---
-const CHROMATIC_TEXT = "relative inline-block before:content-[attr(data-text)] before:absolute before:inset-0 before:text-fuchsia-500/50 before:animate-[chromatic-1_2s_infinite] after:content-[attr(data-text)] after:absolute after:inset-0 after:text-cyan-500/50 after:animate-[chromatic-2_2s_infinite]";
+const CHROMATIC_TEXT = "relative inline-block before:content-[attr(data-text)] before:absolute before:inset-0 before:text-cyan-500/50 before:animate-[chromatic-1_2s_infinite] after:content-[attr(data-text)] after:absolute after:inset-0 after:text-cyan-500/50 after:animate-[chromatic-2_2s_infinite]";
 
 const MessageBubble = ({ m }: { m: ChatMsg }) => (
   <motion.div
@@ -30,14 +30,14 @@ const MessageBubble = ({ m }: { m: ChatMsg }) => (
     className={`flex ${m.role === "user" ? "justify-end" : "justify-start"} mb-6 relative group`}
   >
     <div className={`max-w-[85%] rounded-[32px] p-6 shadow-2xl relative border overflow-hidden ${m.role === "user"
-        ? "bg-indigo-500 text-white font-bold rounded-tr-none border-indigo-400/30"
+        ? "bg-blue-500 text-white font-bold rounded-tr-none border-blue-400/30"
         : "gf-panel-strong text-zinc-100 border-white/10 rounded-tl-none bg-black/40 backdrop-blur-3xl"
       }`}>
       {/* Scanline Overlay */}
       <div className="absolute inset-x-0 h-10 bg-white/[0.03] blur-xl -translate-y-full animate-[scanline_4s_linear_infinite] pointer-events-none" />
 
       {m.role === "assistant" && (
-        <div className="absolute -left-12 top-0 h-10 w-10 rounded-2xl bg-gradient-to-br from-indigo-500 to-fuchsia-500 flex items-center justify-center text-white shadow-[0_0_20px_rgba(99,102,241,0.4)] border border-white/10">
+        <div className="absolute -left-12 top-0 h-10 w-10 rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center text-white shadow-[0_0_20px_rgba(99,102,241,0.4)] border border-white/10">
           <Robot size={20} weight="duotone" />
         </div>
       )}
@@ -130,7 +130,7 @@ const NeuralVortex = ({ active, thinking }: { active: boolean, thinking: boolean
 // --- Holographic Satellite Ring ---
 const NeuralRing = ({ rotate, active, thinking }: { rotate: number, active: boolean, thinking: boolean }) => (
   <div
-    className="absolute h-64 w-64 border-2 border-dashed border-indigo-500/20 rounded-full transition-transform duration-700 ease-[cubic-bezier(0.2,1,0.4,1)]"
+    className="absolute h-64 w-64 border-2 border-dashed border-blue-500/20 rounded-full transition-transform duration-700 ease-[cubic-bezier(0.2,1,0.4,1)]"
     style={{
       transform: `perspective(1000px) rotateX(60deg) rotateZ(${rotate}deg) scale(${active ? 1.1 : 1})`,
       borderWidth: thinking ? '4px' : '2px',
@@ -140,7 +140,7 @@ const NeuralRing = ({ rotate, active, thinking }: { rotate: number, active: bool
     <motion.div
       animate={{ scale: [1, 1.2, 1], opacity: [0.5, 1, 0.5] }}
       transition={{ duration: 2, repeat: Infinity }}
-      className="absolute top-0 left-1/2 -translate-x-1/2 -ml-2 -mt-2 h-4 w-4 bg-indigo-500 rounded-full shadow-[0_0_20px_rgba(99,102,241,0.8)]"
+      className="absolute top-0 left-1/2 -translate-x-1/2 -ml-2 -mt-2 h-4 w-4 bg-blue-500 rounded-full shadow-[0_0_20px_rgba(99,102,241,0.8)]"
     />
   </div>
 );
@@ -175,7 +175,7 @@ const NeuralCore = ({ active, thinking, speaking }: { active: boolean, thinking:
             opacity: active ? [0.3, 0.5, 0.3] : 0.1
           }}
           transition={{ duration: 3, repeat: Infinity }}
-          className="absolute inset-0 bg-indigo-500/30 rounded-full blur-[100px]"
+          className="absolute inset-0 bg-blue-500/30 rounded-full blur-[100px]"
         />
 
         {/* The Core Orb */}
@@ -199,14 +199,14 @@ const NeuralCore = ({ active, thinking, speaking }: { active: boolean, thinking:
             `}
         >
           <div className={`absolute inset-0 bg-gradient-to-br transition-opacity duration-700
-              ${active ? 'from-indigo-500/40 via-fuchsia-500/30 to-cyan-500/40 opacity-100' : 'from-white/5 to-transparent opacity-50'}
+              ${active ? 'from-blue-500/40 via-cyan-500/30 to-cyan-500/40 opacity-100' : 'from-white/5 to-transparent opacity-50'}
             `} />
 
           <div className="relative z-10 drop-shadow-[0_0_15px_rgba(255,255,255,0.4)]">
             <AnimatePresence mode="wait">
               {thinking ? (
                 <motion.div key="think" initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}>
-                  <Brain size={48} weight="duotone" className="text-fuchsia-400 animate-pulse" />
+                  <Brain size={48} weight="duotone" className="text-cyan-400 animate-pulse" />
                 </motion.div>
               ) : active ? (
                 <motion.div key="active" initial={{ opacity: 0, scale: 0.5 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0 }}>
@@ -228,13 +228,13 @@ const NeuralCore = ({ active, thinking, speaking }: { active: boolean, thinking:
               initial={{ scale: 0.8, opacity: 1 }}
               animate={{ scale: 2.5, opacity: 0 }}
               transition={{ duration: 2, repeat: Infinity, ease: "easeOut" }}
-              className="absolute inset-0 border-2 border-indigo-500/20 rounded-full"
+              className="absolute inset-0 border-2 border-blue-500/20 rounded-full"
             />
             <motion.div
               initial={{ scale: 0.8, opacity: 1 }}
               animate={{ scale: 2.2, opacity: 0 }}
               transition={{ duration: 2, repeat: Infinity, ease: "easeOut", delay: 0.5 }}
-              className="absolute inset-0 border border-fuchsia-500/10 rounded-full"
+              className="absolute inset-0 border border-cyan-500/10 rounded-full"
             />
           </>
         )}
@@ -248,7 +248,7 @@ const NeuralCore = ({ active, thinking, speaking }: { active: boolean, thinking:
               key={i}
               animate={{ height: speaking ? [20, 64, 20] : [10, 32, 10] }}
               transition={{ duration: 0.4 + i * 0.05, repeat: Infinity, ease: "easeInOut" }}
-              className="w-2 bg-gradient-to-t from-indigo-500 via-purple-500 to-fuchsia-400 rounded-full shadow-[0_0_10px_rgba(99,102,241,0.5)]"
+              className="w-2 bg-gradient-to-t from-blue-500 via-sky-500 to-cyan-400 rounded-full shadow-[0_0_10px_rgba(99,102,241,0.5)]"
             />
           ))}
         </div>
@@ -268,7 +268,7 @@ export default function AiCoachPage() {
 function AiCoachPageInner() {
   const router = useRouter();
   const sp = useSearchParams();
-  const token = useMemo(() => getUserToken(), []);
+  const { token } = useAuthToken();
   const projectId = sp?.get("projectId");
 
   const [connected, setConnected] = useState(false);
@@ -401,7 +401,7 @@ function AiCoachPageInner() {
         <div className="flex items-center gap-3">
           <button
             onClick={() => setAutoSpeak(!autoSpeak)}
-            className={`h-10 w-10 rounded-xl flex items-center justify-center transition-all border ${autoSpeak ? 'bg-indigo-500/20 border-indigo-500/40 text-indigo-400 shadow-[0_0_15px_rgba(99,102,241,0.2)]' : 'bg-white/5 border-white/10 text-zinc-500'
+            className={`h-10 w-10 rounded-xl flex items-center justify-center transition-all border ${autoSpeak ? 'bg-blue-500/20 border-blue-500/40 text-blue-400 shadow-[0_0_15px_rgba(99,102,241,0.2)]' : 'bg-white/5 border-white/10 text-zinc-500'
               }`}
             title="Auto-Voice Protocol"
           >
@@ -444,7 +444,7 @@ function AiCoachPageInner() {
         >
           {messages.length === 0 && !streamedText && (
             <div className="flex flex-col items-center justify-start h-full text-center pt-4 relative">
-              <div className="absolute top-[20%] left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-indigo-500/5 blur-[120px] rounded-full pointer-events-none" />
+              <div className="absolute top-[20%] left-1/2 -translate-x-1/2 w-[600px] h-[600px] bg-blue-500/5 blur-[120px] rounded-full pointer-events-none" />
 
               <NeuralCore
                 active={isListening || loading || isSpeaking}
@@ -458,12 +458,12 @@ function AiCoachPageInner() {
                   animate={{ opacity: 1, scale: 1 }}
                   className="inline-block relative"
                 >
-                  <div className="absolute -inset-10 bg-indigo-500/10 blur-[50px] opacity-20" />
+                  <div className="absolute -inset-10 bg-blue-500/10 blur-[50px] opacity-20" />
                   <h3
                     data-text="NEURAL COMMAND READY"
-                    className={`text-3xl lg:text-4xl font-black tracking-tighter text-white uppercase italic leading-none ${CHROMATIC_TEXT}`}
+                    className={`text-3xl lg:text-4xl font-black tracking-tighter text-[var(--foreground)] uppercase italic leading-none ${CHROMATIC_TEXT}`}
                   >
-                    NEURAL COMMAND <span className="text-indigo-500">READY</span>
+                    NEURAL COMMAND <span className="text-blue-500">READY</span>
                   </h3>
                 </motion.div>
 
@@ -481,10 +481,10 @@ function AiCoachPageInner() {
                     <button
                       key={hint.label}
                       onClick={() => handleSendMessage(hint.label)}
-                      className="gf-panel group hover:bg-indigo-500/10 hover:border-indigo-500/30 transition-all text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-indigo-400 py-3 px-5 rounded-2xl border border-white/5 flex items-center justify-between backdrop-blur-xl"
+                      className="gf-panel group hover:bg-blue-500/10 hover:border-blue-500/30 transition-all text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-blue-400 py-3 px-5 rounded-2xl border border-white/5 flex items-center justify-between backdrop-blur-xl"
                     >
                       <div className="flex items-center gap-4">
-                        <div className="h-8 w-8 rounded-lg bg-white/5 flex items-center justify-center group-hover:bg-indigo-500/20 group-hover:text-indigo-400 transition-all">
+                        <div className="h-8 w-8 rounded-lg bg-white/5 flex items-center justify-center group-hover:bg-blue-500/20 group-hover:text-blue-400 transition-all">
                           <hint.icon size={18} weight="duotone" />
                         </div>
                         {hint.label}
@@ -505,16 +505,16 @@ function AiCoachPageInner() {
 
               {streamedText && (
                 <div className="flex justify-start mb-6">
-                  <div className="max-w-[85%] rounded-[32px] rounded-tl-none p-6 gf-panel-strong text-zinc-100 border border-white/10 relative bg-black/40 backdrop-blur-3xl overflow-hidden shadow-[0_0_40px_rgba(99,102,241,0.2)]">
+                  <div className="max-w-[85%] rounded-[32px] rounded-tl-none p-6 gf-panel-strong text-[var(--foreground)] border border-white/10 relative bg-[var(--gf-panel-bg-strong)] backdrop-blur-3xl overflow-hidden shadow-[0_0_40px_rgba(99,102,241,0.2)]">
                     <div className="absolute inset-x-0 h-10 bg-white/[0.03] blur-xl -translate-y-full animate-[scanline_3s_linear_infinite]" />
-                    <div className="absolute -left-12 top-0 h-10 w-10 rounded-2xl bg-indigo-500 flex items-center justify-center text-white border border-white/10 shadow-[0_0_20px_rgba(99,102,241,0.4)] animate-pulse">
+                    <div className="absolute -left-12 top-0 h-10 w-10 rounded-2xl bg-blue-500 flex items-center justify-center text-white border border-white/10 shadow-[0_0_20px_rgba(99,102,241,0.4)] animate-pulse">
                       <Terminal size={20} weight="bold" />
                     </div>
                     <p className="text-[15px] leading-relaxed whitespace-pre-wrap relative z-10">{streamedText}</p>
                     <div className="mt-4 flex gap-1.5">
-                      <div className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-bounce" />
-                      <div className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-bounce [animation-delay:0.2s]" />
-                      <div className="h-1.5 w-1.5 rounded-full bg-indigo-500 animate-bounce [animation-delay:0.4s]" />
+                      <div className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-bounce" />
+                      <div className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-bounce [animation-delay:0.2s]" />
+                      <div className="h-1.5 w-1.5 rounded-full bg-blue-500 animate-bounce [animation-delay:0.4s]" />
                     </div>
                   </div>
                 </div>
@@ -535,8 +535,8 @@ function AiCoachPageInner() {
         {/* Floating Controls (Enhanced) */}
         <div className="absolute bottom-4 left-0 right-0 px-4">
           <div className="relative max-w-4xl mx-auto">
-            <div className="gf-panel-strong rounded-[40px] p-2 border border-white/10 focus-within:border-indigo-500/50 transition-all shadow-2xl bg-[#08090f]/80 backdrop-blur-[40px] group relative overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-r from-indigo-500/5 via-transparent to-fuchsia-500/5 opacity-0 group-focus-within:opacity-100 transition-opacity" />
+            <div className="gf-panel-strong rounded-[40px] p-2 border border-white/10 focus-within:border-blue-500/50 transition-all shadow-2xl bg-[var(--gf-shell-bg)]/80 backdrop-blur-[40px] group relative overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-r from-blue-500/5 via-transparent to-cyan-500/5 opacity-0 group-focus-within:opacity-100 transition-opacity" />
               <div className="flex items-center gap-2 relative z-10">
                 <button
                   onClick={toggleListening}
@@ -558,7 +558,7 @@ function AiCoachPageInner() {
                 />
 
                 <button
-                  className="h-14 w-14 rounded-[28px] bg-indigo-500 flex items-center justify-center text-white disabled:opacity-50 transition-all hover:scale-105 active:scale-95 shadow-[0_10px_30px_rgba(99,102,241,0.4)]"
+                  className="h-14 w-14 rounded-[28px] bg-blue-500 flex items-center justify-center text-white disabled:opacity-50 transition-all hover:scale-105 active:scale-95 shadow-[0_10px_30px_rgba(99,102,241,0.4)]"
                   onClick={() => handleSendMessage()}
                   disabled={!input.trim() || !connected || loading}
                 >
@@ -568,7 +568,7 @@ function AiCoachPageInner() {
             </div>
             <div className="mt-3 text-center">
               <span className="text-[10px] font-black uppercase tracking-[0.4em] text-zinc-700 flex items-center justify-center gap-2 animate-pulse">
-                <Terminal size={12} className="text-indigo-500" />
+                <Terminal size={12} className="text-blue-500" />
                 NEURAL PROTOCOL v4.28.1 // SECURE_SYNC: ENABLED
               </span>
             </div>

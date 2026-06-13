@@ -36,14 +36,14 @@ export default function AIStoryboard() {
   };
 
   return (
-    <div className="gf-holographic rounded-[40px] p-8 relative overflow-hidden">
+    <div className="gf-holographic rounded-[40px] p-8 relative overflow-hidden border border-white/5 shadow-2xl">
       <div className="flex items-center justify-between mb-10 relative z-10">
         <div className="flex items-center gap-4">
-          <div className="h-12 w-12 rounded-2xl bg-indigo-500/20 flex items-center justify-center text-indigo-400">
+          <div className="h-12 w-12 rounded-2xl bg-blue-600/20 flex items-center justify-center text-blue-400">
             <BrainCircuit size={24} />
           </div>
           <div>
-            <h3 className="text-xl font-bold text-white tracking-tight uppercase italic">Neural Storyboard</h3>
+            <h3 className="text-xl font-black text-[var(--foreground)] tracking-tight uppercase italic">Neural Storyboard</h3>
             <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-1">AI-Generated Mission Architecture</p>
           </div>
         </div>
@@ -68,20 +68,20 @@ export default function AIStoryboard() {
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               transition={{ delay: i * 0.1 }}
-              className="p-6 rounded-3xl bg-white/[0.02] border border-white/5 relative group hover:bg-white/[0.04] transition-all"
+              className="p-6 rounded-3xl bg-white/[0.03] dark:bg-white/[0.02] border border-black/5 dark:border-white/5 relative group hover:bg-white/[0.06] transition-all shadow-sm"
             >
               <div className="flex items-center gap-2 mb-4">
                 <div className={`h-1.5 w-1.5 rounded-full ${
-                  node.type === "narrative" ? "bg-fuchsia-500" : 
+                  node.type === "narrative" ? "bg-blue-500" : 
                   node.type === "mechanic" ? "bg-cyan-500" : "bg-amber-500"
                 }`} />
                 <span className="text-[8px] font-black uppercase tracking-[0.2em] text-zinc-500">{node.type}</span>
               </div>
-              <h4 className="text-sm font-bold text-white uppercase tracking-tight mb-2">{node.title}</h4>
-              <p className="text-xs text-zinc-500 leading-relaxed">{node.desc}</p>
+              <h4 className="text-sm font-black text-[var(--foreground)] uppercase tracking-tight mb-2">{node.title}</h4>
+              <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed font-medium">{node.desc}</p>
               
               <div className="mt-6 flex items-center justify-between pt-4 border-t border-white/5 opacity-0 group-hover:opacity-100 transition-opacity">
-                <span className="text-[9px] font-bold text-indigo-400 uppercase">Neural Link Established</span>
+                <span className="text-[9px] font-bold text-blue-400 uppercase">Neural Link Established</span>
                 <ChevronRight size={14} className="text-zinc-600" />
               </div>
             </motion.div>

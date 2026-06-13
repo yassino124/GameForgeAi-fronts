@@ -16,6 +16,7 @@ import '../../../core/services/api_service.dart';
 import '../../../core/services/ai_service.dart';
 import '../../../core/services/projects_service.dart';
 import '../../../core/services/templates_service.dart';
+import '../../../core/services/gameplay_progression_service.dart';
 import '../../../core/providers/auth_provider.dart';
 import '../../widgets/widgets.dart';
 
@@ -49,6 +50,9 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
   bool _hasAccess = false;
   bool _checkingAccess = false;
   bool _purchasing = false;
+
+  Map<String, dynamic>? _rewards;
+  bool _loadingRewards = false;
 
   File? _newPreviewImage;
   List<File> _newScreenshots = [];
@@ -758,6 +762,7 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
       }
 
       _loadAccess();
+      _loadRewards();
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -769,6 +774,19 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
         _loading = false;
       });
     }
+  }
+
+  Future<void> _loadRewards() async {
+    final token = _getToken();
+    if (token == null) return;
+    try {
+      final res = await GameplayProgressionService.rewards(token: token);
+      if (res['success'] == true && res['data'] is Map) {
+        setState(() {
+          _rewards = Map<String, dynamic>.from(res['data'] as Map);
+        });
+      }
+    } catch (_) {}
   }
 
   Future<void> _openVideoPlayer(String url) async {
@@ -964,12 +982,23 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
     final originalPrice = (t?['originalPrice'] is num)
         ? (t?['originalPrice'] as num).toDouble()
         : price;
-    final discountPercent = (t?['discountPercent'] is num)
+
+    final int nftDiscountPct = _rewards != null ? (_rewards!['templateDiscountPct'] ?? 0) : 0;
+    int baseDiscountPercent = (t?['discountPercent'] is num)
         ? (t?['discountPercent'] as num).toInt()
         : 0;
+
+    int finalDiscountPercent = baseDiscountPercent;
+    double finalPrice = price;
+
+    if (nftDiscountPct > baseDiscountPercent) {
+      finalDiscountPercent = nftDiscountPct;
+      finalPrice = originalPrice * (1 - (nftDiscountPct / 100));
+    }
+
     final isDiscounted =
-        discountPercent > 0 && originalPrice > 0 && price < originalPrice;
-    final isPaid = price > 0.0;
+        finalDiscountPercent > 0 && originalPrice > 0 && finalPrice < originalPrice;
+    final isPaid = finalPrice > 0.0;
     final canUse = !isPaid || _hasAccess;
 
     final coverUrl = _resolveMediaUrl(t?['previewImageUrl']?.toString());
@@ -1028,9 +1057,9 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
         : _BottomCtaBar(
             canUse: canUse,
             isPaidLocked: isPaid && !canUse,
-            price: price,
+            price: finalPrice,
             originalPrice: originalPrice,
-            discountPercent: discountPercent,
+            discountPercent: finalDiscountPercent,
             purchasing: _purchasing,
             forking: _forking,
             onDownload: canUse ? _downloadTemplateZip : null,
@@ -1294,13 +1323,13 @@ class _TemplateDetailsScreenState extends State<TemplateDetailsScreen> {
                                   suffix: 'downloads',
                                 ),
                                 _DetailsPriceChip(
-                                  price: price,
+                                  price: finalPrice,
                                   originalPrice: originalPrice,
-                                  discountPercent: discountPercent,
+                                  discountPercent: finalDiscountPercent,
                                 ),
                                 if (isDiscounted)
                                   _DetailsBadgeChip(
-                                    label: '$discountPercent% OFF',
+                                    label: '$finalDiscountPercent% OFF',
                                     icon: Icons.local_offer_rounded,
                                   ),
                               ],

@@ -24,9 +24,9 @@ class ApiService {
     if (Platform.isAndroid) {
       return 'http://10.0.2.2:3000/api';
     }
-    // Handle iOS Simulator localhost access
+    // Handle iOS Simulator localhost access - Use 127.0.0.1 for stability
     if (Platform.isIOS) {
-      return 'http://localhost:3000/api';
+      return 'http://127.0.0.1:3000/api';
     }
     return _configuredBaseUrl;
   }
@@ -48,7 +48,7 @@ class ApiService {
     if (raw.startsWith('/')) return '$base$raw';
     return '$base/$raw';
   }
-  static const Duration _timeout = Duration(seconds: 60);
+  static const Duration _timeout = Duration(seconds: 180);
 
   static Duration _resolveTimeout(Duration? timeout) => timeout ?? _timeout;
 

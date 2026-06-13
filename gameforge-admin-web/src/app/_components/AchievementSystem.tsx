@@ -35,7 +35,7 @@ export default function AchievementSystem() {
           }`}
         >
           {a.unlocked && (
-            <div className="absolute inset-0 bg-gradient-to-br from-indigo-500/5 to-transparent pointer-events-none" />
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-600/5 to-transparent pointer-events-none" />
           )}
           
           <div className="flex items-center gap-4 relative z-10">

@@ -224,7 +224,7 @@ export default function LiveSessionsAdminPage() {
             filtered.map((session) => (
               <div key={session.id} className="grid grid-cols-[1.5fr_1fr_1fr_1fr_1fr] gap-4 px-6 py-4 items-center hover:bg-white/[0.02] transition-colors">
                 <div className="flex items-center gap-3">
-                  <div className="h-10 w-10 rounded-xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400">
+                  <div className="h-10 w-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400">
                     <Globe size={20} />
                   </div>
                   <div>
@@ -298,7 +298,7 @@ export default function LiveSessionsAdminPage() {
                   <button
                     disabled={busyId === selected.id}
                     onClick={saveTitle}
-                    className="h-10 px-4 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-black uppercase tracking-widest hover:bg-indigo-500/20 transition-all disabled:opacity-50 flex items-center gap-2"
+                    className="h-10 px-4 rounded-xl bg-blue-500/10 border border-blue-500/20 text-blue-300 text-xs font-black uppercase tracking-widest hover:bg-blue-500/20 transition-all disabled:opacity-50 flex items-center gap-2"
                   >
                     <Save size={14} />
                     Save

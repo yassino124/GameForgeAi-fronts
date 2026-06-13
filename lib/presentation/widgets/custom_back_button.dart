@@ -35,6 +35,8 @@ class CustomBackButton extends StatelessWidget {
           onTap: onPressed ?? () {
             if (context.canPop()) {
               context.pop();
+            } else {
+              context.go('/dashboard?tab=home');
             }
           },
           child: Padding(
